@@ -77,6 +77,22 @@ export function defaultConfig(): WotwConfig {
     lint: {
       schedule_enabled: false,
       interval_hours: 24,
+      auto_fix: false,
+    },
+    health: {
+      staleness_thresholds: [7, 30, 90, 180, 365],
+      staleness_scores: [100, 80, 60, 40, 20, 0],
+      weights: {
+        staleness: 0.25,
+        source_availability: 0.25,
+        link_health: 0.2,
+        duplicate_risk: 0.15,
+        contradiction_risk: 0.15,
+      },
+      duplicate_threshold: 60,
+      auto_fix_staleness_below: 40,
+      max_fixes_per_run: 10,
+      detect_contradictions: false,
     },
   };
 }
@@ -145,6 +161,15 @@ export function mergeConfig(base: WotwConfig, override: Partial<WotwConfig>): Wo
   if (override.provenance) assign("provenance", override.provenance);
   if (override.multi_user) assign("multi_user", override.multi_user);
   if (override.lint) assign("lint", override.lint);
+  if (override.health) {
+    // Deep-merge the weights sub-object separately.
+    const healthBase = out.health;
+    const healthOverride = override.health as Partial<WotwConfig["health"]>;
+    out.health = { ...healthBase, ...healthOverride };
+    if (healthOverride.weights) {
+      out.health.weights = { ...healthBase.weights, ...healthOverride.weights };
+    }
+  }
   return out;
 }
 

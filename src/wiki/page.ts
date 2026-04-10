@@ -53,6 +53,13 @@ export function parsePage(filePath: string, raw: string): WikiPage {
     if (orphanedSource.length > 0) {
       frontmatter.orphaned_source = orphanedSource;
     }
+    if (typeof data.merged_into === "string") {
+      frontmatter.merged_into = data.merged_into;
+    }
+  }
+  const contradictions = normalizeStringArray(data.contradictions);
+  if (contradictions.length > 0) {
+    frontmatter.contradictions = contradictions;
   }
 
   return {
@@ -84,6 +91,10 @@ export function serializePage(page: Pick<WikiPage, "frontmatter" | "body">): str
   if (fm.orphaned_at) data.orphaned_at = fm.orphaned_at;
   if (fm.orphaned_source && fm.orphaned_source.length > 0) {
     data.orphaned_source = fm.orphaned_source;
+  }
+  if (fm.merged_into) data.merged_into = fm.merged_into;
+  if (fm.contradictions && fm.contradictions.length > 0) {
+    data.contradictions = fm.contradictions;
   }
   return matter.stringify(page.body, data);
 }
@@ -133,6 +144,8 @@ function normalizeConfidence(v: unknown): ConfidenceLevel {
 
 function normalizeStatus(v: unknown): WikiPageStatus | null {
   if (v === "orphaned") return "orphaned";
+  if (v === "merged") return "merged";
+  if (v === "stale") return "stale";
   return null;
 }
 

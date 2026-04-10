@@ -21,7 +21,7 @@ export interface LintSchedulerOptions {
    * the scheduler is calling through on each interval without touching
    * the filesystem.
    */
-  runner?: (config: WotwConfig) => Promise<LintResult>;
+  runner?: (config: WotwConfig, opts?: { fix?: boolean; yes?: boolean }) => Promise<LintResult>;
 }
 
 /** One hour in milliseconds — unit used by the interval math. */
@@ -80,8 +80,9 @@ export class LintScheduler implements DaemonSubsystem {
   async runOnce(): Promise<LintResult | null> {
     const log = getLogger("lint-scheduler");
     const runner = this.opts.runner ?? runLintPass;
+    const autoFix = this.opts.config.lint.auto_fix === true;
     try {
-      const result = await runner(this.opts.config);
+      const result = await runner(this.opts.config, autoFix ? { fix: true, yes: true } : undefined);
       this.lastResult = result;
       if (result.missingWikiDir) {
         log.warn(

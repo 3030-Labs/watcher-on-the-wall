@@ -212,6 +212,39 @@ export function registerTools(server: McpServer, ctx: ToolRegistrationContext): 
         if (page && page.frontmatter.status === "orphaned") orphanedPages += 1;
       }
       const failedBatches = ctx.deadLetter ? await ctx.deadLetter.count() : 0;
+
+      // Compute health summary (no LLM calls).
+      let healthSummary: {
+        avg_score: number;
+        pages_below_50: number;
+        lowest_scoring_page: string | null;
+      } | null = null;
+      try {
+        const { computeHealthReport } = await import("../wiki/health.js");
+        const pages = ctx.store.listAll();
+        if (pages.length > 0) {
+          const report = await computeHealthReport(ctx.store, ctx.provenance ?? null, ctx.search, {
+            config: ctx.config,
+          });
+          const avg =
+            report.scores.length > 0
+              ? Math.round(report.scores.reduce((s, sc) => s + sc.score, 0) / report.scores.length)
+              : 0;
+          const belowFifty = report.scores.filter((s) => s.score < 50);
+          const lowest =
+            report.scores.length > 0
+              ? report.scores.reduce((min, s) => (s.score < min.score ? s : min), report.scores[0]!)
+              : null;
+          healthSummary = {
+            avg_score: avg,
+            pages_below_50: belowFifty.length,
+            lowest_scoring_page: lowest ? lowest.page : null,
+          };
+        }
+      } catch {
+        // Health computation failure should not break get_stats.
+      }
+
       const stats = {
         total: ctx.store.count(),
         by_category: counts,
@@ -219,6 +252,7 @@ export function registerTools(server: McpServer, ctx: ToolRegistrationContext): 
         cost_today_usd: ctx.costTracker.spentToday(),
         indexed_documents: ctx.search.size(),
         failed_batches: failedBatches,
+        ...(healthSummary ? { health: healthSummary } : {}),
       };
       return { content: [{ type: "text", text: JSON.stringify(stats, null, 2) }] };
     },

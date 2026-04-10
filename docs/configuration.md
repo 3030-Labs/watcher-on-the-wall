@@ -92,6 +92,21 @@ multi_user:
 lint:
   schedule_enabled: false        # true → run the linter on a timer alongside the daemon
   interval_hours: 24             # how often the scheduler fires when enabled
+  auto_fix: false                # when true, the daemon scheduler runs lint --fix --yes
+
+health:
+  staleness_thresholds: [7, 30, 90, 180, 365]
+  staleness_scores: [100, 80, 60, 40, 20, 0]
+  weights:
+    staleness: 0.25
+    source_availability: 0.25
+    link_health: 0.20
+    duplicate_risk: 0.15
+    contradiction_risk: 0.15
+  duplicate_threshold: 60        # minisearch similarity threshold for duplicate detection
+  auto_fix_staleness_below: 40   # pages with staleness score below this are flagged
+  max_fixes_per_run: 10          # cap on auto-healed findings per lint pass
+  detect_contradictions: false   # LLM-powered contradiction detection (expensive)
 ```
 
 ---
@@ -108,6 +123,21 @@ timer is `unref`'d, so it never keeps the daemon alive on its own.
 
 Leave this `false` (the default) and the scheduler is a cheap no-op;
 you can still run `wotw lint` manually whenever you like.
+
+### `lint.auto_fix`
+
+When `true`, the background `LintScheduler` runs `wotw lint --fix --yes`
+instead of a report-only pass. Auto-fixable findings (stale pages,
+broken links, duplicates, missing backlinks) are healed by the LLM or
+deterministic handlers, subject to `health.max_fixes_per_run` and the
+cost budget.
+
+### `health`
+
+The `health:` block controls how wiki-page health scores are computed
+and which findings are auto-fixable. All weights must sum to 1.0 for
+the overall score to be a proper 0–100 value. See
+[knowledge-health.md](knowledge-health.md) for the full reference.
 
 ### `ingestion.dead_letter_file`
 

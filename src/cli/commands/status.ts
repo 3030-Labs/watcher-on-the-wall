@@ -87,6 +87,31 @@ export async function runStatus(opts: StatusOptions): Promise<void> {
   }
 
   const running = status.alive ? chalk.green("● running") : chalk.red("● stopped");
+  // Compute a quick health summary (no LLM calls — pure computation).
+  let healthLine = "—";
+  if (pageCount > 0) {
+    try {
+      const { WikiStore } = await import("../../wiki/store.js");
+      const { WikiSearch } = await import("../../wiki/search.js");
+      const { loadAllPages } = await import("../../ingestion/wiki-writer.js");
+      const { computeHealthReport } = await import("../../wiki/health.js");
+      const store = new WikiStore({ wikiRoot });
+      const search = new WikiSearch();
+      const allPages = await loadAllPages(store);
+      search.rebuild(allPages);
+      const report = await computeHealthReport(store, null, search, { config });
+      const avg =
+        report.scores.length > 0
+          ? Math.round(report.scores.reduce((s, p) => s + p.score, 0) / report.scores.length)
+          : 0;
+      const belowFifty = report.scores.filter((s) => s.score < 50).length;
+      healthLine = `${avg} avg`;
+      if (belowFifty > 0) healthLine += chalk.yellow(` (${belowFifty} need attention)`);
+    } catch {
+      healthLine = "error computing";
+    }
+  }
+
   const rows: Array<[string, string]> = [
     ["status", running],
     ["pid", status.pid !== null ? String(status.pid) : "—"],
@@ -101,6 +126,7 @@ export async function runStatus(opts: StatusOptions): Promise<void> {
       "orphaned pages",
       orphanedCount > 0 ? chalk.yellow(String(orphanedCount)) : String(orphanedCount),
     ],
+    ["wiki health", healthLine],
     ["raw files", String(rawCount)],
     ["provenance records", String(provenanceCount)],
     [

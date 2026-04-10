@@ -6,7 +6,7 @@
 export type ModelId = string;
 
 /** Operation type for an ingestion / provenance record. */
-export type OperationType = "ingest" | "query" | "compound" | "archive" | "lint" | "merge";
+export type OperationType = "ingest" | "query" | "compound" | "archive" | "lint" | "merge" | "heal";
 
 /**
  * Execution mode. Controls which Claude runtime the daemon invokes:
@@ -105,6 +105,30 @@ export interface WotwConfig {
     schedule_enabled: boolean;
     /** Interval between scheduled lint passes, in hours. */
     interval_hours: number;
+    /** When true, scheduled lint runs with --fix semantics (auto-heal). */
+    auto_fix: boolean;
+  };
+  health: {
+    /** Day thresholds for staleness scoring (ascending). */
+    staleness_thresholds: number[];
+    /** Scores corresponding to each staleness bucket (one more than thresholds). */
+    staleness_scores: number[];
+    /** Scoring weights — must sum to 1.0. */
+    weights: {
+      staleness: number;
+      source_availability: number;
+      link_health: number;
+      duplicate_risk: number;
+      contradiction_risk: number;
+    };
+    /** Similarity score 0-100 above which pages are flagged as duplicates. */
+    duplicate_threshold: number;
+    /** Pages scoring below this on staleness are auto-fixable. */
+    auto_fix_staleness_below: number;
+    /** Cap LLM calls per lint --fix pass. */
+    max_fixes_per_run: number;
+    /** Enable LLM-powered contradiction detection (expensive). */
+    detect_contradictions: boolean;
   };
 }
 
@@ -113,7 +137,7 @@ export interface WotwConfig {
  * have been deleted from `raw/`. Pages without a `status` field are
  * considered active.
  */
-export type WikiPageStatus = "orphaned";
+export type WikiPageStatus = "orphaned" | "merged" | "stale";
 
 /** Wiki page frontmatter shape. */
 export interface WikiFrontmatter {
@@ -140,6 +164,10 @@ export interface WikiFrontmatter {
    * different batches.
    */
   orphaned_source?: string[];
+  /** Wiki-relative path of the page this was merged into (dedup heal). */
+  merged_into?: string;
+  /** Unresolved factual contradictions detected by the health system. */
+  contradictions?: string[];
 }
 
 /** A parsed wiki page. */

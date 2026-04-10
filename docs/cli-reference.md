@@ -155,11 +155,37 @@ Walk the provenance chain and verify its integrity.
 - `--full` verifies every record from genesis.
 - Non-zero exit code on any tamper detection.
 
-## `wotw lint [--json]`
+## `wotw lint [--fix] [--yes] [--json]`
 
-Run a linter pass over every wiki page: checks for orphan `related:`
-links, missing sources, confidence outliers, and YAML frontmatter
-issues. Does not touch the filesystem.
+Run a health check over every wiki page. Computes per-page health
+scores (staleness, source availability, link health, duplicate risk,
+contradiction risk) and emits structured findings (stale pages, broken
+links, orphans, duplicates, missing backlinks).
+
+```bash
+wotw lint              # report only — no changes to disk
+wotw lint --json       # machine-readable JSON output
+wotw lint --fix        # heal auto-fixable findings (prompts for confirmation)
+wotw lint --fix --yes  # heal without prompting
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--fix` | Dispatch auto-fixable findings to heal handlers (LLM-powered for stale/duplicate/broken-link/contradiction; deterministic for missing-backlink). |
+| `--yes` | Skip confirmation prompt when `--fix` is set. |
+| `--json` | Output the health report as JSON instead of formatted text. |
+
+### Heal handlers
+
+When `--fix` is used, each finding is dispatched to a specialized
+handler. LLM-powered handlers check the cost budget before invoking
+and produce `type: "heal"` provenance records. The number of fixes
+per run is capped by `health.max_fixes_per_run` (default 10).
+
+See [knowledge-health.md](./knowledge-health.md) for the full health
+system documentation.
 
 ## `wotw synthesize [--force]`
 

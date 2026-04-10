@@ -8,6 +8,52 @@ AI knowledge daemon.
 **Author line in package.json:** 3030 Labs LLC
 **Target runtime:** Node.js ≥ 20
 
+> ### Feature Pass 003 — 2026-04-09
+>
+> **Knowledge Health System.** Four interconnected features, written on
+> top of the post-Feature-Pass-002 tree. Full pass report at
+> `FEATURE-PASS-003.md`. Highlights:
+>
+> - **Knowledge quality scoring.** Every wiki page gets a health score
+>   (0–100) based on five factors: staleness, source availability, link
+>   health, duplicate risk, and contradiction risk. Scores use a weighted
+>   average with configurable weights. New `src/wiki/health.ts` (~517 LoC)
+>   and `src/wiki/heal-handlers.ts` (~450 LoC).
+> - **Deduplication detection + auto-merge.** Pages with high search-index
+>   similarity are grouped transitively via union-find. `wotw lint --fix`
+>   merges duplicate groups via the LLM, marking surplus pages as
+>   `status: merged` with `merged_into:` frontmatter.
+> - **Auto-healing via `wotw lint --fix`.** New `--fix`, `--yes`, `--json`
+>   flags on `wotw lint`. Five heal handlers dispatch by finding kind:
+>   `healStale`, `healDuplicate`, `healBrokenLinks`, `healMissingBacklinks`
+>   (no LLM), `healContradiction`. Budget-gated, provenance-tracked
+>   (`type: "heal"` records), capped by `max_fixes_per_run`.
+> - **Health surfacing.** `wotw status` shows a one-line health summary.
+>   `get_stats` MCP tool returns `health.avg_score`, `pages_below_50`,
+>   `lowest_scoring_page`. Daemon `LintScheduler` gains `auto_fix`
+>   support.
+>
+> **New frontmatter fields:** `merged_into` (slug of survivor page),
+> `contradictions` (array of contradicting slugs). New page statuses:
+> `"merged"`, `"stale"`.
+>
+> **New config block:** `health:` with staleness thresholds/scores,
+> weights, `duplicate_threshold`, `auto_fix_staleness_below`,
+> `max_fixes_per_run`, `detect_contradictions`. Plus `lint.auto_fix`.
+>
+> **New documentation:** `docs/knowledge-health.md`.
+> Updated: `docs/configuration.md`, `docs/cli-reference.md`,
+> `docs/provenance.md`, `docs/mcp-tools.md`.
+>
+> **Test delta:** 272 → **300** (+28 across +5 files —
+> `test/unit/health-scoring.test.ts` (15),
+> `test/unit/dedup-detection.test.ts` (4),
+> `test/unit/heal-handlers.test.ts` (5),
+> `test/integration/health-report.test.ts` (2),
+> `test/integration/lint-fix.test.ts` (2)). **Source files:** 63 → 65
+> (+2: `src/wiki/health.ts`, `src/wiki/heal-handlers.ts`).
+> **CLI bundle:** ~215 KB → ~246 KB. All 5 gates green.
+
 > ### Feature Pass 002 — 2026-04-09
 >
 > **Obsidian-aware interactive `wotw init` wizard.** One product-surface
@@ -233,17 +279,17 @@ from the working tree at build-complete time.
 
 | Metric | Value |
 |---|---|
-| Source TypeScript files | **63** (post Feature Pass 002, +1 `cli/lib/vault-detect.ts`) |
-| Total source LoC | **~9,609** |
-| Test files | **26** |
-| Total test LoC | **~4,408** |
-| **Tests passing** | **272 / 272** (100%, post Feature Pass 002) |
-| Doc files under `docs/` | **8** (includes new `obsidian-setup.md`) |
+| Source TypeScript files | **65** (post Feature Pass 003, +2: `wiki/health.ts`, `wiki/heal-handlers.ts`) |
+| Total source LoC | **~10,831** |
+| Test files | **31** |
+| Total test LoC | **~5,208** |
+| **Tests passing** | **300 / 300** (100%, post Feature Pass 003) |
+| Doc files under `docs/` | **9** (includes new `knowledge-health.md`) |
 | Top-level doc files | **6** (README.md, CHANGELOG.md, CONTRIBUTING.md, SECURITY.md, ROADMAP.md, this file) |
-| Total doc LoC | **~1,910** (every `.md` listed above + new `obsidian-setup.md`, this summary not included) |
+| Total doc LoC | **~2,100** (every `.md` listed above, this summary not included) |
 | Build target | Node 20, ESM |
-| CLI binary size | ~215 KB (`dist/cli/index.js`, +15 KB from @clack/prompts) |
-| Daemon entry size | ~140 KB (`dist/daemon/entry.js`) |
+| CLI binary size | ~246 KB (`dist/cli/index.js`) |
+| Daemon entry size | ~169 KB (`dist/daemon/entry.js`) |
 | Lint errors | **0** |
 | Typecheck errors | **0** |
 | Prettier diffs | **0** |
@@ -263,6 +309,7 @@ from the working tree at build-complete time.
 | Gate 8 | Feature Pass 001 | PASS | 4 features shipped (lint scheduler, deletion→archive, `wotw logs`, dead-letter queue) with +20 tests across +4 files. 251/251 tests passing across 24 files; lint/typecheck/format/build all clean. See `FEATURE-PASS-001.md`. |
 | Gate 9 | Audit V2 fixes | PASS | 3 HIGH findings resolved (F-7 timing-safe legacy auth, F-12 SECURITY.md token-storage claim, F-13 BUILD-SUMMARY.md drift). **252/252** tests passing across **24** files; lint/typecheck/format/build all clean. See `AUDIT-V2-FIXES.md`. |
 | Gate 10 | Feature Pass 002 | PASS | Obsidian-aware interactive `wotw init` wizard. New `src/cli/lib/vault-detect.ts`, rewritten `src/cli/commands/init.ts`, new `@clack/prompts@^1.2.0` dependency, new `docs/obsidian-setup.md`. **272/272** tests passing across **26** files; lint/typecheck/format/build all clean. See `FEATURE-PASS-002.md`. |
+| Gate 11 | Feature Pass 003 | PASS | Knowledge Health System: health scoring, deduplication, auto-healing (`wotw lint --fix`), contradiction detection. New `src/wiki/health.ts`, `src/wiki/heal-handlers.ts`, `health:` config block, `type: "heal"` provenance, new `docs/knowledge-health.md`. **300/300** tests passing across **31** files; lint/typecheck/format/build all clean. See `FEATURE-PASS-003.md`. |
 
 ---
 
@@ -471,8 +518,10 @@ watcher-on-the-wall/
 │   ├── cli-reference.md
 │   ├── configuration.md
 │   ├── execution-modes.md      # CLI vs API runtime modes (Phase 6)
+│   ├── knowledge-health.md    # Knowledge health system (Feature Pass 003)
 │   ├── mcp-tools.md
 │   ├── multi-user.md
+│   ├── obsidian-setup.md      # Obsidian integration guide (Feature Pass 002)
 │   └── provenance.md
 ├── scripts/
 ├── src/
@@ -485,13 +534,13 @@ watcher-on-the-wall/
 │   ├── server/                 # MCP HTTP server (5 files)
 │   ├── utils/                  # Shared utilities (6 files; utils/hash.ts deleted in L-DUP-1)
 │   ├── watcher/                # File watcher + debounce (4 files)
-│   ├── wiki/                   # Wiki store/search/index (6 files + templates)
+│   ├── wiki/                   # Wiki store/search/index/health (8 files + templates)
 │   └── index.ts                # Library re-export barrel
 ├── templates/                  # (empty placeholder for end-user templates)
 ├── test/
 │   ├── fixtures/
-│   ├── integration/            # 6 files, 38 tests
-│   └── unit/                   # 18 files, 214 tests
+│   ├── integration/            # 8 files, 42 tests
+│   └── unit/                   # 23 files, 258 tests
 ├── .eslintrc.cjs               # Legacy — kept as historical reference
 ├── AUDIT-FIXES.md              # Audit V1 fix summary (16/16)
 ├── AUDIT-REPORT.md             # Audit V1 input
@@ -501,6 +550,8 @@ watcher-on-the-wall/
 ├── CHANGELOG.md
 ├── CONTRIBUTING.md             # Pre-release contributor guide
 ├── FEATURE-PASS-001.md         # Feature Pass 001 report
+├── FEATURE-PASS-002.md         # Feature Pass 002 report
+├── FEATURE-PASS-003.md         # Feature Pass 003 report (Knowledge Health System)
 ├── LICENSE                     # AGPL-3.0-or-later
 ├── README.md
 ├── ROADMAP.md                  # Shipped / In flight / Planned / Won't build
@@ -519,7 +570,7 @@ watcher-on-the-wall/
 ## 4. Source inventory (every file)
 
 Every TypeScript file currently in `src/`, grouped by subsystem.
-**Total: 63 files, ~9,609 LoC.**
+**Total: 65 files, ~10,831 LoC.**
 
 ### `src/cli/` — 17 files
 
@@ -531,10 +582,10 @@ Every TypeScript file currently in `src/`, grouped by subsystem.
 | `cli/commands/init.ts` | **[Feature Pass 002]** `wotw init [dir]` — Obsidian-aware interactive wizard. 7 steps (intro → idempotency → vault location → overlay detection → runtime detection → scaffold → launch → next steps). Uses `@clack/prompts` for the interactive UI. Silent runtime detection via `findOnPath` + `findApiKey` from `ingestion/execution-mode.ts`. Non-interactive mode (no TTY, `--yes`, or `nonInteractive: true`) skips every prompt. Fresh vaults get `.obsidian/{app,appearance,graph}.json` defaults; overlay never touches existing `.obsidian/`. `.gitignore` is append-or-create. Idempotent re-runs short-circuit. Exports `runInit(opts): Promise<RunInitResult>` for tests and programmatic use. |
 | `cli/commands/start.ts` | `wotw start` — forks detached daemon child or runs foreground. |
 | `cli/commands/stop.ts` | `wotw stop` — SIGTERM the daemon via PID file. |
-| `cli/commands/status.ts` | `wotw status [--watch] [--json]` — snapshot TUI. **[Feature Pass 001]** Surfaces orphan count and dead-letter failed-batch count. |
+| `cli/commands/status.ts` | `wotw status [--watch] [--json]` — snapshot TUI. **[Feature Pass 001]** Surfaces orphan count and dead-letter failed-batch count. **[Feature Pass 003]** Shows one-line health summary (avg score + pages needing attention). |
 | `cli/commands/query.ts` | `wotw query <question>` — MCP client → query tool → formatted answer. |
 | `cli/commands/audit.ts` | `wotw audit` — walk provenance chain, print records, verify. |
-| `cli/commands/lint.ts` | `wotw lint` — run linter pass over wiki. **[Feature Pass 001]** Now reports orphan-page count too. |
+| `cli/commands/lint.ts` | `wotw lint [--fix] [--yes] [--json]` — run health checks over wiki. **[Feature Pass 003]** Rewritten: computes full health report (per-page scores + findings), dispatches auto-fixable findings to heal handlers when `--fix` is set. `--json` outputs machine-readable JSON. `--yes` skips confirmation. |
 | `cli/commands/logs.ts` | **[Feature Pass 001]** `wotw logs [-n N] [-f]` — tail `daemon.log_file`. Default 20 lines, follow mode via `watchFile` (250 ms poll, WSL-friendly), handles log rotation via size-shrink detection, exits 0 with friendly message if log file is missing. |
 | `cli/commands/install-hook.ts` | `wotw install-hook` — install Claude Code SessionStart hook. |
 | `cli/commands/uninstall-hook.ts` | `wotw uninstall-hook` — remove Claude Code hook. |
@@ -550,9 +601,9 @@ Every TypeScript file currently in `src/`, grouped by subsystem.
 | `daemon/index.ts` | `DaemonSubsystem` interface + root daemon orchestrator. **[Phase 6]** Resolves the execution mode at startup via `resolveExecutionMode`, exposes it via `getExecutionMode()`, logs the resolved mode prominently. |
 | `daemon/entry.ts` | Child-process entrypoint. Constructs all subsystems and starts them. **[Phase 6]** Threads the resolved `runtimeMode` into `IngestionQueue`, `FileWatcher`, `McpHttpServer`, and `CompoundingEngine`. **[Feature Pass 001]** Constructs `LintScheduler` and `DeadLetterQueue`, and emits a single INFO startup banner with mode / MCP URL / wiki root / DLQ status / lint schedule status. |
 | `daemon/lifecycle.ts` | Start/stop sequencing, signal handlers, graceful shutdown. |
-| `daemon/lint-scheduler.ts` | **[Feature Pass 001]** `LintScheduler` DaemonSubsystem. Runs the structural sweep from `wotw lint` on a configurable interval (`lint.schedule_enabled`/`lint.interval_hours`, default off). Cheap no-op when disabled. `setInterval(...).unref()` so it never holds the daemon open. Clean sweeps log INFO; sweeps with issues log WARN. Injectable `runner` option for tests. |
+| `daemon/lint-scheduler.ts` | **[Feature Pass 001]** `LintScheduler` DaemonSubsystem. Runs the structural sweep from `wotw lint` on a configurable interval (`lint.schedule_enabled`/`lint.interval_hours`, default off). Cheap no-op when disabled. `setInterval(...).unref()` so it never holds the daemon open. Clean sweeps log INFO; sweeps with issues log WARN. Injectable `runner` option for tests. **[Feature Pass 003]** Passes `{ fix: true, yes: true }` when `lint.auto_fix` is enabled. |
 | `daemon/process-manager.ts` | PID/lock file management. Uses `child_process.spawn` with `detached: true` + `stdio: 'ignore'` (not `fork`) so the daemon survives terminal close on every platform including WSL. |
-| `daemon/config.ts` | `defaultConfig`, `loadConfig`, `mergeConfig`, `resolveConfigPaths`. **[Phase 6]** Defines the `execution:` block (`mode/cli_path/cli_model/api_key_env`) with `auto` defaults. **[Feature Pass 001]** Adds the `lint:` block (`schedule_enabled`/`interval_hours`) and `ingestion.dead_letter_file` (default `.wotw/failed-batches.jsonl`; empty string disables). |
+| `daemon/config.ts` | `defaultConfig`, `loadConfig`, `mergeConfig`, `resolveConfigPaths`. **[Phase 6]** Defines the `execution:` block (`mode/cli_path/cli_model/api_key_env`) with `auto` defaults. **[Feature Pass 001]** Adds the `lint:` block (`schedule_enabled`/`interval_hours`) and `ingestion.dead_letter_file` (default `.wotw/failed-batches.jsonl`; empty string disables). **[Feature Pass 003]** Adds the `health:` block (staleness thresholds/scores, weights, duplicate_threshold, auto_fix_staleness_below, max_fixes_per_run, detect_contradictions) and `lint.auto_fix` with deep-merge for health.weights. |
 
 ### `src/watcher/` — 4 files
 
@@ -579,16 +630,18 @@ Every TypeScript file currently in `src/`, grouped by subsystem.
 | `ingestion/cost-tracker.ts` | Per-op + daily budget enforcement. Append-only JSONL cost log. `spentToday()` is cached and backed by a shared `sumCostsForDay` helper reused from `wotw status`. (CLI mode logs `cost=0` for every operation; budget never trips.) |
 | `ingestion/model-router.ts` | Operation → model id mapping. Pricing table. Cost math. **API MODE ONLY** — CLI mode uses `execution.cli_model` for every operation. |
 
-### `src/wiki/` — 6 files + templates
+### `src/wiki/` — 8 files + templates
 
 | File | Purpose |
 |---|---|
 | `wiki/index.ts` | Subsystem barrel. |
 | `wiki/store.ts` | `WikiStore`: category dirs, slug sanitization, read/write/list/count. |
-| `wiki/page.ts` | `WikiPage` type, `parsePage`, `serializePage`, `newPage`. **[Feature Pass 001]** Frontmatter now carries optional `status: orphaned`, `orphaned_at`, `orphaned_source` fields written by the deletion archive pass. |
+| `wiki/page.ts` | `WikiPage` type, `parsePage`, `serializePage`, `newPage`. **[Feature Pass 001]** Frontmatter now carries optional `status: orphaned`, `orphaned_at`, `orphaned_source` fields written by the deletion archive pass. **[Feature Pass 003]** Supports `status: "merged"` / `"stale"`, plus `merged_into` and `contradictions` frontmatter fields. |
 | `wiki/search.ts` | `WikiSearch`: minisearch wrapper with OR-combine, title/tag boosts, snippets. |
 | `wiki/index-manager.ts` | Sentinel-delimited `wiki/index.md` generator. |
 | `wiki/cross-reference.ts` | Bidirectional `related:` link repair. `[[wiki-link]]` extraction. |
+| `wiki/health.ts` | **[Feature Pass 003]** Knowledge health scoring and report generation. `computeStaleness`, `computeSourceAvailability`, `computeLinkHealth`, `computeDuplicateRisk`, `computeWeightedScore`, `computePageHealthScore`, `groupDuplicates` (union-find), `computeHealthReport`. Pure computation + file I/O — no LLM calls. |
+| `wiki/heal-handlers.ts` | **[Feature Pass 003]** LLM-powered heal handlers dispatched by `wotw lint --fix`. `healStale`, `healDuplicate`, `healBrokenLinks`, `healMissingBacklinks` (no LLM — deterministic backlink repair), `healContradiction`. `healFinding` dispatcher routes by `finding.kind`. Budget pre-flight, `type: "heal"` provenance, git commits. |
 | `wiki/templates/CLAUDE.md` | Default wiki CLAUDE.md seed. |
 | `wiki/templates/index.md` | Default wiki index.md seed. |
 | `wiki/templates/log.md` | Default wiki log.md seed. |
@@ -599,7 +652,7 @@ Every TypeScript file currently in `src/`, grouped by subsystem.
 |---|---|
 | `server/index.ts` | `McpHttpServer` subsystem. HTTP server + stateless MCP transport per request. TokenStore integration. **[Phase 6]** Forwards `runtimeMode` to the internal `QueryEngine`. **[M-SEC-2]** No-auth safety rail: emits a loud WARN banner when started with no auth and refuses to start if `server.host` is non-loopback. **[Feature Pass 001]** Threads `DeadLetterQueue` count through to `get_stats`. |
 | `server/middleware.ts` | `RateLimiter`, `runMiddleware`. Returns `{ ok, principal }`. **[F-7]** Legacy single-token branch now uses a constant-time `safeEqual` helper backed by `crypto.timingSafeEqual`. |
-| `server/tools.ts` | All 10 MCP tool handlers (search/list/read/query/index/stats/related/provenance-log/verify/synthesize). `resolveWikiPath` uses canonical `path.resolve` + `path.relative` containment check (M-SEC-1). **[Feature Pass 001]** `get_stats` now reports `orphaned_pages` and `failed_batches`. |
+| `server/tools.ts` | All 10 MCP tool handlers (search/list/read/query/index/stats/related/provenance-log/verify/synthesize). `resolveWikiPath` uses canonical `path.resolve` + `path.relative` containment check (M-SEC-1). **[Feature Pass 001]** `get_stats` now reports `orphaned_pages` and `failed_batches`. **[Feature Pass 003]** `get_stats` now includes `health: { avg_score, pages_below_50, lowest_scoring_page }`. |
 | `server/resources.ts` | MCP resources (index.md as a resource). |
 | `server/query-engine.ts` | Natural-language query answering. Retrieves top-k, asks Claude via `invokeIngestionAgent` (with `allowedTools: ["Read","Glob","Grep"]`), returns answer + citations + cost. **[Phase 6]** Branches model selection on `runtimeMode` and skips budget pre-flight in CLI mode. |
 
@@ -633,7 +686,7 @@ aliases (`sha256`, `sha256Json`, `stableStringify`, `sha256FileSync`).
 
 | File | Purpose |
 |---|---|
-| `utils/types.ts` | All shared types: `WotwConfig`, `WikiPage`, `WikiFrontmatter`, `ProvenanceRecord`, `WatchEvent`, etc. **[Feature Pass 001]** `OperationType` now includes `"archive"`. |
+| `utils/types.ts` | All shared types: `WotwConfig`, `WikiPage`, `WikiFrontmatter`, `ProvenanceRecord`, `WatchEvent`, etc. **[Feature Pass 001]** `OperationType` now includes `"archive"`. **[Feature Pass 003]** `OperationType` now includes `"heal"`. `WikiPageStatus` extended with `"merged"` and `"stale"`. `WikiFrontmatter` gains `merged_into` and `contradictions`. `WotwConfig` gains `health:` block and `lint.auto_fix`. |
 | `utils/fs.ts` | `expandHome`, `resolvePath`, `ensureDir(Sync)`, `atomicWrite(Sync)`, `readTextOrNull(Async)`, `removeIfExistsSync`, `fileExists`, `dirExists`. |
 | `utils/git.ts` | `isGitRepo`, `git(dir)`, `ensureGitRepo`, `commitAll`. Thin wrapper over simple-git. |
 | `utils/logger.ts` | pino-based `getLogger(module)`. Wraps pino-pretty in dev. |
@@ -649,9 +702,9 @@ as an npm package.
 
 ## 5. Test inventory (every file + count)
 
-**Total: 26 files, ~4,408 LoC, 272 tests — all passing.**
+**Total: 31 files, ~5,208 LoC, 300 tests — all passing.**
 
-### Unit tests — `test/unit/` — 20 files, 234 tests
+### Unit tests — `test/unit/` — 23 files, 258 tests
 
 | File | Tests | Covers |
 |---|---|---|
@@ -675,8 +728,11 @@ as an npm package.
 | `unit/logs-command.test.ts` | 5 | **[Feature Pass 001]** `wotw logs` default-tail prints the last 20 lines; explicit `--lines` honored; short logs print fully; missing log file warns and exits 0; invalid `--lines` value exits 1 with error. |
 | `unit/vault-detect.test.ts` | 10 | **[Feature Pass 002]** `obsidianRegistryPath` override + default non-empty. `findObsidianVaults`: missing registry file returns `[]`, malformed JSON returns `[]`, parses mock registry filtering nonexistent paths and sorting by `ts` desc, skips entries pointing at files (not directories). `findEnclosingVault` finds `.obsidian/` one level up, returns null with no match. `obsidianOpenCommand` URL-encodes the vault path. `openInObsidian` returns boolean and never throws on launcher failure. |
 | `unit/init-wizard.test.ts` | 10 | **[Feature Pass 002]** Full non-interactive scaffolding via `runInit({ nonInteractive: true })`: creates every directory + file (config, CLAUDE.md, .gitignore, raw/, wiki/index.md + log.md + 6 category dirs, .obsidian/{app,appearance,graph}.json, .git/); defaults to `process.cwd()` when no `--path`; replaces `__WOTW_UPDATED_ISO__` placeholder in index.md and preserves the sentinel markers; renders `wotw.yaml` with `wiki_root: .` + `raw_path: ./raw`; idempotent re-run preserves a user mutation; `--force` overwrites templates but leaves `.obsidian/` alone; `.gitignore` handling (full file when absent, append on existing without `.wotw/`, no-op when already mentions `.wotw/`); overlay detection preserves a pre-existing `.obsidian/appearance.json` while still scaffolding `raw/` + `wiki/`. |
+| `unit/health-scoring.test.ts` | 15 | **[Feature Pass 003]** `computeStaleness` (recent/old/no-provenance/60-day bucket), `computeSourceAvailability` (orphan/no-provenance/all-exist/partial-missing), `computeLinkHealth` (all-valid/2/4-broken/no-links), `computeWeightedScore` (perfect/all-zero/custom-weights), `computePageHealthScore` (structure check). |
+| `unit/dedup-detection.test.ts` | 4 | **[Feature Pass 003]** `groupDuplicates`: simple pair, empty input, transitive grouping (A↔B + B↔C → {A,B,C}), independent pairs stay separate. |
+| `unit/heal-handlers.test.ts` | 5 | **[Feature Pass 003]** Mock LLM invoker + git-committer. `healStale` prompt shape, `healBrokenLinks` tool whitelist, `healMissingBacklinks` (no LLM, cost=0), `max_fixes_per_run` cap respected, `healDuplicate` merge prompt. |
 
-### Integration tests — `test/integration/` — 6 files, 38 tests
+### Integration tests — `test/integration/` — 8 files, 42 tests
 
 | File | Tests | Covers |
 |---|---|---|
@@ -686,37 +742,46 @@ as an npm package.
 | `integration/git-committer.test.ts` | 5 | Real temp git repos. Fresh-dir init. Real file commit after `ensureGitRepo`. Selective staging (alpha + beta committed, gamma left untracked). Idempotent no-op on unchanged files. Rejection of paths outside wiki root. |
 | `integration/daemon-wsl-verification.test.ts` | 8 | **[Phase 6]** Documents and verifies the spawn-with-`detached: true` daemon pattern on WSL filesystems: PID file write/parse round-trip, `checkDaemonAlive` for current process, stale PID detection via signal 0 (using `0x7fffffff`), `removePidFile` idempotency, `acquireStartLock` under `/tmp`, mutual exclusion (second acquire rejects), re-acquisition after release, platform sanity check. |
 | `integration/deletion-handling.test.ts` | 2 | **[Feature Pass 001]** Full archive pipeline end-to-end: ingest a file, verify provenance + wiki page, delete the source, run the archive pass, assert the wiki page's frontmatter now has `status: orphaned` + `orphaned_at` + `orphaned_source`, the wiki file still exists on disk, an `"archive"` provenance record was appended, and `chain.verify().ok === true` (the new record type does not break canonical hashing). Second test: archive pass with no affected pages is a clean no-op. |
+| `integration/health-report.test.ts` | 2 | **[Feature Pass 003]** Full `computeHealthReport` on a 5-page test wiki: verifies scores for all 5 pages, detects orphan finding, detects broken link finding (with page name in description), confirms summary counts match findings, confirms stale findings for pages with no provenance. Second test: minimal 1-page wiki validates summary field types. |
+| `integration/lint-fix.test.ts` | 2 | **[Feature Pass 003]** Mock LLM/git/execution-mode. `wotw lint` without `--fix`: reports broken links but doesn't modify disk. `wotw lint --fix --yes`: repairs missing backlinks and verifies the target page's `related:` array now contains the back-reference. |
 
-### Test run output (final, post Audit V2)
+### Test run output (final, post Feature Pass 003)
 
 ```
- ✓ test/integration/compounding-skip.test.ts        ( 4 tests)  222ms
- ✓ test/integration/daemon-wsl-verification.test.ts ( 8 tests)   56ms
- ✓ test/integration/deletion-handling.test.ts       ( 2 tests)  469ms
- ✓ test/integration/git-committer.test.ts           ( 5 tests) 1436ms
- ✓ test/integration/mcp-server.test.ts              (15 tests)  618ms
- ✓ test/integration/wiki-pipeline.test.ts           ( 4 tests)  313ms
- ✓ test/unit/cli-invoker.test.ts                    ( 7 tests)10111ms
- ✓ test/unit/config.test.ts                         ( 9 tests)   11ms
- ✓ test/unit/cost-tracker.test.ts                   (11 tests)   44ms
- ✓ test/unit/cross-reference.test.ts                (13 tests)   45ms
- ✓ test/unit/dead-letter.test.ts                    ( 7 tests)  109ms
- ✓ test/unit/execution-mode.test.ts                 (12 tests)  965ms
- ✓ test/unit/fs-utils.test.ts                       (20 tests)  129ms
- ✓ test/unit/lint-scheduler.test.ts                 ( 6 tests)   84ms
- ✓ test/unit/logs-command.test.ts                   ( 5 tests)   86ms
- ✓ test/unit/middleware.test.ts                     (14 tests)  124ms
- ✓ test/unit/model-router.test.ts                   ( 9 tests)   20ms
- ✓ test/unit/provenance-chain.test.ts               (14 tests)  751ms
- ✓ test/unit/provenance-hash.test.ts                (16 tests)   87ms
- ✓ test/unit/sanitize.test.ts                       ( 7 tests)   14ms
- ✓ test/unit/token-store.test.ts                    (17 tests)   71ms
- ✓ test/unit/wiki-page.test.ts                      (12 tests)   72ms
- ✓ test/unit/wiki-search.test.ts                    (14 tests)   42ms
- ✓ test/unit/wiki-store.test.ts                     (21 tests)  227ms
+ ✓ test/integration/compounding-skip.test.ts        ( 4 tests)  240ms
+ ✓ test/integration/daemon-wsl-verification.test.ts ( 8 tests)  121ms
+ ✓ test/integration/deletion-handling.test.ts       ( 2 tests)  918ms
+ ✓ test/integration/git-committer.test.ts           ( 5 tests) 1925ms
+ ✓ test/integration/health-report.test.ts           ( 2 tests)  254ms
+ ✓ test/integration/lint-fix.test.ts                ( 2 tests)  192ms
+ ✓ test/integration/mcp-server.test.ts              (15 tests) 1194ms
+ ✓ test/integration/wiki-pipeline.test.ts           ( 4 tests)  401ms
+ ✓ test/unit/cli-invoker.test.ts                    ( 7 tests)10178ms
+ ✓ test/unit/config.test.ts                         ( 9 tests)   19ms
+ ✓ test/unit/cost-tracker.test.ts                   (11 tests)   91ms
+ ✓ test/unit/cross-reference.test.ts                (13 tests)   46ms
+ ✓ test/unit/dead-letter.test.ts                    ( 7 tests)  164ms
+ ✓ test/unit/dedup-detection.test.ts                ( 4 tests)   50ms
+ ✓ test/unit/execution-mode.test.ts                 (12 tests) 1616ms
+ ✓ test/unit/fs-utils.test.ts                       (20 tests)  185ms
+ ✓ test/unit/heal-handlers.test.ts                  ( 5 tests)  372ms
+ ✓ test/unit/health-scoring.test.ts                 (15 tests)   42ms
+ ✓ test/unit/init-wizard.test.ts                    (10 tests) 2454ms
+ ✓ test/unit/lint-scheduler.test.ts                 ( 6 tests)   59ms
+ ✓ test/unit/logs-command.test.ts                   ( 5 tests)   81ms
+ ✓ test/unit/middleware.test.ts                     (14 tests)  157ms
+ ✓ test/unit/model-router.test.ts                   ( 9 tests)   23ms
+ ✓ test/unit/provenance-chain.test.ts               (14 tests) 1151ms
+ ✓ test/unit/provenance-hash.test.ts                (16 tests)   55ms
+ ✓ test/unit/sanitize.test.ts                       ( 7 tests)   20ms
+ ✓ test/unit/token-store.test.ts                    (17 tests)  148ms
+ ✓ test/unit/vault-detect.test.ts                   (10 tests) 1174ms
+ ✓ test/unit/wiki-page.test.ts                      (12 tests)   75ms
+ ✓ test/unit/wiki-search.test.ts                    (14 tests)   40ms
+ ✓ test/unit/wiki-store.test.ts                     (21 tests)  261ms
 
- Test Files  24 passed (24)
-      Tests  252 passed (252)
+ Test Files  31 passed (31)
+      Tests  300 passed (300)
    Duration  ~12s
 ```
 
@@ -737,12 +802,13 @@ real `claude` binary won't use sleep so this is purely a test cost.
 | `ROADMAP.md` | **[Feature Pass 001]** Shipped / In flight / Planned / Won't build buckets with rationale. | 123 |
 | `BUILD-SUMMARY.md` | **This document.** Auditable build summary. | (this file) |
 | `docs/architecture.md` | Subsystem table, data flow, wiki structure, provenance summary, compounding summary, process model. **[Feature Pass 001]** Subsystem table now includes `lint-scheduler` and `dead-letter`; new "Deletions", "Dead-letter queue", and "Periodic lint" subsections. | 231 |
-| `docs/configuration.md` | Full YAML schema with every default — including the Phase 6 `execution:` block. Environment variables. Path resolution rules. Secrets guidance. **[Feature Pass 001]** New `lint:` block and `ingestion.dead_letter_file` documented. | 161 |
-| `docs/cli-reference.md` | Every CLI command with flags and exit codes. **[Feature Pass 001]** Adds the `wotw logs` subsection and notes that `wotw status` now reports orphan + failed-batch counts. **[Feature Pass 002]** `wotw init` section fully rewritten: 5-row flag table, 8-step wizard flow, non-interactive mode, idempotency guarantees, cross-link to `obsidian-setup.md`. | 225 |
+| `docs/knowledge-health.md` | **[Feature Pass 003]** Full knowledge health system documentation: five scoring factors with weights, staleness day-threshold table, finding kinds and severities, auto-healing handlers, safety guardrails (budget, max_fixes_per_run, provenance), duplicate detection via union-find, contradiction detection, configuration reference, surfacing locations. | 170 |
+| `docs/configuration.md` | Full YAML schema with every default — including the Phase 6 `execution:` block. Environment variables. Path resolution rules. Secrets guidance. **[Feature Pass 001]** New `lint:` block and `ingestion.dead_letter_file` documented. **[Feature Pass 003]** New `health:` block and `lint.auto_fix` documented. | 191 |
+| `docs/cli-reference.md` | Every CLI command with flags and exit codes. **[Feature Pass 001]** Adds the `wotw logs` subsection and notes that `wotw status` now reports orphan + failed-batch counts. **[Feature Pass 002]** `wotw init` section fully rewritten: 5-row flag table, 8-step wizard flow, non-interactive mode, idempotency guarantees, cross-link to `obsidian-setup.md`. **[Feature Pass 003]** `wotw lint` section rewritten with `--fix`, `--yes`, `--json` flags and heal handler summary. | 256 |
 | `docs/obsidian-setup.md` | **[Feature Pass 002]** Full Obsidian integration guide. Registry file locations (macOS / Windows / Linux / WSL), overlay vs fresh vault semantics, subdirectory overlay, `.gitignore` append rules, platform launcher dispatch for `obsidian://open?path=…`, and troubleshooting (missing vaults, wrong `XDG_CONFIG_HOME`, moved vault paths). | 122 |
 | `docs/execution-modes.md` | **[Phase 6]** CLI vs API mode comparison table, auto-detection sequence, behavioral differences, recommended setups, troubleshooting guide for `NO_RUNTIME_AVAILABLE` / `CLI_BINARY_NOT_FOUND` / `API_KEY_NOT_SET`. | 120 |
-| `docs/mcp-tools.md` | Every MCP tool with input schemas and return shapes. Auth modes. Rate limiting. **[Feature Pass 001]** `get_stats` schema now shows `orphaned_pages` and `failed_batches`. | 176 |
-| `docs/provenance.md` | Record schema (every field), canonical hashing algorithm, chain hashing algorithm, verification algorithm, what a signature proves. **[Feature Pass 001]** `type` enum updated to include `"archive"`; new "Archive records" section with the full record shape, sentinel semantics (`source_hashes: ["deleted"]`, `model_id: "none"`), and the no-delete-on-disk guarantee. | 204 |
+| `docs/mcp-tools.md` | Every MCP tool with input schemas and return shapes. Auth modes. Rate limiting. **[Feature Pass 001]** `get_stats` schema now shows `orphaned_pages` and `failed_batches`. **[Feature Pass 003]** `get_stats` schema now includes `health` object. | 183 |
+| `docs/provenance.md` | Record schema (every field), canonical hashing algorithm, chain hashing algorithm, verification algorithm, what a signature proves. **[Feature Pass 001]** `type` enum updated to include `"archive"`; new "Archive records" section. **[Feature Pass 003]** `type` enum includes `"heal"`; new "Heal records" section. | 248 |
 | `docs/multi-user.md` | Enabling, provisioning, listing, revoking users. Client configuration. Token format. Storage format. | 144 |
 
 ---
@@ -789,6 +855,13 @@ Every user-visible feature with an auditable source location.
 | Idempotent synthesis (skip existing) | `src/compounding/engine.ts` (`hasExistingSynthesis`) | Gate 4 live run |
 | Multi-user token lifecycle | `src/multi-user/token-store.ts` | `unit/token-store.test.ts` (17 tests) |
 | `wotw user add/list/revoke` admin | `src/cli/commands/user.ts` | CLI smoke test (`node dist/cli/index.js user --help`) |
+| **Knowledge health scoring** | `src/wiki/health.ts` | `unit/health-scoring.test.ts` (15 tests), `integration/health-report.test.ts` (2 tests) |
+| **Deduplication detection (union-find grouping)** | `src/wiki/health.ts` (`groupDuplicates`) | `unit/dedup-detection.test.ts` (4 tests) |
+| **Auto-healing via `wotw lint --fix`** | `src/wiki/heal-handlers.ts`, `src/cli/commands/lint.ts` | `unit/heal-handlers.test.ts` (5 tests), `integration/lint-fix.test.ts` (2 tests) |
+| **Heal provenance records (`type: "heal"`)** | `src/wiki/heal-handlers.ts` | `unit/heal-handlers.test.ts` |
+| **Health summary in `wotw status`** | `src/cli/commands/status.ts` | Manual verification |
+| **Health summary in `get_stats` MCP tool** | `src/server/tools.ts` | Manual verification |
+| **Daemon lint auto-fix (`lint.auto_fix`)** | `src/daemon/lint-scheduler.ts` | `unit/lint-scheduler.test.ts` (6 tests) |
 | 13 CLI subcommands | `src/cli/commands/*.ts` | Gate-1 smoke (`init`/`start`/`stop`/`status`), Gate-2 live (`start` ingesting), Gate-3 live (`query`), Gate-4 live (`audit`/`synthesize`), Phase-5 smoke (`user`) |
 | Config discovery via cosmiconfig | `src/daemon/config.ts` | `unit/config.test.ts` (9 tests) |
 | Atomic file writes (temp-then-rename) | `src/utils/fs.ts` (`atomicWrite`) | `unit/fs-utils.test.ts` ("no .tmp leftovers") |
@@ -954,7 +1027,7 @@ short-circuiting on a 0 cost (clearer intent in the source).
 ## 9. Quality gates — final verification
 
 All commands were run from the repo root. Output captured on
-2026-04-09 after the Feature Pass 002 landing.
+2026-04-09 after the Feature Pass 003 landing.
 
 ### Typecheck
 
@@ -985,8 +1058,8 @@ All matched files use Prettier code style!
 
 ```
 $ pnpm test
- Test Files  26 passed (26)
-      Tests  272 passed (272)
+ Test Files  31 passed (31)
+      Tests  300 passed (300)
    Duration  ~12s
 ```
 
@@ -995,9 +1068,9 @@ $ pnpm test
 ```
 $ pnpm build
 > tsup
-ESM dist/index.js             ~21 KB
-ESM dist/daemon/entry.js     ~140 KB
-ESM dist/cli/index.js        ~215 KB
+ESM dist/index.js             ~22 KB
+ESM dist/daemon/entry.js     ~169 KB
+ESM dist/cli/index.js        ~246 KB
 ESM ⚡️ Build success
 DTS ⚡️ Build success
 ```
@@ -1063,7 +1136,7 @@ Each one dispatches to a file under `src/cli/commands/`.
 | `wotw status [--watch] [--json]` | `status.ts` | Snapshot: uptime, queue depth, today's cost, page counts, provenance head |
 | `wotw query <question> [--k N]` | `query.ts` | Natural-language query over the wiki via MCP client |
 | `wotw audit [page] [--full] [--limit N]` | `audit.ts` | Walk provenance chain (for a page or the whole chain) |
-| `wotw lint [--json]` | `lint.ts` | Run wiki health checks (orphans, stale refs, contradictions) |
+| `wotw lint [--fix] [--yes] [--json]` | `lint.ts` | **[Feature Pass 003]** Run wiki health checks. `--fix` heals auto-fixable findings (LLM-powered). `--yes` skips confirmation. `--json` outputs machine-readable JSON. |
 | `wotw logs [-n N] [-f/--follow]` | `logs.ts` | Tail the daemon's rotating log file (Feature Pass 001) |
 | `wotw install-hook` | `install-hook.ts` | Install Claude Code SessionStart hook that boots the daemon |
 | `wotw uninstall-hook` | `uninstall-hook.ts` | Remove the Claude Code SessionStart hook |
@@ -1166,6 +1239,22 @@ compounding:
 lint:
   schedule_enabled: false
   interval_hours: 24
+  auto_fix: false                # [Feature Pass 003] when true, scheduler runs lint --fix --yes
+
+# [Feature Pass 003] Knowledge health scoring and auto-healing.
+health:
+  staleness_thresholds: [7, 30, 90, 180, 365]
+  staleness_scores: [100, 80, 60, 40, 20, 0]
+  weights:
+    staleness: 0.25
+    source_availability: 0.25
+    link_health: 0.20
+    duplicate_risk: 0.15
+    contradiction_risk: 0.15
+  duplicate_threshold: 60
+  auto_fix_staleness_below: 40
+  max_fixes_per_run: 10
+  detect_contradictions: false
 
 provenance:
   enabled: true
@@ -1200,7 +1289,7 @@ Every record on `provenance-chain.jsonl` is a single JSON line:
   "seq": 1,
   "id": "sha256(canonicalJson(payload_without_id_and_chain_hash))",
   "timestamp": "ISO-8601 UTC",
-  "type": "ingest | query | synthesize | audit",
+  "type": "ingest | query | compound | archive | heal",
   "source_files": ["wiki-relative paths"],
   "source_hashes": ["sha256 per source file"],
   "prompt_hash": "sha256 of exact prompt bytes",
@@ -1274,8 +1363,8 @@ steps. Nothing in this list is broken; everything is "not yet built".
   provenance rotate` would archive the current chain and start a new
   one whose seq-1 record's `previous_chain_hash` equals the archived
   chain's final `chain_hash`.
-- **`wotw lint` details.** The command exists and runs; a dedicated
-  doc page explaining what it checks would be helpful.
+- ~~**`wotw lint` details.**~~ Resolved in Feature Pass 003 —
+  `docs/knowledge-health.md` covers the full health system.
 - **`wotw install-hook` details.** Same — command works; dedicated
   doc would help.
 - **Cost-tracking, compounding, query-engine docs.** All three are
@@ -1299,20 +1388,20 @@ reproduce the key measurements:
 
 ```bash
 # File counts
-find src -name "*.ts" | wc -l                                 # -> 63
-find test -name "*.ts" | wc -l                                # -> 26
-find docs -name "*.md" | wc -l                                # -> 8
+find src -name "*.ts" | wc -l                                 # -> 65
+find test -name "*.ts" | wc -l                                # -> 31
+find docs -name "*.md" | wc -l                                # -> 9
 
 # Line counts
-find src -name "*.ts" -exec wc -l {} + | tail -1              # -> ~9609 total
-find test -name "*.ts" -exec wc -l {} + | tail -1             # -> ~4408 total
-wc -l docs/*.md README.md CHANGELOG.md CONTRIBUTING.md SECURITY.md ROADMAP.md | tail -1  # -> ~1910 total
+find src -name "*.ts" -exec wc -l {} + | tail -1              # -> ~10831 total
+find test -name "*.ts" -exec wc -l {} + | tail -1             # -> ~5208 total
+wc -l docs/*.md README.md CHANGELOG.md CONTRIBUTING.md SECURITY.md ROADMAP.md | tail -1  # -> ~2100 total
 
 # Gates
 pnpm typecheck                                                # 0 errors
 pnpm lint                                                     # 0 errors, 0 warnings
 pnpm format:check                                             # clean
-pnpm test                                                     # 272/272 passing
+pnpm test                                                     # 300/300 passing
 pnpm build                                                    # success
 
 # CLI smoke

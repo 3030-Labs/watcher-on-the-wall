@@ -43,7 +43,7 @@ Each line is a single JSON object:
 | `seq` | number | Monotonic, starts at 1 |
 | `id` | string | `sha256(canonical(payload))` — see below |
 | `timestamp` | ISO-8601 string | UTC |
-| `type` | `"ingest" \| "query" \| "compound" \| "archive"` | Operation type — `compound` is emitted by the compounding synthesis engine; `archive` is emitted when a raw source is deleted and its dependent wiki pages are marked orphaned (see "Archive records" below) |
+| `type` | `"ingest" \| "query" \| "compound" \| "archive" \| "heal"` | Operation type — `compound` is emitted by the compounding synthesis engine; `archive` is emitted when a raw source is deleted and its dependent wiki pages are marked orphaned (see "Archive records" below); `heal` is emitted by the auto-healing system when `wotw lint --fix` repairs a finding (see "Heal records" below) |
 | `source_files` | `string[]` | Wiki-relative paths |
 | `source_hashes` | `string[]` | `sha256` of each source file, same order |
 | `prompt_hash` | string | `sha256` of the exact system+user prompt bytes |
@@ -191,6 +191,50 @@ A few specifics:
 This design means the provenance chain is a complete record of every
 intended state transition — including the intent to "forget" a
 source — without ever actually losing history.
+
+---
+
+## Heal records
+
+When `wotw lint --fix` repairs a finding, the auto-healing system
+appends a `type: "heal"` record to the provenance chain:
+
+```json
+{
+  "seq": 50,
+  "id": "…",
+  "timestamp": "2026-04-09T18:00:00.000Z",
+  "type": "heal",
+  "source_files": [],
+  "source_hashes": [],
+  "prompt_hash": "…",
+  "model_id": "claude-haiku-4-5",
+  "response_hash": "…",
+  "wiki_files_written": ["wiki/concepts/stale-page.md"],
+  "wiki_file_hashes_after": { "…": "…" },
+  "previous_id": "…",
+  "previous_chain_hash": "…",
+  "chain_hash": "…",
+  "metadata": {
+    "cost_usd": 0.005,
+    "heal_kind": "stale",
+    "finding_id": "stale:wiki/concepts/stale-page.md"
+  }
+}
+```
+
+Key differences from ingest records:
+
+- **`type: "heal"`** distinguishes healing operations from ingestion.
+- **`metadata.heal_kind`** identifies the finding type that was healed
+  (`stale`, `duplicate`, `broken-link`, `missing-backlink`,
+  `contradiction`).
+- **`metadata.finding_id`** links back to the specific finding.
+- **`source_files` / `source_hashes`** are empty because heals operate
+  on existing wiki pages, not raw source files.
+- For `missing-backlink` heals, **`model_id: "none"`** and
+  **`cost_usd: 0`** because no LLM is invoked — the backlink repair
+  is deterministic.
 
 ---
 

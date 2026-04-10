@@ -82,7 +82,12 @@ batches in the dead-letter queue.
   "cost_today_usd": 0.183,
   "indexed_documents": 42,
   "orphaned_pages": 2,
-  "failed_batches": 0
+  "failed_batches": 0,
+  "health": {
+    "avg_score": 78,
+    "pages_below_50": 3,
+    "lowest_scoring_page": "wiki/concepts/old-topic.md"
+  }
 }
 ```
 
@@ -90,7 +95,9 @@ batches in the dead-letter queue.
 the deletion/archive flow in [docs/architecture.md](architecture.md#deletions)).
 `failed_batches` reflects the line count of
 `ingestion.dead_letter_file`; when the dead-letter queue is disabled
-(empty path) this field is always `0`.
+(empty path) this field is always `0`. `health` includes the average
+health score, the count of pages scoring below 50, and the
+lowest-scoring page path (see [knowledge-health.md](knowledge-health.md)).
 
 ### `related_pages`
 
