@@ -2,7 +2,7 @@
  * Unit tests for TokenStore: load/save, addUser, revokeUser, authenticate.
  */
 import { describe, expect, it } from "vitest";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { TokenStore } from "../../src/multi-user/token-store.js";
@@ -155,6 +155,18 @@ describe("TokenStore.revokeUser", () => {
     const store = new TokenStore({ workspacesDir: tmpDir() });
     store.load();
     expect(store.revokeUser("ghost")).toBe(0);
+  });
+});
+
+describe("TokenStore file permissions", () => {
+  it("sets tokens.json to mode 0600 after save", () => {
+    const dir = tmpDir();
+    const store = new TokenStore({ workspacesDir: dir });
+    store.load();
+    store.addUser("alice");
+    const st = statSync(join(dir, "tokens.json"));
+    const mode = st.mode & 0o777;
+    expect(mode).toBe(0o600);
   });
 });
 

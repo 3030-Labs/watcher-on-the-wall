@@ -56,6 +56,7 @@ ingestion:
   max_budget_per_batch_usd: 1.0  # hard cap on spend per batch
   resume_session: true           # keep agent session across batches when possible
   dead_letter_file: .wotw/failed-batches.jsonl  # JSONL ledger of permanently-failed batches (empty string disables)
+  staging: true                  # true → pages land in candidates/ for review; false → direct to wiki/
 
 cost:
   max_daily_usd: 10.0            # hard daily budget (all operations combined)
@@ -68,6 +69,7 @@ server:
   host: 127.0.0.1                # bind to localhost by default
   auth_token: null               # set to a secret to require bearer auth
   rate_limit_rpm: 60             # per-IP requests per minute
+  trust_proxy: false             # set true to use X-Forwarded-For for rate limiting
 
 daemon:
   pid_file: ~/.wotw/daemon.pid
@@ -138,6 +140,28 @@ The `health:` block controls how wiki-page health scores are computed
 and which findings are auto-fixable. All weights must sum to 1.0 for
 the overall score to be a proper 0–100 value. See
 [knowledge-health.md](knowledge-health.md) for the full reference.
+
+### `ingestion.staging`
+
+When `true` (the default), the ingestion pipeline redirects all
+newly-written wiki pages to `wiki/candidates/` instead of their final
+category directory. Pages sit in staging until a human runs
+`wotw approve` to move them into `wiki/<category>/` (or `wotw reject`
+to send them to `candidates/rejected/`).
+
+Set to `false` to bypass staging entirely — pages are written directly
+to their category directories, matching the pre-v0.2 behavior. You can
+also bypass staging per-run with `wotw start --auto-approve`.
+
+### `server.trust_proxy`
+
+When `false` (the default), the rate limiter uses the TCP socket's
+`remoteAddress` to identify clients. The `X-Forwarded-For` header is
+ignored, closing a spoofing vector on direct-connect deployments.
+
+Set to `true` when running behind a reverse proxy (nginx, Cloudflare,
+etc.) that sets `X-Forwarded-For`. The rate limiter will use the
+first IP in the `X-Forwarded-For` chain as the client identity.
 
 ### `ingestion.dead_letter_file`
 

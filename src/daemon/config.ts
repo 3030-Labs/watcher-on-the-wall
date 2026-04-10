@@ -4,6 +4,7 @@
  */
 import { cosmiconfig, type CosmiconfigResult } from "cosmiconfig";
 import { parse as parseYaml } from "yaml";
+import { z } from "zod";
 import { resolvePath } from "../utils/fs.js";
 import type { WotwConfig } from "../utils/types.js";
 
@@ -41,6 +42,7 @@ export function defaultConfig(): WotwConfig {
       max_budget_per_batch_usd: 1.0,
       resume_session: true,
       dead_letter_file: ".wotw/failed-batches.jsonl",
+      staging: true,
     },
     cost: {
       max_daily_usd: 10.0,
@@ -53,6 +55,7 @@ export function defaultConfig(): WotwConfig {
       host: "127.0.0.1",
       auth_token: null,
       rate_limit_rpm: 60,
+      trust_proxy: false,
     },
     daemon: {
       pid_file: "~/.wotw/daemon.pid",
@@ -132,8 +135,9 @@ export async function loadConfig(searchFrom?: string): Promise<LoadConfigResult>
   if (!result || !result.config) {
     return { config: defaults, path: null };
   }
+  const merged = mergeConfig(defaults, result.config as Partial<WotwConfig>);
   return {
-    config: mergeConfig(defaults, result.config as Partial<WotwConfig>),
+    config: validateConfig(merged),
     path: result.filepath,
   };
 }
@@ -171,6 +175,117 @@ export function mergeConfig(base: WotwConfig, override: Partial<WotwConfig>): Wo
     }
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Zod validation schema
+// ---------------------------------------------------------------------------
+
+const positiveNumber = z.number().positive();
+const nonNegativeNumber = z.number().min(0);
+const logLevelSchema = z.enum(["trace", "debug", "info", "warn", "error", "fatal"]);
+
+/**
+ * Zod schema that validates a fully-merged WotwConfig object. Every field
+ * has a default matching {@link defaultConfig} so a bare `{}` passes.
+ */
+const WotwConfigSchema = z.object({
+  wiki_root: z.string().min(1),
+  raw_path: z.string().min(1),
+  execution: z.object({
+    mode: z.enum(["auto", "cli", "api"]),
+    cli_path: z.string().min(1),
+    cli_model: z.string().min(1),
+    api_key_env: z.string().min(1),
+  }),
+  models: z.object({
+    ingest: z.string().min(1),
+    query: z.string().min(1),
+    lint: z.string().min(1),
+    compound_eval: z.string().min(1),
+  }),
+  watcher: z.object({
+    debounce_initial_ms: positiveNumber,
+    debounce_max_ms: positiveNumber,
+    debounce_growth_factor: positiveNumber,
+    burst_threshold: z.number().int().positive(),
+    max_batch_size: z.number().int().positive(),
+    ignore_patterns: z.array(z.string()),
+  }),
+  ingestion: z.object({
+    max_turns: z.number().int().positive(),
+    max_budget_per_batch_usd: positiveNumber,
+    resume_session: z.boolean(),
+    dead_letter_file: z.string(),
+    staging: z.boolean(),
+  }),
+  cost: z.object({
+    max_daily_usd: positiveNumber,
+    max_per_query_usd: positiveNumber,
+    max_per_ingest_usd: positiveNumber,
+    track_file: z.string().min(1),
+  }),
+  server: z.object({
+    port: z.number().int().min(1).max(65535),
+    host: z.string().min(1),
+    auth_token: z.string().nullable(),
+    rate_limit_rpm: z.number().int().positive(),
+    trust_proxy: z.boolean(),
+  }),
+  daemon: z.object({
+    pid_file: z.string().min(1),
+    lock_file: z.string().min(1),
+    log_file: z.string().min(1),
+    log_level: logLevelSchema,
+  }),
+  compounding: z.object({
+    enabled: z.boolean(),
+    min_source_pages: z.number().int().min(0),
+    confidence_threshold: z.number().min(0).max(100),
+  }),
+  provenance: z.object({
+    enabled: z.boolean(),
+    chain_file: z.string().min(1),
+    verify_on_startup: z.boolean(),
+  }),
+  multi_user: z.object({
+    enabled: z.boolean(),
+    workspaces_dir: z.string().min(1),
+  }),
+  lint: z.object({
+    schedule_enabled: z.boolean(),
+    interval_hours: positiveNumber,
+    auto_fix: z.boolean(),
+  }),
+  health: z.object({
+    staleness_thresholds: z.array(z.number().int().min(0)),
+    staleness_scores: z.array(z.number().min(0).max(100)),
+    weights: z.object({
+      staleness: nonNegativeNumber,
+      source_availability: nonNegativeNumber,
+      link_health: nonNegativeNumber,
+      duplicate_risk: nonNegativeNumber,
+      contradiction_risk: nonNegativeNumber,
+    }),
+    duplicate_threshold: z.number().min(0).max(100),
+    auto_fix_staleness_below: z.number().min(0).max(100),
+    max_fixes_per_run: z.number().int().min(0),
+    detect_contradictions: z.boolean(),
+  }),
+});
+
+/**
+ * Validate a merged config against the Zod schema. Throws a descriptive
+ * error on failure, naming the invalid field, expected type, and value.
+ */
+export function validateConfig(config: WotwConfig): WotwConfig {
+  const result = WotwConfigSchema.safeParse(config);
+  if (!result.success) {
+    const issue = result.error.issues[0]!;
+    const path = issue.path.join(".");
+    throw new Error(`Config error: "${path}" ${issue.message}`);
+  }
+  return result.data as WotwConfig;
 }
 
 /**

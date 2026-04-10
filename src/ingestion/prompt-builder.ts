@@ -12,11 +12,12 @@
  * The builder returns a structured object so the llm-invoker can attach it
  * to a session and the cost-tracker can hash the prompt for provenance.
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { readTextOrNullAsync } from "../utils/fs.js";
 import { sanitize } from "../utils/sanitize.js";
 import type { WotwConfig } from "../utils/types.js";
+import { parsePage } from "../wiki/page.js";
 
 export interface IngestionPrompt {
   /** The full user-turn body. */
@@ -68,8 +69,11 @@ export async function buildIngestionPrompt(
     }
   }
 
+  // Gather rejection feedback from previously rejected candidates.
+  const rejections = loadRejectionFeedback(opts.config);
+
   const system = opts.claudeMdOverride ?? (await loadClaudeMd(opts.config));
-  const text = renderUserTurn(opts.config, excerpts);
+  const text = renderUserTurn(opts.config, excerpts, rejections);
 
   return { text, excerpts, system };
 }
@@ -103,7 +107,46 @@ Rules:
   - Never modify files in raw/.
   - Never emit placeholder TODOs — write what you know.`;
 
-function renderUserTurn(cfg: WotwConfig, excerpts: IngestionPrompt["excerpts"]): string {
+interface RejectionFeedback {
+  title: string;
+  reason: string;
+}
+
+/**
+ * Scan the rejected candidates directory for rejection reasons.
+ * These feed back into the LLM prompt so the model learns from past rejections.
+ */
+function loadRejectionFeedback(config: WotwConfig): RejectionFeedback[] {
+  const rejectedDir = join(config.wiki_root, "candidates", "rejected");
+  let files: string[];
+  try {
+    files = readdirSync(rejectedDir).filter((f) => f.endsWith(".md"));
+  } catch {
+    return [];
+  }
+  const feedback: RejectionFeedback[] = [];
+  for (const file of files) {
+    try {
+      const raw = readFileSync(join(rejectedDir, file), "utf8");
+      const page = parsePage(join(rejectedDir, file), raw);
+      if (page.frontmatter.rejection_note) {
+        feedback.push({
+          title: page.frontmatter.title,
+          reason: page.frontmatter.rejection_note,
+        });
+      }
+    } catch {
+      // Skip unreadable rejected pages.
+    }
+  }
+  return feedback;
+}
+
+function renderUserTurn(
+  cfg: WotwConfig,
+  excerpts: IngestionPrompt["excerpts"],
+  rejections: RejectionFeedback[] = [],
+): string {
   const lines: string[] = [];
   lines.push("# Ingestion batch");
   lines.push("");
@@ -125,6 +168,18 @@ function renderUserTurn(cfg: WotwConfig, excerpts: IngestionPrompt["excerpts"]):
     lines.push("```");
   }
   lines.push("");
+  // Rejection feedback from previously rejected candidates.
+  if (rejections.length > 0) {
+    lines.push("## Previous rejections");
+    lines.push("");
+    lines.push("The following pages were rejected by the user. Learn from their feedback:");
+    lines.push("");
+    for (const r of rejections) {
+      lines.push(`- **${r.title}**: ${r.reason}`);
+    }
+    lines.push("");
+  }
+
   lines.push("## Expected output");
   lines.push("");
   lines.push("Write wiki pages using the Write tool. Use `readPage` / `listPages` as you see fit.");

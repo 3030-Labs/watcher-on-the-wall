@@ -90,9 +90,15 @@ with `detached: true` and `stdio: 'ignore'`) and exit. The daemon writes
 its PID to `daemon.pid_file` and its log to `daemon.log_file`.
 
 ```bash
-wotw start              # detach
-wotw start --foreground # run in foreground (useful under systemd / docker)
+wotw start                # detach
+wotw start --foreground   # run in foreground (useful under systemd / docker)
+wotw start --auto-approve # bypass candidates staging (pages go directly to wiki/)
 ```
+
+| Flag | Description |
+|------|-------------|
+| `--foreground` | Run the daemon in the foreground instead of detaching. |
+| `--auto-approve` | Disable the candidates staging workflow for this run. Ingested pages are written directly to `wiki/<category>/` instead of `wiki/candidates/`. |
 
 ## `wotw stop`
 
@@ -138,7 +144,9 @@ at …" message and exits 0.
 ## `wotw query <question> [--k N] [--json]`
 
 Ask a natural-language question and print an answer grounded in the
-wiki, with inline `[citation]` markers.
+wiki, with inline `[citation]` markers. If the search index returns
+zero relevant pages, the query short-circuits with a "no relevant
+wiki pages found" message and costs $0 (the LLM is never called).
 
 ```bash
 wotw query "what is a hash chain?"
@@ -186,6 +194,74 @@ per run is capped by `health.max_fixes_per_run` (default 10).
 
 See [knowledge-health.md](./knowledge-health.md) for the full health
 system documentation.
+
+## `wotw search <terms> [--top N] [--json] [--open]`
+
+Offline full-text search over the wiki (no daemon required). Uses the
+MiniSearch index to find pages matching the given terms.
+
+```bash
+wotw search "hash chain"           # top 5 results
+wotw search "auth" --top 20        # more results
+wotw search "crypto" --json        # machine-readable output
+wotw search "hash chain" --open    # open top result in $EDITOR
+```
+
+## `wotw stale [--since <duration>] [--json] [--dashboard]`
+
+List wiki pages that are stale according to the knowledge health system.
+Uses `computeHealthReport` scores — not raw file modification times.
+
+```bash
+wotw stale                  # pages scoring below default staleness threshold
+wotw stale --since 14d      # pages stale for 14+ days
+wotw stale --since 4w       # pages stale for 4+ weeks
+wotw stale --json           # machine-readable output
+wotw stale --dashboard      # generate a Dataview dashboard page (Obsidian)
+```
+
+Duration syntax: `Nd` for days, `Nw` for weeks. The duration is mapped
+to a score threshold via the `health.staleness_thresholds` /
+`health.staleness_scores` config arrays. Finer granularity requires
+customizing these arrays.
+
+The `--dashboard` flag generates a `wiki/Stale Dashboard.md` with a
+Dataview query — only if the Dataview plugin is installed (detected via
+`.obsidian/plugins/dataview/`). Existing dashboards are never overwritten.
+
+## `wotw candidates [--json]`
+
+List pages currently in the candidates staging area awaiting review.
+
+```bash
+wotw candidates          # human-readable list
+wotw candidates --json   # machine-readable output
+```
+
+## `wotw approve [file] [--all]`
+
+Approve a candidate page, moving it from `wiki/candidates/` to its
+proper category directory (`wiki/<category>/`). Appends a provenance
+record on approval.
+
+```bash
+wotw approve my-article.md   # approve a specific candidate
+wotw approve --all            # approve all pending candidates
+```
+
+## `wotw reject <file> [--reason <text>]`
+
+Reject a candidate page, moving it from `wiki/candidates/` to
+`wiki/candidates/rejected/` with `rejected_at` and optional
+`rejection_note` frontmatter. Rejected pages are fed back to the
+ingestion LLM as "previous rejections" so it can avoid repeating
+the same mistakes.
+
+```bash
+wotw reject bad-article.md --reason "Dates are inaccurate"
+```
+
+---
 
 ## `wotw synthesize [--force]`
 

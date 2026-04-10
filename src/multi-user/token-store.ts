@@ -21,7 +21,7 @@
  * (add/revoke) are written atomically via the same temp-file-then-rename
  * pattern the wiki store uses.
  */
-import { existsSync, readFileSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
 import { atomicWriteSync, ensureDirSync } from "../utils/fs.js";
@@ -90,6 +90,7 @@ export class TokenStore {
       tokens: Object.fromEntries(this.tokens),
     };
     atomicWriteSync(this.file, JSON.stringify(out, null, 2) + "\n");
+    chmodSync(this.file, 0o600);
   }
 
   /**

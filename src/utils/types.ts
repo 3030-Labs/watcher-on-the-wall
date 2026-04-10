@@ -67,6 +67,12 @@ export interface WotwConfig {
      * config-load time. Set to an empty string to disable.
      */
     dead_letter_file: string;
+    /**
+     * When true, ingested pages land in `wiki/candidates/` for human review
+     * instead of going directly into category directories. Approved via
+     * `wotw approve`, rejected via `wotw reject`.
+     */
+    staging: boolean;
   };
   cost: {
     max_daily_usd: number;
@@ -79,6 +85,12 @@ export interface WotwConfig {
     host: string;
     auth_token: string | null;
     rate_limit_rpm: number;
+    /**
+     * When true, trust the `X-Forwarded-For` header for client IP
+     * extraction (for rate limiting). Enable when running behind a
+     * reverse proxy. Default false — use `req.socket.remoteAddress`.
+     */
+    trust_proxy: boolean;
   };
   daemon: {
     pid_file: string;
@@ -168,6 +180,18 @@ export interface WikiFrontmatter {
   merged_into?: string;
   /** Unresolved factual contradictions detected by the health system. */
   contradictions?: string[];
+  /** ISO-8601 timestamp of last compilation by the ingestion pipeline. */
+  last_compiled?: string;
+  /** Number of raw source files backing this page. */
+  source_count?: number;
+  /** ISO-8601 timestamp of last source confirmation (re-ingest or corroboration). */
+  last_confirmed?: string;
+  /** Wiki-relative path of a page that supersedes this one, or null. */
+  superseded_by?: string | null;
+  /** ISO-8601 timestamp when this candidate page was rejected. */
+  rejected_at?: string;
+  /** Reason provided when rejecting a candidate page. */
+  rejection_note?: string;
 }
 
 /** A parsed wiki page. */

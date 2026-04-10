@@ -48,8 +48,19 @@ verifiable down to the byte.
   daily budget prevents runaway spend.
 - **Git-backed history.** The wiki root is a git repo. Every batch is a
   commit with the operation id and cost in the message.
+- **Candidates workflow.** Generated pages can optionally land in
+  `candidates/` for human review before entering the wiki. `wotw approve`,
+  `wotw reject`, and `wotw candidates` manage the review queue.
+- **Knowledge lifecycle.** Every page tracks `last_compiled`,
+  `last_confirmed`, and `source_count` in frontmatter. `wotw stale`
+  surfaces pages that haven't been confirmed recently.
+- **Provenance footers.** Every wiki page carries a `[[wikilink]]` footer
+  linking back to its source files — click-through provenance in Obsidian.
+- **Config validation.** Zod schema validates every config field on load with
+  clear error messages naming the offending field and constraint.
 - **Single binary.** One `wotw` CLI covers everything: `init`, `start`,
-  `stop`, `status`, `query`, `audit`, `lint`, `synthesize`, `user`, `serve`.
+  `stop`, `status`, `query`, `search`, `audit`, `lint`, `stale`,
+  `approve`, `reject`, `candidates`, `synthesize`, `user`, `serve`.
 
 ---
 

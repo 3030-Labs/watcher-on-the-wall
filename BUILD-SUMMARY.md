@@ -1,12 +1,105 @@
-# BUILD-SUMMARY — watcher-on-the-wall v0.1.0
+# BUILD-SUMMARY — watcher-on-the-wall v0.2.0
 
 **Project:** `watcher-on-the-wall` (`wotw`) — a self-bootstrapping persistent
 AI knowledge daemon.
 **Repo path:** `/home/jgoodman/watcher-on-the-wall`
-**Version shipped:** `0.1.0`
+**Version shipped:** `0.2.0`
 **License:** AGPL-3.0-or-later
 **Author line in package.json:** 3030 Labs LLC
 **Target runtime:** Node.js ≥ 20
+
+> ### v0.2 Reconciliation Pass — 2026-04-09
+>
+> Post-sprint reconciliation: 8 features verified/adapted, 4 with new
+> code (trust_proxy, zero-hit guard, staging integration, stale rewrite).
+> **356 tests** across **37 files**. **71 source files**, ~11,900 source LoC,
+> ~273 KB CLI bundle. All gates green (typecheck, lint, format, tests, build).
+>
+> **Feature 7: X-Forwarded-For Proxy Trust (F-8 audit fix).** New
+> `server.trust_proxy: false` default. `extractClientIp` in middleware
+> only uses `X-Forwarded-For` when `trustProxy: true`, closing a
+> rate-limit bypass on direct-connect deployments. 3 new tests.
+>
+> **Feature 8: Zero-Hit Grounding Guard.** `QueryEngine.answer()` now
+> short-circuits with "No relevant wiki pages found" when the search
+> index returns zero hits. No LLM call, $0 cost. 2 new tests.
+>
+> **Feature 3 Gap: Staging Integration.** `ingestion.staging: true`
+> default; `reconcileWrittenPages` redirects pages to `candidates/`.
+> `wotw start --auto-approve` flag. `buildIngestionPrompt` includes
+> rejection feedback from `candidates/rejected/`. `wotw init` scaffolds
+> `candidates/` and `candidates/rejected/`. 5 new staging tests + 3
+> config validation tests.
+>
+> **Feature 4: Stale Rewrite.** `wotw stale` rewritten to wrap
+> `computeHealthReport` from health.ts instead of parallel staleness
+> system. `parseDuration`, `scoreThresholdForDuration` exported. 11
+> stale tests (rewritten).
+>
+> **New test files (+2):** `test/unit/staging.test.ts` (5),
+> `test/unit/query-engine.test.ts` (2).
+> **Modified test files:** `test/unit/middleware.test.ts` (+3),
+> `test/unit/config.test.ts` (+3), `test/unit/stale-command.test.ts`
+> (rewritten, 11 tests).
+
+> ### v0.2 Implementation Sprint — 2026-04-09
+>
+> **2 pre-sprint fixes + 6 features.** All 300 existing tests preserved,
+> 37 new tests added (**337 total** across **35 files**). **71 source files**,
+> ~11,665 source LoC, ~272 KB CLI bundle. All gates green (typecheck,
+> lint, format, tests, build).
+>
+> **Fix A: Config Loader Validation.** Comprehensive Zod schema
+> (`WotwConfigSchema`) validates every field on load with type/range
+> checks. `validateConfig()` runs `safeParse` and throws clear errors
+> with dotted field paths. 7 new tests in `test/unit/config.test.ts`.
+>
+> **Fix B: Token File Permissions.** `chmodSync(0o600)` after every
+> atomic write in `TokenStore.save()`. 1 new test verifying mode.
+>
+> **Feature 1: Provenance Footers.** New `src/wiki/provenance-footer.ts`
+> with sentinel-delimited `<!-- wotw:provenance:start/end -->` footer
+> containing `[[wikilink]]` source references. `ensureProvenanceFooter`
+> is idempotent (strip + re-append). Integrated into
+> `reconcileWrittenPages`. 8 new tests.
+>
+> **Feature 2: Full-Text Search.** `wotw search <terms>` — offline
+> MiniSearch-based FTS over wiki content (no daemon needed). Flags:
+> `--top N`, `--json`, `--open`. 5 new tests.
+>
+> **Feature 3: Knowledge Lifecycle / Staleness.** New frontmatter fields:
+> `last_compiled`, `source_count`, `last_confirmed`, `superseded_by`,
+> `rejected_at`, `rejection_note`. `wotw stale` command with threshold
+> parsing (`14d`, `2w`), `--json`, `--dashboard` (Dataview). 5 new tests.
+>
+> **Feature 4: Candidates Approve/Reject Workflow.** `WikiStore` gains
+> `candidatesDir`, `rejectedDir`, `listCandidates()`, `listRejected()`.
+> Three new CLI commands: `wotw approve [file] [--all]`,
+> `wotw reject <file> [--reason]`, `wotw candidates [--json]`.
+> Approved pages go to `wiki/<category>/`, rejected pages go to
+> `candidates/rejected/` with frontmatter metadata. Provenance records
+> appended on approve. 10 new tests.
+>
+> **Feature 5: Obsidian Launch.** Already implemented in FP002 `wotw init`
+> wizard — graceful fallback when Obsidian is not installed.
+>
+> **Feature 6: Getting Started Page.** New template
+> `src/wiki/templates/getting-started.md` scaffolded into `wiki/` during
+> `wotw init`. Covers quick start, wiki structure, all CLI commands, tips.
+> 1 new test.
+>
+> **New source files (+6):** `src/cli/commands/approve.ts`,
+> `src/cli/commands/reject.ts`, `src/cli/commands/candidates.ts`,
+> `src/cli/commands/stale.ts`, `src/cli/commands/search.ts`,
+> `src/wiki/provenance-footer.ts`.
+> **New template (+1):** `src/wiki/templates/getting-started.md`.
+> **New test files (+4):** `test/unit/candidates-workflow.test.ts` (10),
+> `test/unit/provenance-footer.test.ts` (8),
+> `test/unit/stale-command.test.ts` (5),
+> `test/unit/search-command.test.ts` (5).
+> **Modified test files:** `test/unit/config.test.ts` (+7),
+> `test/unit/token-store.test.ts` (+1),
+> `test/unit/init-wizard.test.ts` (+1).
 
 > ### Feature Pass 003 — 2026-04-09
 >
@@ -279,17 +372,17 @@ from the working tree at build-complete time.
 
 | Metric | Value |
 |---|---|
-| Source TypeScript files | **65** (post Feature Pass 003, +2: `wiki/health.ts`, `wiki/heal-handlers.ts`) |
-| Total source LoC | **~10,831** |
-| Test files | **31** |
-| Total test LoC | **~5,208** |
-| **Tests passing** | **300 / 300** (100%, post Feature Pass 003) |
+| Source TypeScript files | **71** (post v0.2 reconciliation) |
+| Total source LoC | **~11,900** |
+| Test files | **37** |
+| Total test LoC | **~6,100** |
+| **Tests passing** | **356 / 356** (100%, post v0.2 reconciliation) |
 | Doc files under `docs/` | **9** (includes new `knowledge-health.md`) |
 | Top-level doc files | **6** (README.md, CHANGELOG.md, CONTRIBUTING.md, SECURITY.md, ROADMAP.md, this file) |
-| Total doc LoC | **~2,100** (every `.md` listed above, this summary not included) |
+| Total doc LoC | **~2,400** |
 | Build target | Node 20, ESM |
-| CLI binary size | ~246 KB (`dist/cli/index.js`) |
-| Daemon entry size | ~169 KB (`dist/daemon/entry.js`) |
+| CLI binary size | ~273 KB (`dist/cli/index.js`) |
+| Daemon entry size | ~179 KB (`dist/daemon/entry.js`) |
 | Lint errors | **0** |
 | Typecheck errors | **0** |
 | Prettier diffs | **0** |
@@ -310,6 +403,7 @@ from the working tree at build-complete time.
 | Gate 9 | Audit V2 fixes | PASS | 3 HIGH findings resolved (F-7 timing-safe legacy auth, F-12 SECURITY.md token-storage claim, F-13 BUILD-SUMMARY.md drift). **252/252** tests passing across **24** files; lint/typecheck/format/build all clean. See `AUDIT-V2-FIXES.md`. |
 | Gate 10 | Feature Pass 002 | PASS | Obsidian-aware interactive `wotw init` wizard. New `src/cli/lib/vault-detect.ts`, rewritten `src/cli/commands/init.ts`, new `@clack/prompts@^1.2.0` dependency, new `docs/obsidian-setup.md`. **272/272** tests passing across **26** files; lint/typecheck/format/build all clean. See `FEATURE-PASS-002.md`. |
 | Gate 11 | Feature Pass 003 | PASS | Knowledge Health System: health scoring, deduplication, auto-healing (`wotw lint --fix`), contradiction detection. New `src/wiki/health.ts`, `src/wiki/heal-handlers.ts`, `health:` config block, `type: "heal"` provenance, new `docs/knowledge-health.md`. **300/300** tests passing across **31** files; lint/typecheck/format/build all clean. See `FEATURE-PASS-003.md`. |
+| Gate 12 | v0.2 Reconciliation | PASS | 8 features reconciled (trust_proxy, zero-hit guard, staging integration, stale rewrite, plus 4 verified-in-place). **356/356** tests passing across **37** files; lint/typecheck/format/build all clean. See `RECONCILIATION-PASS.md`. |
 
 ---
 

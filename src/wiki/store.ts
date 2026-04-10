@@ -41,10 +41,16 @@ export interface StoreOptions {
 export class WikiStore {
   readonly wikiRoot: string;
   readonly wikiDir: string;
+  /** Candidates staging directory (sibling of wiki/). */
+  readonly candidatesDir: string;
+  /** Rejected candidates subdirectory. */
+  readonly rejectedDir: string;
 
   constructor(opts: StoreOptions) {
     this.wikiRoot = resolve(opts.wikiRoot);
     this.wikiDir = join(this.wikiRoot, "wiki");
+    this.candidatesDir = join(this.wikiRoot, "candidates");
+    this.rejectedDir = join(this.wikiRoot, "candidates", "rejected");
   }
 
   /** Ensure every category subdirectory exists. */
@@ -53,6 +59,8 @@ export class WikiStore {
     for (const dir of Object.values(CATEGORY_DIRS)) {
       await ensureDir(join(this.wikiDir, dir));
     }
+    await ensureDir(this.candidatesDir);
+    await ensureDir(this.rejectedDir);
   }
 
   /** Absolute path to the category directory. */
@@ -114,6 +122,41 @@ export class WikiStore {
       }
     }
     return null;
+  }
+
+  /** List all markdown files in candidates/ (not rejected). */
+  listCandidates(): string[] {
+    const out: string[] = [];
+    if (!dirExists(this.candidatesDir)) return out;
+    for (const entry of readdirSync(this.candidatesDir)) {
+      if (entry === "rejected") continue;
+      const full = join(this.candidatesDir, entry);
+      try {
+        if (statSync(full).isFile() && entry.endsWith(".md")) {
+          out.push(full);
+        }
+      } catch {
+        // Skip entries we can't stat.
+      }
+    }
+    return out.sort();
+  }
+
+  /** List rejected candidates. */
+  listRejected(): string[] {
+    const out: string[] = [];
+    if (!dirExists(this.rejectedDir)) return out;
+    for (const entry of readdirSync(this.rejectedDir)) {
+      const full = join(this.rejectedDir, entry);
+      try {
+        if (statSync(full).isFile() && entry.endsWith(".md")) {
+          out.push(full);
+        }
+      } catch {
+        // Skip entries we can't stat.
+      }
+    }
+    return out.sort();
   }
 
   /** Count markdown files, optionally filtered by category. */

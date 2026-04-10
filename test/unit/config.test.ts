@@ -3,7 +3,12 @@
  */
 import { describe, expect, it } from "vitest";
 import { isAbsolute } from "node:path";
-import { defaultConfig, mergeConfig, resolveConfigPaths } from "../../src/daemon/config.js";
+import {
+  defaultConfig,
+  mergeConfig,
+  resolveConfigPaths,
+  validateConfig,
+} from "../../src/daemon/config.js";
 
 describe("defaultConfig", () => {
   it("returns a full config object with sensible defaults", () => {
@@ -65,6 +70,73 @@ describe("mergeConfig", () => {
     });
     expect(merged.server.port).toBe(9999);
     expect(merged.server.host).toBe(base.server.host);
+  });
+});
+
+describe("validateConfig", () => {
+  it("passes a valid default config", () => {
+    const cfg = defaultConfig();
+    expect(() => validateConfig(cfg)).not.toThrow();
+  });
+
+  it("rejects an invalid type (string where number expected)", () => {
+    const cfg = defaultConfig();
+    (cfg.server as Record<string, unknown>).port = "not-a-number";
+    expect(() => validateConfig(cfg)).toThrow(/server\.port/);
+  });
+
+  it("rejects a negative number where positive is required", () => {
+    const cfg = defaultConfig();
+    cfg.cost.max_daily_usd = -5;
+    expect(() => validateConfig(cfg)).toThrow(/cost\.max_daily_usd/);
+  });
+
+  it("rejects a port out of range", () => {
+    const cfg = defaultConfig();
+    cfg.server.port = 99999;
+    expect(() => validateConfig(cfg)).toThrow(/server\.port/);
+  });
+
+  it("rejects an invalid execution mode", () => {
+    const cfg = defaultConfig();
+    (cfg.execution as Record<string, unknown>).mode = "invalid";
+    expect(() => validateConfig(cfg)).toThrow(/execution\.mode/);
+  });
+
+  it("rejects an invalid log level", () => {
+    const cfg = defaultConfig();
+    (cfg.daemon as Record<string, unknown>).log_level = "verbose";
+    expect(() => validateConfig(cfg)).toThrow(/daemon\.log_level/);
+  });
+
+  it("error message includes the field name", () => {
+    const cfg = defaultConfig();
+    cfg.watcher.debounce_initial_ms = -100;
+    try {
+      validateConfig(cfg);
+      expect.fail("should have thrown");
+    } catch (err) {
+      expect((err as Error).message).toContain("watcher.debounce_initial_ms");
+    }
+  });
+
+  it("rejects a non-boolean trust_proxy", () => {
+    const cfg = defaultConfig();
+    (cfg.server as Record<string, unknown>).trust_proxy = "yes";
+    expect(() => validateConfig(cfg)).toThrow(/server\.trust_proxy/);
+  });
+
+  it("rejects a non-boolean staging", () => {
+    const cfg = defaultConfig();
+    (cfg.ingestion as Record<string, unknown>).staging = "always";
+    expect(() => validateConfig(cfg)).toThrow(/ingestion\.staging/);
+  });
+
+  it("accepts valid trust_proxy and staging values", () => {
+    const cfg = defaultConfig();
+    cfg.server.trust_proxy = true;
+    cfg.ingestion.staging = false;
+    expect(() => validateConfig(cfg)).not.toThrow();
   });
 });
 

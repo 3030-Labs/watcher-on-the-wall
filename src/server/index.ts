@@ -222,6 +222,7 @@ export class McpHttpServer implements DaemonSubsystem {
         authToken: opts.authToken,
         tokenStore: this.tokenStore,
         rateLimitRpm: opts.rateLimit,
+        trustProxy: this.opts.config.server.trust_proxy,
       },
       this.limiter,
     );

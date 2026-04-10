@@ -549,6 +549,9 @@ async function scaffoldVault(
   for (const cat of WIKI_CATEGORY_DIRS) {
     ensureDirSync(join(wikiDir, cat));
   }
+  // Candidates staging directory (for approve/reject workflow).
+  ensureDirSync(join(overlayDir, "candidates"));
+  ensureDirSync(join(overlayDir, "candidates", "rejected"));
 
   // Templates (index.md, log.md, CLAUDE.md) live next to the compiled JS
   // at runtime; fall back to the source tree for `pnpm test`.
@@ -556,12 +559,15 @@ async function scaffoldVault(
   const indexTemplate = readFileSync(join(templatesDir, "index.md"), "utf8");
   const logTemplate = readFileSync(join(templatesDir, "log.md"), "utf8");
   const claudeTemplate = readFileSync(join(templatesDir, "CLAUDE.md"), "utf8");
+  const gettingStartedTemplate = readFileSync(join(templatesDir, "getting-started.md"), "utf8");
 
   const isoNow = new Date().toISOString();
   const indexWithTs = indexTemplate.replace("__WOTW_UPDATED_ISO__", isoNow);
+  const gettingStartedWithTs = gettingStartedTemplate.replace(/__WOTW_UPDATED_ISO__/g, isoNow);
 
   writeIfMissingOrForce(join(wikiDir, "index.md"), indexWithTs, opts.force);
   writeIfMissingOrForce(join(wikiDir, "log.md"), logTemplate, opts.force);
+  writeIfMissingOrForce(join(wikiDir, "getting-started.md"), gettingStartedWithTs, opts.force);
   writeIfMissingOrForce(join(overlayDir, "CLAUDE.md"), claudeTemplate, opts.force);
 
   // wotw.yaml at vault root (NOT overlayDir — the config discovery walks up

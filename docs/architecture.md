@@ -54,7 +54,27 @@ see decision D-16.
 4. **Serving.** The MCP server streams tool calls from any connected
    client. `search`, `list_pages`, and `read_page` are pure reads.
    `query` runs a second Claude agent that receives the top-k search
-   results as context. `synthesize` triggers a compounding pass.
+   results as context — if the search index returns zero hits, the
+   query short-circuits with "No relevant wiki pages found" and costs
+   $0 (the LLM is never called). `synthesize` triggers a compounding
+   pass.
+
+### Candidates staging
+
+When `ingestion.staging: true` (the default), ingested pages do not
+land directly in `wiki/<category>/`. Instead, the reconciler redirects
+them to `wiki/candidates/`, where they sit until a human reviews them:
+
+- `wotw approve [file] [--all]` — moves the page to `wiki/<category>/`
+  and appends a provenance record.
+- `wotw reject <file> [--reason]` — moves the page to
+  `wiki/candidates/rejected/` with `rejected_at` and `rejection_note`
+  frontmatter. Rejected pages are fed back to the ingestion LLM as
+  context ("previous rejections") so it can learn from mistakes.
+- `wotw candidates` — lists pages currently in staging.
+
+Use `wotw start --auto-approve` or set `ingestion.staging: false` to
+bypass staging entirely.
 
 ### Deletions
 
@@ -135,6 +155,8 @@ wiki-store/
     comparisons/    # side-by-side comparison pages
     syntheses/      # compounded higher-level pages
     queries/        # auto-recorded query interactions
+  candidates/       # staging area for human review (when staging=true)
+    rejected/       # rejected candidates with rejection_note frontmatter
   provenance-chain.jsonl
   cost-log.jsonl
   .git/

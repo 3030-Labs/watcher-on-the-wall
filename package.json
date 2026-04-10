@@ -1,6 +1,6 @@
 {
   "name": "watcher-on-the-wall",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A self-bootstrapping persistent AI knowledge daemon. Your AI agents share a brain. It builds itself.",
   "type": "module",
   "bin": {

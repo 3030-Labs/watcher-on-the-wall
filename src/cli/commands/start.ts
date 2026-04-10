@@ -16,6 +16,7 @@ interface StartOptions {
   detach?: boolean;
   foreground?: boolean;
   config?: string;
+  autoApprove?: boolean;
 }
 
 /**
@@ -28,6 +29,7 @@ export function registerStartCommand(program: Command): void {
     .option("-d, --detach", "Run as a detached background process (default)")
     .option("-f, --foreground", "Run in the foreground (Ctrl-C to stop)")
     .option("-c, --config <path>", "Path to a config file")
+    .option("--auto-approve", "Bypass candidates staging (pages go directly to wiki/)")
     .action(async (opts: StartOptions) => {
       try {
         await runStart(opts);
@@ -48,6 +50,11 @@ export async function runStart(opts: StartOptions): Promise<void> {
   // Always load config first so we know the PID / log file locations.
   const loaded = await loadConfig();
   const config = resolveConfigPaths(loaded.config);
+
+  // --auto-approve disables staging for this daemon run.
+  if (opts.autoApprove === true) {
+    config.ingestion.staging = false;
+  }
 
   const alive = checkDaemonAlive(config.daemon.pid_file);
   if (alive.alive) {

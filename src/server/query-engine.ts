@@ -91,6 +91,21 @@ export class QueryEngine {
     const hits = this.opts.search.search(question, k);
     log.info({ question, hits: hits.length, runtimeMode }, "query received");
 
+    // Zero-hit grounding guard: refuse to answer from general knowledge.
+    // The wiki's value is grounded answers backed by source material.
+    if (hits.length === 0) {
+      return {
+        question,
+        answer:
+          "No relevant wiki pages found for this query. Try ingesting source material on this topic first.",
+        sources: [],
+        costUsd: 0,
+        durationMs: Date.now() - started,
+        model,
+        skipped: false,
+      };
+    }
+
     const systemPrompt = buildQuerySystemPrompt();
     const userPrompt = buildQueryUserPrompt(question, hits);
 
@@ -196,7 +211,7 @@ function buildQueryUserPrompt(question: string, hits: SearchHit[]): string {
   lines.push(`# Retrieved wiki pages (${hits.length})`);
   lines.push("");
   if (hits.length === 0) {
-    lines.push("_No matching pages found. Answer from general knowledge with a disclaimer._");
+    lines.push("_No matching pages found._");
   } else {
     for (const h of hits) {
       lines.push(`## ${h.title}  (score ${h.score.toFixed(3)})`);

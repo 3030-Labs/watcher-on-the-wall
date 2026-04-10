@@ -194,6 +194,79 @@ describe("runMiddleware", () => {
     }
   });
 
+  it("trust_proxy false: ignores XFF, uses socket address", () => {
+    const limiter = new RateLimiter(1);
+    const req1 = mockRequest({
+      forwarded: "1.2.3.4",
+      remoteAddress: "10.0.0.1",
+    });
+    const r1 = mockResponse();
+    // trust_proxy defaults to undefined (falsy) — should use socket address.
+    expect(runMiddleware(req1, r1.res, { authToken: null, rateLimitRpm: 1 }, limiter).ok).toBe(
+      true,
+    );
+    // Second request from same socket address (different XFF) hits limit.
+    const req2 = mockRequest({
+      forwarded: "5.6.7.8",
+      remoteAddress: "10.0.0.1",
+    });
+    const r2 = mockResponse();
+    expect(runMiddleware(req2, r2.res, { authToken: null, rateLimitRpm: 1 }, limiter).ok).toBe(
+      false,
+    );
+    expect(r2.statusCode).toBe(429);
+  });
+
+  it("trust_proxy true: uses XFF for rate limiting", () => {
+    const limiter = new RateLimiter(1);
+    const req1 = mockRequest({
+      forwarded: "1.2.3.4",
+      remoteAddress: "127.0.0.1",
+    });
+    const r1 = mockResponse();
+    expect(
+      runMiddleware(req1, r1.res, { authToken: null, rateLimitRpm: 1, trustProxy: true }, limiter)
+        .ok,
+    ).toBe(true);
+    // Second request from same XFF IP hits limit.
+    const req2 = mockRequest({
+      forwarded: "1.2.3.4",
+      remoteAddress: "127.0.0.1",
+    });
+    const r2 = mockResponse();
+    expect(
+      runMiddleware(req2, r2.res, { authToken: null, rateLimitRpm: 1, trustProxy: true }, limiter)
+        .ok,
+    ).toBe(false);
+    expect(r2.statusCode).toBe(429);
+    // Different XFF IP is still allowed.
+    const req3 = mockRequest({
+      forwarded: "5.6.7.8",
+      remoteAddress: "127.0.0.1",
+    });
+    const r3 = mockResponse();
+    expect(
+      runMiddleware(req3, r3.res, { authToken: null, rateLimitRpm: 1, trustProxy: true }, limiter)
+        .ok,
+    ).toBe(true);
+  });
+
+  it("trust_proxy false: same socket, different XFF share rate-limit bucket", () => {
+    const limiter = new RateLimiter(2);
+    const opts = { authToken: null, rateLimitRpm: 2, trustProxy: false };
+    const req1 = mockRequest({ forwarded: "1.1.1.1", remoteAddress: "10.0.0.5" });
+    const r1 = mockResponse();
+    expect(runMiddleware(req1, r1.res, opts, limiter).ok).toBe(true);
+    const req2 = mockRequest({ forwarded: "2.2.2.2", remoteAddress: "10.0.0.5" });
+    const r2 = mockResponse();
+    expect(runMiddleware(req2, r2.res, opts, limiter).ok).toBe(true);
+    // Third request exhausts the bucket for 10.0.0.5.
+    const req3 = mockRequest({ forwarded: "3.3.3.3", remoteAddress: "10.0.0.5" });
+    const r3 = mockResponse();
+    expect(runMiddleware(req3, r3.res, opts, limiter).ok).toBe(false);
+    expect(r3.statusCode).toBe(429);
+  });
+
   it("extracts client IP from x-forwarded-for", () => {
     const limiter = new RateLimiter(1);
     // First request from proxied IP.
@@ -202,18 +275,20 @@ describe("runMiddleware", () => {
       remoteAddress: "127.0.0.1",
     });
     const r1 = mockResponse();
-    expect(runMiddleware(req1, r1.res, { authToken: null, rateLimitRpm: 1 }, limiter).ok).toBe(
-      true,
-    );
+    expect(
+      runMiddleware(req1, r1.res, { authToken: null, rateLimitRpm: 1, trustProxy: true }, limiter)
+        .ok,
+    ).toBe(true);
     // Second request from same proxied IP hits the limit.
     const req2 = mockRequest({
       forwarded: "203.0.113.1, 198.51.100.1",
       remoteAddress: "127.0.0.1",
     });
     const r2 = mockResponse();
-    expect(runMiddleware(req2, r2.res, { authToken: null, rateLimitRpm: 1 }, limiter).ok).toBe(
-      false,
-    );
+    expect(
+      runMiddleware(req2, r2.res, { authToken: null, rateLimitRpm: 1, trustProxy: true }, limiter)
+        .ok,
+    ).toBe(false);
     expect(r2.statusCode).toBe(429);
     // A different proxied IP should still be allowed.
     const req3 = mockRequest({
@@ -221,9 +296,10 @@ describe("runMiddleware", () => {
       remoteAddress: "127.0.0.1",
     });
     const r3 = mockResponse();
-    expect(runMiddleware(req3, r3.res, { authToken: null, rateLimitRpm: 1 }, limiter).ok).toBe(
-      true,
-    );
+    expect(
+      runMiddleware(req3, r3.res, { authToken: null, rateLimitRpm: 1, trustProxy: true }, limiter)
+        .ok,
+    ).toBe(true);
   });
 
   it("authenticates via TokenStore when provided", async () => {

@@ -61,6 +61,24 @@ export function parsePage(filePath: string, raw: string): WikiPage {
   if (contradictions.length > 0) {
     frontmatter.contradictions = contradictions;
   }
+  if (typeof data.last_compiled === "string") {
+    frontmatter.last_compiled = data.last_compiled;
+  }
+  if (typeof data.source_count === "number") {
+    frontmatter.source_count = data.source_count;
+  }
+  if (typeof data.last_confirmed === "string") {
+    frontmatter.last_confirmed = data.last_confirmed;
+  }
+  if (data.superseded_by === null || typeof data.superseded_by === "string") {
+    frontmatter.superseded_by = data.superseded_by;
+  }
+  if (typeof data.rejected_at === "string") {
+    frontmatter.rejected_at = data.rejected_at;
+  }
+  if (typeof data.rejection_note === "string") {
+    frontmatter.rejection_note = data.rejection_note;
+  }
 
   return {
     path: filePath,
@@ -96,6 +114,12 @@ export function serializePage(page: Pick<WikiPage, "frontmatter" | "body">): str
   if (fm.contradictions && fm.contradictions.length > 0) {
     data.contradictions = fm.contradictions;
   }
+  if (fm.last_compiled) data.last_compiled = fm.last_compiled;
+  if (fm.source_count !== undefined) data.source_count = fm.source_count;
+  if (fm.last_confirmed) data.last_confirmed = fm.last_confirmed;
+  if (fm.superseded_by !== undefined) data.superseded_by = fm.superseded_by;
+  if (fm.rejected_at) data.rejected_at = fm.rejected_at;
+  if (fm.rejection_note) data.rejection_note = fm.rejection_note;
   return matter.stringify(page.body, data);
 }
 

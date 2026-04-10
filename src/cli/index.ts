@@ -21,9 +21,14 @@ import { registerInstallHookCommand } from "./commands/install-hook.js";
 import { registerUninstallHookCommand } from "./commands/uninstall-hook.js";
 import { registerServeCommand } from "./commands/serve.js";
 import { registerSynthesizeCommand } from "./commands/synthesize.js";
+import { registerSearchCommand } from "./commands/search.js";
+import { registerStaleCommand } from "./commands/stale.js";
 import { registerUserCommand } from "./commands/user.js";
+import { registerApproveCommand } from "./commands/approve.js";
+import { registerRejectCommand } from "./commands/reject.js";
+import { registerCandidatesCommand } from "./commands/candidates.js";
 
-const VERSION = "0.1.0";
+const VERSION = "0.2.0";
 
 async function main(): Promise<void> {
   // If spawned as a detached daemon child (D-16), bypass CLI parsing entirely.
@@ -45,14 +50,19 @@ async function main(): Promise<void> {
   registerStopCommand(program);
   registerStatusCommand(program);
   registerQueryCommand(program);
+  registerSearchCommand(program);
   registerAuditCommand(program);
   registerLintCommand(program);
   registerLogsCommand(program);
   registerInstallHookCommand(program);
   registerUninstallHookCommand(program);
   registerServeCommand(program);
+  registerStaleCommand(program);
   registerSynthesizeCommand(program);
   registerUserCommand(program);
+  registerApproveCommand(program);
+  registerRejectCommand(program);
+  registerCandidatesCommand(program);
 
   await program.parseAsync(process.argv);
 }

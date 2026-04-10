@@ -39,6 +39,11 @@ export interface MiddlewareOptions {
    */
   tokenStore?: TokenStore | null;
   rateLimitRpm: number;
+  /**
+   * When true, trust `X-Forwarded-For` for client IP. When false
+   * (default), always use `req.socket.remoteAddress`.
+   */
+  trustProxy?: boolean;
 }
 
 /**
@@ -113,7 +118,7 @@ export function runMiddleware(
   limiter: RateLimiter,
 ): MiddlewareResult {
   const log = getLogger("http");
-  const clientIp = extractClientIp(req);
+  const clientIp = extractClientIp(req, opts.trustProxy === true);
 
   // Rate limit first so a flood of 401s doesn't DoS us either.
   if (!limiter.take(clientIp)) {
@@ -166,8 +171,10 @@ function extractBearer(req: IncomingMessage): string | null {
   return h.slice(7).trim() || null;
 }
 
-function extractClientIp(req: IncomingMessage): string {
-  const fwd = req.headers["x-forwarded-for"];
-  if (typeof fwd === "string") return fwd.split(",")[0]?.trim() ?? "unknown";
+function extractClientIp(req: IncomingMessage, trustProxy: boolean): string {
+  if (trustProxy) {
+    const fwd = req.headers["x-forwarded-for"];
+    if (typeof fwd === "string") return fwd.split(",")[0]?.trim() ?? "unknown";
+  }
   return req.socket.remoteAddress ?? "unknown";
 }

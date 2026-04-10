@@ -14,11 +14,13 @@
  * it in place rather than failing the whole batch — the worst case is the
  * page gets a default category ("concept") and today's date.
  */
-import { isAbsolute, relative, resolve, sep } from "node:path";
+import { unlinkSync } from "node:fs";
+import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { readTextOrNullAsync } from "../utils/fs.js";
 import { getLogger } from "../utils/logger.js";
 import type { WikiPage } from "../utils/types.js";
 import { parsePage } from "../wiki/page.js";
+import { ensureProvenanceFooter } from "../wiki/provenance-footer.js";
 import type { WikiStore } from "../wiki/store.js";
 
 export interface ReconcileResult {
@@ -28,6 +30,11 @@ export interface ReconcileResult {
   skipped: { path: string; reason: string }[];
 }
 
+export interface ReconcileOptions {
+  /** When true, redirect pages to candidates/ for human review. */
+  staging?: boolean;
+}
+
 /**
  * Walk a list of absolute paths, keep only those inside the wiki directory,
  * parse them, normalize frontmatter, and rewrite them through the store.
@@ -35,6 +42,7 @@ export interface ReconcileResult {
 export async function reconcileWrittenPages(
   store: WikiStore,
   candidatePaths: string[],
+  opts?: ReconcileOptions,
 ): Promise<ReconcileResult> {
   const log = getLogger("wiki-writer");
   const pages: WikiPage[] = [];
@@ -65,7 +73,36 @@ export async function reconcileWrittenPages(
     }
     try {
       const page = parsePage(abs, raw);
-      await store.writePage(page);
+      // Populate lifecycle fields on write.
+      const now = new Date().toISOString();
+      page.frontmatter.last_compiled = now;
+      page.frontmatter.source_count = page.frontmatter.sources.length;
+      if (!page.frontmatter.last_confirmed) {
+        page.frontmatter.last_confirmed = now;
+      }
+      if (page.frontmatter.superseded_by === undefined) {
+        page.frontmatter.superseded_by = null;
+      }
+      // Append clickable provenance footer.
+      page.body = ensureProvenanceFooter(page.body, page.frontmatter);
+
+      if (opts?.staging === true) {
+        // Redirect page to candidates/ for human review.
+        const originalPath = page.path;
+        const candidatePath = join(store.candidatesDir, basename(page.path));
+        page.path = candidatePath;
+        await store.writePage(page);
+        // Remove the agent's original file (already written to category dir).
+        try {
+          if (resolve(originalPath) !== resolve(candidatePath)) {
+            unlinkSync(originalPath);
+          }
+        } catch {
+          // Best-effort cleanup.
+        }
+      } else {
+        await store.writePage(page);
+      }
       pages.push(page);
     } catch (err) {
       log.warn({ err, path: abs }, "failed to parse written page");

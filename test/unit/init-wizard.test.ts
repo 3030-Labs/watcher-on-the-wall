@@ -52,6 +52,9 @@ describe("runInit — non-interactive scaffolding", () => {
       expect(existsSync(join(root, "wiki", cat))).toBe(true);
     }
 
+    // Getting Started page
+    expect(existsSync(join(root, "wiki", "getting-started.md"))).toBe(true);
+
     // Fresh-vault .obsidian defaults
     expect(existsSync(join(root, ".obsidian", "app.json"))).toBe(true);
     expect(existsSync(join(root, ".obsidian", "appearance.json"))).toBe(true);
@@ -80,6 +83,18 @@ describe("runInit — non-interactive scaffolding", () => {
     expect(indexBody).toContain("<!-- wotw:index:end -->");
     // ISO timestamp dropped into the frontmatter.
     expect(indexBody).toMatch(/updated: \d{4}-\d{2}-\d{2}T/);
+  });
+
+  it("creates getting-started.md with replaced timestamp and valid frontmatter", async () => {
+    const root = tmp();
+    await runInit({ path: root, yes: true, nonInteractive: true, open: false });
+    const body = readFileSync(join(root, "wiki", "getting-started.md"), "utf8");
+    expect(body).not.toContain("__WOTW_UPDATED_ISO__");
+    expect(body).toContain("title: Getting Started");
+    expect(body).toContain("category: concept");
+    expect(body).toContain("wotw start");
+    expect(body).toContain("wotw search");
+    expect(body).toContain("wotw approve");
   });
 
   it("renders wotw.yaml with sibling raw/wiki paths relative to the vault root", async () => {

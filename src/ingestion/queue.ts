@@ -274,6 +274,7 @@ export class IngestionQueue implements DaemonSubsystem {
     const { pages: newPages, skipped: skippedWrites } = await reconcileWrittenPages(
       this.opts.store,
       invokeResult.writtenPaths,
+      { staging: this.opts.config.ingestion.staging },
     );
     if (skippedWrites.length > 0) {
       log.warn({ skipped: skippedWrites, batchId: batch.id }, "some written paths skipped");
