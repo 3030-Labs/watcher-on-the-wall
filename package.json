@@ -1,0 +1,85 @@
+{
+  "name": "watcher-on-the-wall",
+  "version": "0.1.0",
+  "description": "A self-bootstrapping persistent AI knowledge daemon. Your AI agents share a brain. It builds itself.",
+  "type": "module",
+  "bin": {
+    "wotw": "./dist/cli/index.js",
+    "watcher-on-the-wall": "./dist/cli/index.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "templates",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:unit": "vitest run test/unit",
+    "test:integration": "vitest run test/integration",
+    "lint": "eslint src test --ext .ts",
+    "lint:fix": "eslint src test --ext .ts --fix",
+    "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\"",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "pnpm build"
+  },
+  "keywords": [
+    "ai",
+    "llm",
+    "claude",
+    "mcp",
+    "knowledge-base",
+    "daemon",
+    "wiki",
+    "provenance",
+    "compliance",
+    "agent"
+  ],
+  "author": "3030 Labs LLC",
+  "license": "AGPL-3.0-or-later",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.92",
+    "@anthropic-ai/sdk": "^0.82.0",
+    "@clack/prompts": "^1.2.0",
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "boxen": "^8.0.1",
+    "chalk": "^5.4.1",
+    "chokidar": "^4.0.3",
+    "commander": "^12.1.0",
+    "cosmiconfig": "^9.0.0",
+    "gray-matter": "^4.0.3",
+    "minisearch": "^7.1.1",
+    "ora": "^8.1.1",
+    "p-queue": "^8.0.1",
+    "pino": "^9.5.0",
+    "pino-pretty": "^13.0.0",
+    "proper-lockfile": "^4.1.2",
+    "simple-git": "^3.27.0",
+    "yaml": "^2.6.1",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "@types/node": "^22.10.2",
+    "@types/proper-lockfile": "^4.1.4",
+    "@typescript-eslint/eslint-plugin": "^8.18.2",
+    "@typescript-eslint/parser": "^8.18.2",
+    "eslint": "^9.17.0",
+    "globals": "^15.15.0",
+    "prettier": "^3.4.2",
+    "tsup": "^8.3.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

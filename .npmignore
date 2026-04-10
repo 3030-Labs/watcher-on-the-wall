@@ -1,0 +1,14 @@
+src/
+test/
+docs/
+scripts/
+.github/
+*.ts
+!dist/**/*.d.ts
+tsconfig.json
+tsup.config.ts
+vitest.config.ts
+.eslintrc.cjs
+.prettierrc
+.gitignore
+coverage/
