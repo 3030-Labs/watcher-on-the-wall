@@ -3,9 +3,10 @@
  * It reads environment variables, constructs a Daemon instance, wires up
  * the Phase 2+ subsystems (watcher → ingestion queue → wiki layer), and calls run().
  */
+import { mkdirSync, writeFileSync } from "node:fs";
 import { Daemon } from "./index.js";
 import { LintScheduler } from "./lint-scheduler.js";
-import { getLogger } from "../utils/logger.js";
+import { getLogger, initLogger } from "../utils/logger.js";
 import { WikiStore } from "../wiki/store.js";
 import { IndexManager } from "../wiki/index-manager.js";
 import { WikiSearch } from "../wiki/search.js";
@@ -19,6 +20,25 @@ import { ProvenanceChain } from "../provenance/chain.js";
 import { CompoundingEngine } from "../compounding/engine.js";
 
 async function main(): Promise<void> {
+  // Early fallback logger so daemon.init() failures are captured to disk.
+  const fallbackLogDir = `${process.cwd()}/.wotw`;
+  const fallbackLogPath = `${fallbackLogDir}/daemon.log`;
+  try {
+    mkdirSync(fallbackLogDir, { recursive: true });
+    initLogger("info", fallbackLogPath);
+  } catch {
+    try {
+      mkdirSync(fallbackLogDir, { recursive: true });
+      writeFileSync(
+        fallbackLogPath,
+        `[${new Date().toISOString()}] FATAL: failed to initialize fallback logger\n`,
+        { flag: "a" },
+      );
+    } catch {
+      /* nothing more we can do */
+    }
+  }
+
   const args = process.argv.slice(2);
   let configPath: string | null = null;
   for (let i = 0; i < args.length; i++) {

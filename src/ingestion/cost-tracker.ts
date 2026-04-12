@@ -3,7 +3,7 @@
  * configured `cost.track_file` path. Designed for fast append + cheap
  * tail reads (status command reads the last ~1000 lines).
  */
-import { appendFileSync, existsSync, readFileSync } from "node:fs";
+import { appendFileSync, readFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { ensureDirSync } from "../utils/fs.js";
 import { getLogger } from "../utils/logger.js";
@@ -21,16 +21,19 @@ function utcToday(): string {
  * readout) so there is a single source of truth for cost accounting
  * (L-CODE-3).
  *
- * Missing files, unreadable files, and malformed lines all return / skip
- * gracefully — the cost log is best-effort ledger, not a critical path.
+ * Missing files return 0 gracefully. Non-ENOENT read failures throw so
+ * that budget checks fail closed rather than silently returning $0.
+ * Malformed lines are skipped individually.
  */
 export function sumCostsForDay(trackFile: string, day: string = utcToday()): number {
-  if (!existsSync(trackFile)) return 0;
   let text: string;
   try {
     text = readFileSync(trackFile, "utf8");
-  } catch {
-    return 0;
+  } catch (err: unknown) {
+    if (err instanceof Error && "code" in err && (err as NodeJS.ErrnoException).code === "ENOENT") {
+      return 0;
+    }
+    throw new Error(`cost log unreadable: ${err instanceof Error ? err.message : String(err)}`);
   }
   let total = 0;
   for (const rawLine of text.split("\n")) {
@@ -84,15 +87,8 @@ export class CostTracker {
   /** Append a cost entry to the log. */
   record(entry: CostLogEntry): void {
     const line = `${JSON.stringify(entry)}\n`;
-    try {
-      appendFileSync(this.trackFile, line, "utf8");
-    } catch (err) {
-      getLogger("cost").error({ err, file: this.trackFile }, "failed to append cost entry");
-      return;
-    }
-    // Keep the cache in sync without a re-scan. If the entry is for a
-    // different UTC day than the cached one, drop the cache — the next
-    // read will re-hydrate.
+    // Update in-memory cache FIRST so budget checks reflect this entry
+    // even if the file write fails.
     const entryDay = entry.timestamp.slice(0, 10);
     const today = utcToday();
     if (entryDay === today) {
@@ -106,6 +102,14 @@ export class CostTracker {
       // Entry is for an older day (unusual — timestamps are always "now")
       // or for the future. Invalidate so we re-scan next read.
       this.cachedDay = null;
+    }
+    try {
+      appendFileSync(this.trackFile, line, "utf8");
+    } catch (err) {
+      getLogger("cost").error(
+        { err, file: this.trackFile, costUsd: entry.cost_usd },
+        "failed to persist cost entry — in-memory total updated but file may be stale",
+      );
     }
   }
 

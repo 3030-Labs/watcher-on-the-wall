@@ -6,7 +6,8 @@
  * configured raw directory, stop() tears down chokidar and cancels the
  * pending debounce timer.
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import chokidar, { type FSWatcher } from "chokidar";
 import { getLogger } from "../utils/logger.js";
 import type { RuntimeMode, WotwConfig } from "../utils/types.js";
@@ -54,6 +55,8 @@ export interface WatcherOptions {
    * spawn. Defaults to `"api"` so existing tests are unaffected.
    */
   runtimeMode?: RuntimeMode;
+  /** Called when a file exceeds the retry limit. */
+  onDropped?: (path: string, reason: string) => void;
 }
 
 /**
@@ -65,8 +68,12 @@ export class FileWatcher implements DaemonSubsystem {
   private readonly opts: WatcherOptions;
   private readonly classifier = new EventClassifier();
   private readonly batcher: DebounceBatcher;
+  private readonly retryCount = new Map<string, number>();
+  private readonly processedPaths = new Set<string>();
+  private reconciliationTimer: ReturnType<typeof setInterval> | null = null;
   private watcher: FSWatcher | null = null;
   private ready = false;
+  private degraded = false;
 
   constructor(opts: WatcherOptions) {
     this.opts = opts;
@@ -112,6 +119,7 @@ export class FileWatcher implements DaemonSubsystem {
     this.watcher.on("unlink", (path) => this.handleUnlink(path));
     this.watcher.on("error", (err) => {
       log.error({ err }, "watcher error");
+      this.degraded = true;
     });
     this.watcher.on("ready", () => {
       this.ready = true;
@@ -122,6 +130,10 @@ export class FileWatcher implements DaemonSubsystem {
   async stop(): Promise<void> {
     const log = getLogger("watcher");
     log.info("stopping watcher");
+    if (this.reconciliationTimer) {
+      clearInterval(this.reconciliationTimer);
+      this.reconciliationTimer = null;
+    }
     this.batcher.stop();
     if (this.watcher) {
       await this.watcher.close();
@@ -137,6 +149,11 @@ export class FileWatcher implements DaemonSubsystem {
   /** True once chokidar's initial scan has completed. */
   isReady(): boolean {
     return this.ready;
+  }
+
+  /** True if the watcher encountered an error and may be missing events. */
+  isDegraded(): boolean {
+    return this.degraded;
   }
 
   private handleAddOrChange(path: string, kind: "add" | "change"): void {
@@ -182,9 +199,72 @@ export class FileWatcher implements DaemonSubsystem {
     log.info({ batchId: batch.id, count: paths.length, deletes: deletes.length }, "flushing batch");
     try {
       await this.opts.onBatch(batch);
-    } catch (err) {
-      log.error({ err, batchId: batch.id }, "batch handler failed");
+      for (const p of batch.paths) this.processedPaths.add(p);
+    } catch (err: unknown) {
+      const errMessage = err instanceof Error ? err.message : String(err);
+      log.error({ err: errMessage, batchId: batch.id }, "batch handler failed — re-queuing files");
+      for (const p of batch.paths) {
+        const retries = (this.retryCount.get(p) ?? 0) + 1;
+        if (retries > 3) {
+          log.error({ path: p, retries }, "file exceeded retry limit — sending to DLQ");
+          this.retryCount.delete(p);
+          this.opts.onDropped?.(p, errMessage);
+        } else {
+          this.retryCount.set(p, retries);
+          this.batcher.push(p);
+        }
+      }
     }
+  }
+
+  /**
+   * Start periodic reconciliation to catch files missed by the watcher.
+   * Scans the raw directory and re-queues any files not already processed.
+   */
+  startReconciliation(intervalMs: number): void {
+    if (intervalMs <= 0) return;
+    const log = getLogger("watcher");
+    this.reconciliationTimer = setInterval(() => {
+      try {
+        const rawPath = this.opts.config.raw_path;
+        const files = this.walkRawFiles(rawPath);
+        let requeued = 0;
+        for (const f of files) {
+          if (!this.processedPaths.has(f)) {
+            this.batcher.push(f);
+            requeued++;
+          }
+        }
+        if (requeued > 0) {
+          log.info({ requeued }, "reconciliation found unprocessed files");
+        }
+      } catch (err) {
+        log.warn(
+          { err: err instanceof Error ? err.message : String(err) },
+          "reconciliation scan failed",
+        );
+      }
+    }, intervalMs);
+    this.reconciliationTimer.unref();
+  }
+
+  private walkRawFiles(dir: string): string[] {
+    const out: string[] = [];
+    try {
+      const entries = readdirSync(dir, { withFileTypes: true });
+      for (const e of entries) {
+        if (e.name.startsWith(".")) continue;
+        const full = join(dir, e.name);
+        if (e.isDirectory()) {
+          out.push(...this.walkRawFiles(full));
+        } else if (e.isFile()) {
+          out.push(full);
+        }
+      }
+    } catch {
+      /* skip unreadable dirs */
+    }
+    return out;
   }
 }
 

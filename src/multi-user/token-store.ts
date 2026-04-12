@@ -21,10 +21,11 @@
  * (add/revoke) are written atomically via the same temp-file-then-rename
  * pattern the wiki store uses.
  */
-import { chmodSync, existsSync, readFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
 import { atomicWriteSync, ensureDirSync } from "../utils/fs.js";
+import { getLogger } from "../utils/logger.js";
 
 export interface TokenInfo {
   user: string;
@@ -75,12 +76,29 @@ export class TokenStore {
       return;
     }
     const raw = readFileSync(this.file, "utf8");
-    const parsed = JSON.parse(raw) as TokenFile;
-    if (!parsed || typeof parsed !== "object" || !parsed.tokens) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      getLogger("token-store").error(
+        { path: this.file },
+        "token store file is corrupt — starting with empty store",
+      );
+      // Backup corrupt file for forensics
+      try {
+        copyFileSync(this.file, `${this.file}.corrupt.${Date.now()}`);
+      } catch {
+        /* best effort */
+      }
       this.tokens = new Map();
       return;
     }
-    this.tokens = new Map(Object.entries(parsed.tokens));
+    const data = parsed as TokenFile;
+    if (!data || typeof data !== "object" || !data.tokens) {
+      this.tokens = new Map();
+      return;
+    }
+    this.tokens = new Map(Object.entries(data.tokens));
   }
 
   /** Persist the current in-memory state atomically. */

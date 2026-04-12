@@ -26,5 +26,7 @@ interlinked wiki pages here.
 ## Recent Activity
 
 <!-- wotw:index:start -->
+
 _No pages yet. Drop files into raw/ to get started._
+
 <!-- wotw:index:end -->

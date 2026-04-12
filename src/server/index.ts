@@ -20,9 +20,11 @@ import {
 } from "node:http";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { errMsg } from "../utils/errors.js";
 import { getLogger } from "../utils/logger.js";
 import type { DaemonSubsystem } from "../daemon/index.js";
 import type { RuntimeMode, WotwConfig } from "../utils/types.js";
+import { VERSION } from "../utils/version.js";
 import type { WikiStore } from "../wiki/store.js";
 import type { IndexManager } from "../wiki/index-manager.js";
 import type { WikiSearch } from "../wiki/search.js";
@@ -206,7 +208,7 @@ export class McpHttpServer implements DaemonSubsystem {
     const url = new URL(req.url, `http://${req.headers.host ?? "127.0.0.1"}`);
     if (url.pathname === "/healthz") {
       res.writeHead(200, { "content-type": "application/json" });
-      res.end(JSON.stringify({ ok: true, name: "watcher-on-the-wall", version: "0.1.0" }));
+      res.end(JSON.stringify({ ok: true, name: "watcher-on-the-wall", version: VERSION }));
       return;
     }
     if (url.pathname !== "/mcp") {
@@ -257,7 +259,7 @@ export class McpHttpServer implements DaemonSubsystem {
     // Build a fresh McpServer + Transport for this single request.
     // This is mandatory in stateless mode — the SDK throws on reuse.
     const mcpServer = new McpServer(
-      { name: "watcher-on-the-wall", version: "0.1.0" },
+      { name: "watcher-on-the-wall", version: VERSION },
       { capabilities: { tools: {}, resources: {} } },
     );
     registerTools(mcpServer, {
@@ -309,7 +311,7 @@ export class McpHttpServer implements DaemonSubsystem {
         res.end(
           JSON.stringify({
             jsonrpc: "2.0",
-            error: { code: -32603, message: `Internal error: ${(err as Error).message}` },
+            error: { code: -32603, message: `Internal error: ${errMsg(err)}` },
             id: null,
           }),
         );

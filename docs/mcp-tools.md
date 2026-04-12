@@ -22,9 +22,13 @@ pages that only contain `hash chain`.
 ```json
 {
   "name": "search",
-  "arguments": { "query": "hash chain", "limit": 10 }
+  "arguments": { "query": "hash chain", "limit": 10, "domain": "security", "scope": "my-project" }
 }
 ```
+
+`domain` and `scope` are optional pre-filters. When provided, only
+pages whose frontmatter matches (case-insensitive) are returned.
+Omitting both searches everything (backward compatible).
 
 Returns an array of `{ title, category, path, score, snippet }`.
 
@@ -56,12 +60,16 @@ cost, model, and duration.
   "name": "query",
   "arguments": {
     "question": "what is a hash chain?",
-    "k": 8
+    "k": 8,
+    "domain": "security",
+    "scope": "my-project"
   }
 }
 ```
 
 `k` is the number of wiki pages retrieved as context (default 8, max 20).
+`domain` and `scope` narrow the search to pages matching those metadata
+values (same behavior as the `search` tool).
 
 ### `get_index`
 
@@ -87,6 +95,12 @@ batches in the dead-letter queue.
     "avg_score": 78,
     "pages_below_50": 3,
     "lowest_scoring_page": "wiki/concepts/old-topic.md"
+  },
+  "query_health": {
+    "total_queries": 150,
+    "zero_hits": 12,
+    "zero_hit_rate": 0.08,
+    "recent_zero_hit_queries": ["quantum computing", "wormholes"]
   }
 }
 ```
@@ -98,6 +112,8 @@ the deletion/archive flow in [docs/architecture.md](architecture.md#deletions)).
 (empty path) this field is always `0`. `health` includes the average
 health score, the count of pages scoring below 50, and the
 lowest-scoring page path (see [knowledge-health.md](knowledge-health.md)).
+`query_health` shows the zero-hit rate from the query log (last 7 days)
+— see [retrieval-hardening.md](retrieval-hardening.md#feature-4-zero-hit-monitoring--vocabulary-enrichment).
 
 ### `related_pages`
 
@@ -178,6 +194,7 @@ idempotent — existing syntheses covering a cluster are skipped.
 
 Every `/mcp` request is rate-limited per client IP using a token bucket
 with capacity and refill rate equal to `server.rate_limit_rpm` requests
-per minute. Excess requests receive HTTP `429`. The rate limiter
-identifies clients by `X-Forwarded-For` (when behind a proxy) or by
-the connection's remote address.
+per minute. Excess requests receive HTTP `429`. When `server.trust_proxy` is `true`, the rate limiter identifies
+clients by the first IP in the `X-Forwarded-For` header (use this
+behind a reverse proxy). When `false` (default), it uses the TCP
+socket's `remoteAddress` and ignores `X-Forwarded-For`.

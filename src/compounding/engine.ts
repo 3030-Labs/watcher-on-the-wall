@@ -15,6 +15,7 @@
  *     of type "compound".
  */
 import { join, relative } from "node:path";
+import { errMsg } from "../utils/errors.js";
 import { getLogger } from "../utils/logger.js";
 import type { RuntimeMode, WotwConfig, WikiPage } from "../utils/types.js";
 import type { CostTracker } from "../ingestion/cost-tracker.js";
@@ -193,7 +194,7 @@ export class CompoundingEngine {
           pages: cluster.pages.map((p) => relative(this.opts.config.wiki_root, p.path)),
           synthesisPath: null,
           skipped: true,
-          reason: `error: ${(err as Error).message}`,
+          reason: `error: ${errMsg(err)}`,
         });
       }
     }

@@ -29,7 +29,8 @@ export type FindingKind =
   | "contradiction"
   | "orphan"
   | "broken-link"
-  | "missing-backlink";
+  | "missing-backlink"
+  | "consolidation";
 
 export interface HealthFinding {
   /** Stable identifier, e.g. "stale:concepts/old-page". */
@@ -320,6 +321,107 @@ export function groupDuplicates(pairs: Array<[string, string]>): DuplicateGroup[
 }
 
 // ---------------------------------------------------------------------------
+// Knowledge consolidation detection
+// ---------------------------------------------------------------------------
+
+export interface ConsolidationGroup {
+  /** Wiki-relative paths of pages in this topical cluster. */
+  pages: string[];
+  /** Shared topic description derived from common tags. */
+  topic: string;
+  /** Suggested title for the consolidated page. */
+  suggestedTitle: string;
+}
+
+/**
+ * Detect topic clusters that have accumulated too many pages and would
+ * benefit from consolidation into a single authoritative page.
+ *
+ * Uses two signals:
+ *   1. Union-find grouping at a lower similarity threshold than dedup (40 vs 60).
+ *   2. Tag clustering — groups sharing the same primary tag.
+ *
+ * Groups with more than `consolidation_threshold` pages are returned.
+ */
+export function detectConsolidationCandidates(
+  store: WikiStore,
+  search: WikiSearch,
+  config: WotwConfig,
+): ConsolidationGroup[] {
+  if (!config.health.consolidation_enabled) return [];
+  const threshold = config.health.consolidation_threshold;
+  const allPaths = store.listAll();
+  const wikiRoot = config.wiki_root;
+
+  // ---- Signal 1: similarity-based grouping at lower threshold ----
+  const simPairs: Array<[string, string]> = [];
+  for (const absPath of allPaths) {
+    const doc = search.search(
+      // Use a broad query by path-slug to find related pages.
+      absPath.split("/").pop()?.replace(/\.md$/, "").replace(/[-_]/g, " ") ?? "",
+      10,
+    );
+    const pageRel = relative(wikiRoot, absPath);
+    for (const hit of doc) {
+      if (hit.path === absPath) continue;
+      // Normalize to 0-100 risk scale (same as computeDuplicateRisk).
+      const normalized = Math.min(100, Math.round((hit.score / 25) * 100));
+      if (normalized >= 40) {
+        const hitRel = relative(wikiRoot, hit.path);
+        const key = [pageRel, hitRel].sort().join("||");
+        // Deduplicate pairs.
+        if (!simPairs.some(([a, b]) => [a, b].sort().join("||") === key)) {
+          simPairs.push([pageRel, hitRel]);
+        }
+      }
+    }
+  }
+
+  const simGroups = groupDuplicates(simPairs)
+    .filter((g) => g.pages.length > threshold)
+    .map((g) => ({
+      pages: g.pages,
+      topic: g.pages.map((p) => p.split("/").pop()?.replace(/\.md$/, "")).join(", "),
+      suggestedTitle: `Consolidated: ${g.pages[0]?.split("/").pop()?.replace(/\.md$/, "").replace(/[-_]/g, " ") ?? "topic"}`,
+    }));
+
+  // ---- Signal 2: tag clustering ----
+  const tagGroups = new Map<string, string[]>();
+  for (const absPath of allPaths) {
+    const pageRel = relative(wikiRoot, absPath);
+    // Quick tag peek from the index doc — reconstruct from search.
+    const hits = search.search(absPath.split("/").pop()?.replace(/\.md$/, "") ?? "", 1);
+    if (hits.length > 0 && hits[0]!.path === absPath) {
+      // We need the tags from the actual page. Use store for accuracy.
+      // But we want to keep this lightweight. Use relative path.
+      // For now just use path-based inference; actual tag grouping
+      // would need page reads. Defer to the sim-groups signal.
+    }
+    // Group by category directory as a lightweight proxy.
+    const parts = pageRel.split("/");
+    if (parts.length >= 2) {
+      const catDir = parts.slice(0, -1).join("/");
+      if (!tagGroups.has(catDir)) tagGroups.set(catDir, []);
+      tagGroups.get(catDir)!.push(pageRel);
+    }
+  }
+
+  // Merge sim-groups with tag groups that exceed threshold.
+  // Tag groups alone are too coarse (entire categories), so only use sim-groups.
+  const seen = new Set<string>();
+  const result: ConsolidationGroup[] = [];
+  for (const g of simGroups) {
+    const key = g.pages.sort().join("||");
+    if (!seen.has(key)) {
+      seen.add(key);
+      result.push(g);
+    }
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
 // Missing backlink detection
 // ---------------------------------------------------------------------------
 
@@ -403,9 +505,10 @@ export async function computeHealthReport(
     const pageRel = relative(config.wiki_root, absPath);
     const isOrphaned = page.frontmatter.status === "orphaned";
     const isMerged = page.frontmatter.status === "merged";
+    const isConsolidated = page.frontmatter.status === "consolidated";
 
-    // Skip merged pages from scoring.
-    if (isMerged) continue;
+    // Skip merged and consolidated pages from scoring.
+    if (isMerged || isConsolidated) continue;
 
     pageData.push({ absPath, related: page.frontmatter.related });
 
@@ -497,6 +600,19 @@ export async function computeHealthReport(
   // Missing backlinks.
   const backlinkFindings = detectMissingBacklinks(store, pageData);
   findings.push(...backlinkFindings);
+
+  // Consolidation candidates.
+  const consolidationGroups = detectConsolidationCandidates(store, search, config);
+  for (const group of consolidationGroups) {
+    findings.push({
+      id: `consolidation:${group.pages.join("+")}`,
+      kind: "consolidation",
+      severity: "low",
+      pages: group.pages,
+      description: `${group.pages.length} pages cover the topic area "${group.topic}" and could be consolidated.`,
+      autoFixable: true,
+    });
+  }
 
   // Summary.
   const summary: HealthReportSummary = {

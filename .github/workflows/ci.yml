@@ -44,6 +44,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Audit production dependencies
+        # Non-blocking: current advisories are transitive (hono via @modelcontextprotocol/sdk,
+        # @anthropic-ai/sdk via claude-agent-sdk) with no direct fix available.
+        run: pnpm audit --prod || true
+
       - name: Typecheck
         run: pnpm typecheck
 

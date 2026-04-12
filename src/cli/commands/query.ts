@@ -5,6 +5,7 @@
  * the answer. If no daemon is running we tell the user to start one.
  */
 import type { Command } from "commander";
+import { errMsg } from "../../utils/errors.js";
 import { loadConfig, resolveConfigPaths } from "../../daemon/config.js";
 import { checkDaemonAlive } from "../../daemon/lifecycle.js";
 import { callMcpTool } from "./lib/mcp-client.js";
@@ -58,7 +59,7 @@ export async function runQuery(question: string, opts: QueryOptions): Promise<vo
     const text = extractText(result);
     box(text || "(no answer)", "answer");
   } catch (err) {
-    fail(`Query failed: ${(err as Error).message}`);
+    fail(`Query failed: ${errMsg(err)}`);
     process.exitCode = 1;
   }
 }

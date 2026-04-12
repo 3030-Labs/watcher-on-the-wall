@@ -5,6 +5,7 @@
  */
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { VERSION } from "../../../utils/version.js";
 
 export interface McpCallOptions {
   host: string;
@@ -30,7 +31,7 @@ export async function callMcpTool(opts: McpCallOptions): Promise<unknown> {
       ? { headers: { authorization: `Bearer ${opts.authToken}` } }
       : undefined,
   });
-  const client = new Client({ name: "wotw-cli", version: "0.1.0" }, { capabilities: {} });
+  const client = new Client({ name: "wotw-cli", version: VERSION }, { capabilities: {} });
   try {
     await client.connect(transport);
     const result = await client.callTool(

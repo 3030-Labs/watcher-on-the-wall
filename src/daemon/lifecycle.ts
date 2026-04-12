@@ -9,7 +9,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import lockfile from "proper-lockfile";
-import { ensureDirSync, removeIfExistsSync } from "../utils/fs.js";
+import { atomicWriteSync, ensureDirSync, removeIfExistsSync } from "../utils/fs.js";
 
 export interface PidFileContents {
   pid: number;
@@ -22,7 +22,7 @@ export interface PidFileContents {
  */
 export function writePidFile(pidFilePath: string, contents: PidFileContents): void {
   ensureDirSync(dirname(pidFilePath));
-  writeFileSync(pidFilePath, JSON.stringify(contents));
+  atomicWriteSync(pidFilePath, JSON.stringify(contents));
 }
 
 /**

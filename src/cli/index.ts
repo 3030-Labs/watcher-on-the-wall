@@ -9,6 +9,7 @@
  * still supporting detached daemon spawning.
  */
 import { Command } from "commander";
+import { errMsg } from "../utils/errors.js";
 import { registerInitCommand } from "./commands/init.js";
 import { registerStartCommand } from "./commands/start.js";
 import { registerStopCommand } from "./commands/stop.js";
@@ -28,7 +29,7 @@ import { registerApproveCommand } from "./commands/approve.js";
 import { registerRejectCommand } from "./commands/reject.js";
 import { registerCandidatesCommand } from "./commands/candidates.js";
 
-const VERSION = "0.2.0";
+import { VERSION } from "../utils/version.js";
 
 async function main(): Promise<void> {
   // If spawned as a detached daemon child (D-16), bypass CLI parsing entirely.
@@ -69,9 +70,9 @@ async function main(): Promise<void> {
 
 main().catch((err: unknown) => {
   // Last-ditch error handler — anything that propagates this far is a bug.
-  process.stderr.write(`fatal: ${(err as Error).message}\n`);
+  process.stderr.write(`fatal: ${errMsg(err)}\n`);
   if (process.env.WOTW_DEBUG === "1") {
-    process.stderr.write(`${(err as Error).stack ?? ""}\n`);
+    process.stderr.write(`${err instanceof Error ? (err.stack ?? "") : ""}\n`);
   }
   process.exit(1);
 });

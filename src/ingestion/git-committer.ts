@@ -5,6 +5,7 @@
  * a user decision.
  */
 import { relative } from "node:path";
+import { errMsg } from "../utils/errors.js";
 import { commitAll, ensureGitRepo } from "../utils/git.js";
 import { getLogger } from "../utils/logger.js";
 import { retry } from "../utils/retry.js";
@@ -68,7 +69,7 @@ export async function commitWikiChanges(req: CommitRequest): Promise<CommitResul
       initialDelayMs: 200,
       maxDelayMs: 2_000,
       factor: 2,
-      shouldRetry: (err) => /index\.lock/i.test((err as Error).message ?? ""),
+      shouldRetry: (err) => /index\.lock/i.test(errMsg(err)),
       onRetry: (err, attempt, delay) =>
         log.warn({ err, attempt, delay }, "retrying git commit after lock contention"),
     },

@@ -112,6 +112,10 @@ export interface WotwConfig {
     enabled: boolean;
     workspaces_dir: string;
   };
+  query: {
+    /** Enable LLM-powered query expansion before BM25 search. */
+    expand: boolean;
+  };
   lint: {
     /** If true, the daemon runs a lint pass on a recurring interval. */
     schedule_enabled: boolean;
@@ -141,6 +145,16 @@ export interface WotwConfig {
     max_fixes_per_run: number;
     /** Enable LLM-powered contradiction detection (expensive). */
     detect_contradictions: boolean;
+    /** Merge when a topic has more than N pages. */
+    consolidation_threshold: number;
+    /** Master switch for knowledge consolidation. */
+    consolidation_enabled: boolean;
+    /** Trigger vocabulary enrichment when zero-hit rate exceeds this (0-1). */
+    zero_hit_threshold: number;
+    /** Master switch for automated vocabulary enrichment. */
+    enrichment_enabled: boolean;
+    /** JSONL file for query logging. Resolved relative to wiki_root. */
+    query_log_file: string;
   };
 }
 
@@ -149,7 +163,7 @@ export interface WotwConfig {
  * have been deleted from `raw/`. Pages without a `status` field are
  * considered active.
  */
-export type WikiPageStatus = "orphaned" | "merged" | "stale";
+export type WikiPageStatus = "orphaned" | "merged" | "stale" | "consolidated";
 
 /** Wiki page frontmatter shape. */
 export interface WikiFrontmatter {
@@ -192,6 +206,14 @@ export interface WikiFrontmatter {
   rejected_at?: string;
   /** Reason provided when rejecting a candidate page. */
   rejection_note?: string;
+  /** Broad knowledge domain (e.g. "ops", "security", "architecture"). */
+  domain?: string;
+  /** Project or organizational context scope (e.g. project name, "general"). */
+  scope?: string;
+  /** Keywords and phrases for search findability, including synonyms. */
+  key_terms?: string[];
+  /** Wiki-relative path of the consolidated page this was merged into. */
+  consolidated_into?: string;
 }
 
 /** A parsed wiki page. */

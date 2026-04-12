@@ -96,6 +96,22 @@ export class ProvenanceChain {
       return;
     }
     const records = await this.readAll();
+    // Corruption detection: if the file has content but all records failed to parse,
+    // the chain is corrupted and continuing would silently reset to genesis.
+    if (records.length === 0) {
+      const { stat: fsStat } = await import("node:fs/promises");
+      try {
+        const st = await fsStat(this.path);
+        if (st.size > 0) {
+          throw new Error(
+            "provenance chain file exists but contains no valid records — file may be corrupted",
+          );
+        }
+      } catch (err) {
+        if (err instanceof Error && err.message.includes("provenance chain file exists")) throw err;
+        // stat failure — file may have been deleted between exists check and stat
+      }
+    }
     this.totalRecords = records.length;
     if (records.length > 0) {
       const last = records[records.length - 1]!;
@@ -173,7 +189,7 @@ export class ProvenanceChain {
       const handle = await open(this.path, "a");
       try {
         await handle.write(line);
-        await handle.sync().catch(() => undefined);
+        await handle.sync();
       } finally {
         await handle.close();
       }

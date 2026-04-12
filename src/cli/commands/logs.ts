@@ -12,6 +12,7 @@
  * the file so very large logs don't blow up memory.
  */
 import type { Command } from "commander";
+import { errMsg } from "../../utils/errors.js";
 import {
   existsSync,
   openSync,
@@ -165,7 +166,7 @@ async function followLog(filePath: string, fromOffset: number): Promise<void> {
         closeSync(fd);
       }
     } catch (err) {
-      errorLine(`log read failed: ${(err as Error).message}`);
+      errorLine(`log read failed: ${errMsg(err)}`);
     }
   };
 

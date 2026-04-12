@@ -12,6 +12,7 @@
  * bake it into a client config, and never touch it again.
  */
 import type { Command } from "commander";
+import { errMsg } from "../../utils/errors.js";
 import { loadConfig, resolveConfigPaths } from "../../daemon/config.js";
 import { TokenStore } from "../../multi-user/token-store.js";
 import { chalk, fail, info, line, success, warn } from "../output.js";
@@ -56,7 +57,7 @@ async function runUserAdd(name: string): Promise<void> {
     line("");
     info("Configure clients with `Authorization: Bearer <token>` to authenticate.");
   } catch (err) {
-    fail(`Failed to add user: ${(err as Error).message}`);
+    fail(`Failed to add user: ${errMsg(err)}`);
     process.exitCode = 1;
   }
 }

@@ -10,6 +10,7 @@ import type {
   WikiPage,
   WikiPageStatus,
 } from "../utils/types.js";
+import { getLogger } from "../utils/logger.js";
 
 const VALID_CATEGORIES: readonly WikiCategory[] = [
   "concept",
@@ -79,6 +80,19 @@ export function parsePage(filePath: string, raw: string): WikiPage {
   if (typeof data.rejection_note === "string") {
     frontmatter.rejection_note = data.rejection_note;
   }
+  if (typeof data.domain === "string") {
+    frontmatter.domain = data.domain;
+  }
+  if (typeof data.scope === "string") {
+    frontmatter.scope = data.scope;
+  }
+  const keyTerms = normalizeStringArray(data.key_terms);
+  if (keyTerms.length > 0) {
+    frontmatter.key_terms = keyTerms;
+  }
+  if (typeof data.consolidated_into === "string") {
+    frontmatter.consolidated_into = data.consolidated_into;
+  }
 
   return {
     path: filePath,
@@ -120,6 +134,10 @@ export function serializePage(page: Pick<WikiPage, "frontmatter" | "body">): str
   if (fm.superseded_by !== undefined) data.superseded_by = fm.superseded_by;
   if (fm.rejected_at) data.rejected_at = fm.rejected_at;
   if (fm.rejection_note) data.rejection_note = fm.rejection_note;
+  if (fm.domain) data.domain = fm.domain;
+  if (fm.scope) data.scope = fm.scope;
+  if (fm.key_terms && fm.key_terms.length > 0) data.key_terms = fm.key_terms;
+  if (fm.consolidated_into) data.consolidated_into = fm.consolidated_into;
   return matter.stringify(page.body, data);
 }
 
@@ -156,12 +174,18 @@ function normalizeCategory(v: unknown): WikiCategory {
   if (typeof v === "string" && (VALID_CATEGORIES as readonly string[]).includes(v)) {
     return v as WikiCategory;
   }
+  if (v !== undefined && v !== null) {
+    getLogger("page").debug({ field: "category", value: v }, "coerced invalid frontmatter value");
+  }
   return "concept";
 }
 
 function normalizeConfidence(v: unknown): ConfidenceLevel {
   if (typeof v === "string" && (VALID_CONFIDENCE as readonly string[]).includes(v)) {
     return v as ConfidenceLevel;
+  }
+  if (v !== undefined && v !== null) {
+    getLogger("page").debug({ field: "confidence", value: v }, "coerced invalid frontmatter value");
   }
   return "medium";
 }
@@ -170,6 +194,7 @@ function normalizeStatus(v: unknown): WikiPageStatus | null {
   if (v === "orphaned") return "orphaned";
   if (v === "merged") return "merged";
   if (v === "stale") return "stale";
+  if (v === "consolidated") return "consolidated";
   return null;
 }
 

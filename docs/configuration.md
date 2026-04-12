@@ -91,6 +91,9 @@ multi_user:
   enabled: false                 # set true to use TokenStore
   workspaces_dir: ~/.wotw/workspaces
 
+query:
+  expand: true                   # LLM-powered query expansion before BM25 search
+
 lint:
   schedule_enabled: false        # true → run the linter on a timer alongside the daemon
   interval_hours: 24             # how often the scheduler fires when enabled
@@ -109,6 +112,11 @@ health:
   auto_fix_staleness_below: 40   # pages with staleness score below this are flagged
   max_fixes_per_run: 10          # cap on auto-healed findings per lint pass
   detect_contradictions: false   # LLM-powered contradiction detection (expensive)
+  consolidation_threshold: 5    # merge when a topic has more than N pages
+  consolidation_enabled: true   # master switch for knowledge consolidation
+  zero_hit_threshold: 0.20      # trigger enrichment when zero-hit rate exceeds 20%
+  enrichment_enabled: true      # master switch for automated vocabulary enrichment
+  query_log_file: .wotw/query-log.jsonl  # query outcome log for zero-hit monitoring
 ```
 
 ---

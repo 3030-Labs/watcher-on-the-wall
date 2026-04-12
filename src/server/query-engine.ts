@@ -9,6 +9,7 @@
  * The engine is used by both the `wotw query` CLI command and the MCP
  * `query` tool. It enforces the per-query budget cap and logs cost.
  */
+import { errMsg } from "../utils/errors.js";
 import { getLogger } from "../utils/logger.js";
 import type { RuntimeMode, WotwConfig } from "../utils/types.js";
 import type { CostTracker } from "../ingestion/cost-tracker.js";
@@ -19,6 +20,8 @@ import { type SearchHit } from "../wiki/search.js";
 import type { WikiStore } from "../wiki/store.js";
 import type { ProvenanceChain } from "../provenance/chain.js";
 import { sha256Hex } from "../provenance/hash.js";
+import { expandQuery } from "./query-expansion.js";
+import { recordQueryOutcome } from "./query-metrics.js";
 
 export interface QueryEngineOptions {
   config: WotwConfig;
@@ -87,13 +90,52 @@ export class QueryEngine {
       };
     }
 
+    // Query expansion — expand the query into keyword variants via LLM.
+    let searchQuery = question;
+    let expansionCost = 0;
+    try {
+      const expansion = await expandQuery(question, {
+        config: this.opts.config,
+        costTracker: this.opts.costTracker,
+        modelRouter: this.opts.modelRouter,
+        runtimeMode,
+      });
+      if (expansion.expanded) {
+        searchQuery = expansion.expandedQuery;
+        expansionCost = expansion.costUsd;
+        log.debug(
+          { terms: expansion.expansionTerms.length },
+          "query expanded with keyword variants",
+        );
+      }
+    } catch {
+      // Expansion failure is non-fatal — fall back to original query.
+    }
+
+    // Search index health pre-flight: if the wiki has pages but the
+    // search index is empty, something went wrong during rebuild.
+    if (this.opts.search.size() === 0 && this.opts.store.count() > 0) {
+      recordQueryOutcome(this.opts.config.health.query_log_file, question, 0);
+      return {
+        question,
+        answer: "",
+        sources: [],
+        costUsd: 0,
+        durationMs: Date.now() - started,
+        model,
+        skipped: true,
+        skipReason: "search index is empty but wiki has pages — rebuild required",
+      };
+    }
+
     // Retrieve top-k hits
-    const hits = this.opts.search.search(question, k);
+    const hits = this.opts.search.search(searchQuery, k);
     log.info({ question, hits: hits.length, runtimeMode }, "query received");
 
     // Zero-hit grounding guard: refuse to answer from general knowledge.
     // The wiki's value is grounded answers backed by source material.
     if (hits.length === 0) {
+      recordQueryOutcome(this.opts.config.health.query_log_file, question, 0);
       return {
         question,
         answer:
@@ -131,7 +173,7 @@ export class QueryEngine {
             : undefined,
       });
       answer = result.finalText;
-      costUsd = result.totalCostUsd;
+      costUsd = result.totalCostUsd + expansionCost;
     } catch (err) {
       log.error({ err, question }, "query agent failed");
       return {
@@ -142,7 +184,7 @@ export class QueryEngine {
         durationMs: Date.now() - started,
         model,
         skipped: true,
-        skipReason: `query error: ${(err as Error).message}`,
+        skipReason: `query error: ${errMsg(err)}`,
       };
     }
 
@@ -177,6 +219,9 @@ export class QueryEngine {
         log.error({ err }, "failed to append query provenance");
       }
     }
+
+    // Log query outcome for zero-hit monitoring.
+    recordQueryOutcome(this.opts.config.health.query_log_file, question, hits.length);
 
     return {
       question,

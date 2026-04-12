@@ -77,6 +77,9 @@ export function defaultConfig(): WotwConfig {
       enabled: false,
       workspaces_dir: "~/.wotw/workspaces",
     },
+    query: {
+      expand: true,
+    },
     lint: {
       schedule_enabled: false,
       interval_hours: 24,
@@ -96,6 +99,11 @@ export function defaultConfig(): WotwConfig {
       auto_fix_staleness_below: 40,
       max_fixes_per_run: 10,
       detect_contradictions: false,
+      consolidation_threshold: 5,
+      consolidation_enabled: true,
+      zero_hit_threshold: 0.2,
+      enrichment_enabled: true,
+      query_log_file: ".wotw/query-log.jsonl",
     },
   };
 }
@@ -133,6 +141,10 @@ export async function loadConfig(searchFrom?: string): Promise<LoadConfigResult>
   const result: CosmiconfigResult = await explorer.search(searchFrom ?? process.cwd());
   const defaults = defaultConfig();
   if (!result || !result.config) {
+    // eslint-disable-next-line no-console -- runs before pino logger is initialized
+    console.warn(
+      "[wotw] no wotw.yaml found — using all defaults (auth disabled, max_daily_usd: 10.0)",
+    );
     return { config: defaults, path: null };
   }
   const merged = mergeConfig(defaults, result.config as Partial<WotwConfig>);
@@ -164,6 +176,7 @@ export function mergeConfig(base: WotwConfig, override: Partial<WotwConfig>): Wo
   if (override.compounding) assign("compounding", override.compounding);
   if (override.provenance) assign("provenance", override.provenance);
   if (override.multi_user) assign("multi_user", override.multi_user);
+  if (override.query) assign("query", override.query);
   if (override.lint) assign("lint", override.lint);
   if (override.health) {
     // Deep-merge the weights sub-object separately.
@@ -252,6 +265,9 @@ const WotwConfigSchema = z.object({
     enabled: z.boolean(),
     workspaces_dir: z.string().min(1),
   }),
+  query: z.object({
+    expand: z.boolean(),
+  }),
   lint: z.object({
     schedule_enabled: z.boolean(),
     interval_hours: positiveNumber,
@@ -271,6 +287,11 @@ const WotwConfigSchema = z.object({
     auto_fix_staleness_below: z.number().min(0).max(100),
     max_fixes_per_run: z.number().int().min(0),
     detect_contradictions: z.boolean(),
+    consolidation_threshold: z.number().int().min(2),
+    consolidation_enabled: z.boolean(),
+    zero_hit_threshold: z.number().min(0).max(1),
+    enrichment_enabled: z.boolean(),
+    query_log_file: z.string(),
   }),
 });
 
@@ -309,6 +330,10 @@ export function resolveConfigPaths(config: WotwConfig, baseDir?: string): WotwCo
   // failure ledger). Empty string disables; leave it alone in that case.
   if (out.ingestion.dead_letter_file.length > 0) {
     out.ingestion.dead_letter_file = resolvePath(out.ingestion.dead_letter_file, out.wiki_root);
+  }
+  // Query log file is wiki-relative, like the dead-letter file.
+  if (out.health.query_log_file.length > 0) {
+    out.health.query_log_file = resolvePath(out.health.query_log_file, out.wiki_root);
   }
   return out;
 }

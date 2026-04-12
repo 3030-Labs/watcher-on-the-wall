@@ -228,7 +228,7 @@ Key differences from ingest records:
 - **`type: "heal"`** distinguishes healing operations from ingestion.
 - **`metadata.heal_kind`** identifies the finding type that was healed
   (`stale`, `duplicate`, `broken-link`, `missing-backlink`,
-  `contradiction`).
+  `contradiction`, `consolidation`, `vocabulary-enrichment`).
 - **`metadata.finding_id`** links back to the specific finding.
 - **`source_files` / `source_hashes`** are empty because heals operate
   on existing wiki pages, not raw source files.

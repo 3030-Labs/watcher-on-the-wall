@@ -193,7 +193,9 @@ export async function runLintPass(config: WotwConfig, opts?: LintOptions): Promi
         const resolved = resolveExecutionMode(config);
         runtimeMode = resolved.mode;
       } catch {
-        // No runtime available — backlink repair still works (no LLM).
+        warn("No execution mode available — LLM-dependent heals will be skipped");
+        // runtimeMode stays "api" — heal handlers will fail at budget pre-flight
+        // or LLM invocation and return {fixed: false}, which is the correct behavior.
       }
 
       const costTracker = new CostTracker({

@@ -2,8 +2,9 @@
  * `wotw serve` — standalone MCP server. Does not watch files; only serves the
  * existing wiki to Claude Code sessions over HTTP.
  *
- * Full MCP server wiring lands in Phase 3. In Phase 1 this command reports the
- * correct guidance.
+ * The full MCP server is implemented in `src/server/index.ts` and is started
+ * automatically by `wotw start`. This standalone serve command is reserved for
+ * future use as a lightweight server-only mode without the watcher/daemon.
  */
 import type { Command } from "commander";
 import { loadConfig, resolveConfigPaths } from "../../daemon/config.js";
@@ -34,6 +35,8 @@ export async function runServe(opts: ServeOptions): Promise<void> {
   const host = opts.host ?? config.server.host;
   const port = opts.port ? Number(opts.port) : config.server.port;
 
-  info(`MCP server scaffolding lands in Phase 3.`);
-  info(`When implemented, it will bind to http://${host}:${port}/mcp and serve the wiki.`);
+  info(`The standalone MCP server is not yet available as a separate command.`);
+  info(
+    `Use 'wotw start' to launch the full daemon (watcher + MCP server) at http://${host}:${port}/mcp.`,
+  );
 }

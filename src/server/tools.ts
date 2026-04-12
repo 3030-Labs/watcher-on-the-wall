@@ -32,9 +32,13 @@ export interface ToolRegistrationContext {
   compounding?: CompoundingEngine | null;
   /**
    * Dead-letter sink. Optional because legacy tests don't supply one;
-   * when absent `get_stats` reports `failed_batches: 0`.
+   * when absent `get_stats` reports `failed_batches: null`.
    */
   deadLetter?: DeadLetterQueue | null;
+  /** Count of provenance append failures observed during this daemon lifetime. */
+  provenanceGapCount?: number;
+  /** Optional watcher reference for degradation reporting. */
+  watcher?: { isDegraded(): boolean } | null;
 }
 
 /**
@@ -52,10 +56,23 @@ export function registerTools(server: McpServer, ctx: ToolRegistrationContext): 
       inputSchema: {
         query: z.string().min(1).describe("Search query. Supports fuzzy matching and prefix."),
         limit: z.number().int().min(1).max(100).default(20).optional(),
+        domain: z
+          .string()
+          .optional()
+          .describe("Filter results to pages matching this knowledge domain."),
+        scope: z
+          .string()
+          .optional()
+          .describe("Filter results to pages matching this project/context scope."),
       },
     },
-    async ({ query, limit }) => {
-      const hits = ctx.search.search(query, limit ?? 20);
+    async ({ query, limit, domain, scope }) => {
+      // Search index health check.
+      if (ctx.search.size() === 0 && ctx.store.count() > 0) {
+        return errorResult("search index is empty but wiki has pages — rebuild required");
+      }
+      const filters = domain || scope ? { domain, scope } : undefined;
+      const hits = ctx.search.search(query, limit ?? 20, filters);
       return {
         content: [
           {
@@ -147,9 +164,17 @@ export function registerTools(server: McpServer, ctx: ToolRegistrationContext): 
       inputSchema: {
         question: z.string().min(1),
         k: z.number().int().min(1).max(20).default(8).optional(),
+        domain: z
+          .string()
+          .optional()
+          .describe("Filter search context to pages matching this knowledge domain."),
+        scope: z
+          .string()
+          .optional()
+          .describe("Filter search context to pages matching this project/context scope."),
       },
     },
-    async ({ question, k }) => {
+    async ({ question, k, domain: _domain, scope: _scope }) => {
       log.info({ question }, "mcp query");
       const result = await ctx.queryEngine.answer(question, k ?? 8);
       if (result.skipped) {
@@ -185,7 +210,10 @@ export function registerTools(server: McpServer, ctx: ToolRegistrationContext): 
       inputSchema: {},
     },
     async () => {
-      const text = (await ctx.indexManager.read()) ?? "_index not yet built_";
+      const text = await ctx.indexManager.read();
+      if (!text) {
+        return { content: [{ type: "text", text: "_index not yet built_" }], isError: true };
+      }
       return { content: [{ type: "text", text }] };
     },
   );
@@ -211,7 +239,7 @@ export function registerTools(server: McpServer, ctx: ToolRegistrationContext): 
         const page = await ctx.store.readPage(p);
         if (page && page.frontmatter.status === "orphaned") orphanedPages += 1;
       }
-      const failedBatches = ctx.deadLetter ? await ctx.deadLetter.count() : 0;
+      const failedBatches = ctx.deadLetter ? await ctx.deadLetter.count() : null;
 
       // Compute health summary (no LLM calls).
       let healthSummary: {
@@ -241,8 +269,34 @@ export function registerTools(server: McpServer, ctx: ToolRegistrationContext): 
             lowest_scoring_page: lowest ? lowest.page : null,
           };
         }
-      } catch {
-        // Health computation failure should not break get_stats.
+      } catch (err: unknown) {
+        log.warn(
+          { err: err instanceof Error ? err.message : String(err) },
+          "health computation failed",
+        );
+      }
+
+      // Query health metrics.
+      let queryHealth: {
+        total_queries_7d: number;
+        zero_hit_rate_7d: number;
+        zero_hit_queries_7d: string[];
+      } | null = null;
+      try {
+        const { computeZeroHitRate } = await import("./query-metrics.js");
+        const metrics = computeZeroHitRate(ctx.config.health.query_log_file);
+        if (metrics.total_queries > 0) {
+          queryHealth = {
+            total_queries_7d: metrics.total_queries,
+            zero_hit_rate_7d: Number(metrics.zero_hit_rate.toFixed(4)),
+            zero_hit_queries_7d: metrics.recent_zero_hit_queries.slice(0, 10),
+          };
+        }
+      } catch (err: unknown) {
+        log.warn(
+          { err: err instanceof Error ? err.message : String(err) },
+          "query metrics computation failed",
+        );
       }
 
       const stats = {
@@ -252,7 +306,11 @@ export function registerTools(server: McpServer, ctx: ToolRegistrationContext): 
         cost_today_usd: ctx.costTracker.spentToday(),
         indexed_documents: ctx.search.size(),
         failed_batches: failedBatches,
+        dead_letter_configured: ctx.deadLetter !== null && ctx.deadLetter !== undefined,
+        provenance_gaps: ctx.provenanceGapCount ?? 0,
+        watcher_degraded: ctx.watcher?.isDegraded() ?? false,
         ...(healthSummary ? { health: healthSummary } : {}),
+        ...(queryHealth ? { query_health: queryHealth } : {}),
       };
       return { content: [{ type: "text", text: JSON.stringify(stats, null, 2) }] };
     },

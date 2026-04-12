@@ -14,6 +14,7 @@
  * and resolve slugs to category directories. It owns no mutation policy
  * beyond "one file per page, atomic writes, directories created on demand".
  */
+import { createHash } from "node:crypto";
 import { readdirSync, statSync } from "node:fs";
 import { basename, join, relative, resolve } from "node:path";
 import { atomicWrite, dirExists, ensureDir, readTextOrNullAsync } from "../utils/fs.js";
@@ -182,7 +183,7 @@ export function sanitizeSlug(input: string): string {
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
-  return cleaned || "untitled";
+  return cleaned || `untitled-${createHash("sha256").update(input).digest("hex").slice(0, 8)}`;
 }
 
 /** Derive a slug from an absolute file path (drops directory + extension). */

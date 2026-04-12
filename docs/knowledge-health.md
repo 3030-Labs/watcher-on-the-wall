@@ -64,6 +64,7 @@ The health report emits structured findings:
 | `duplicate` | medium | Yes | Multiple pages cover the same topic (detected via search index similarity, grouped transitively). |
 | `missing-backlink` | low | Yes | Page A references B in `related:` but B doesn't reference A back. |
 | `contradiction` | high | Yes | LLM-detected factual contradictions between pages (requires `health.detect_contradictions: true`). |
+| `consolidation` | medium | Yes | A topic is fragmented across too many pages (exceeds `health.consolidation_threshold`). |
 
 ---
 
@@ -79,6 +80,7 @@ finding to a specialized heal handler:
 | `broken-link` | `healBrokenLinks` | Yes | Prompts the LLM to fix or remove broken wikilinks. |
 | `missing-backlink` | `healMissingBacklinks` | No | Deterministic — adds the missing slug to the target page's `related:` array. |
 | `contradiction` | `healContradiction` | Yes | Prompts the LLM to resolve contradictions and update the affected pages. |
+| `consolidation` | `healConsolidation` | Yes | Merges topically related pages that fragment one topic area into a single authoritative page. Marks originals with `status: consolidated` and `consolidated_into: <path>`. |
 
 ### Safety guardrails
 
@@ -115,6 +117,27 @@ frontmatter field pointing to the survivor.
 
 ---
 
+## Knowledge consolidation
+
+Consolidation is similar to dedup but operates at a lower similarity
+threshold (40 vs 60) and targets **topically related but distinct pages**
+that fragment one topic area, not near-identical duplicates.
+
+Detection uses the same union-find grouping approach as dedup. Groups
+that exceed `health.consolidation_threshold` (default 5 pages) are
+emitted as `consolidation` findings. When healed, the LLM merges all
+pages in the group into one authoritative page and marks the originals
+with `status: consolidated` and `consolidated_into: <path>`.
+
+Configure via:
+- `health.consolidation_enabled: true` — master switch
+- `health.consolidation_threshold: 5` — merge when a topic has more
+  than N pages
+
+Pages with `status: consolidated` are excluded from health scoring.
+
+---
+
 ## Contradiction detection
 
 Contradiction detection is **off by default** (`health.detect_contradictions: false`)
@@ -145,6 +168,11 @@ health:
   auto_fix_staleness_below: 40
   max_fixes_per_run: 10
   detect_contradictions: false
+  consolidation_threshold: 5   # merge when a topic has more than N pages
+  consolidation_enabled: true  # master switch for knowledge consolidation
+  zero_hit_threshold: 0.20     # trigger enrichment when zero-hit rate exceeds 20%
+  enrichment_enabled: true     # master switch for automated vocabulary enrichment
+  query_log_file: .wotw/query-log.jsonl  # query outcome log for zero-hit monitoring
 
 lint:
   schedule_enabled: false
@@ -167,4 +195,31 @@ Health data is surfaced in three places:
    and count of pages needing attention (score < 50).
 3. **`get_stats` MCP tool** — returns `health.avg_score`,
    `health.pages_below_50`, and `health.lowest_scoring_page` in the
-   stats response.
+   stats response. Also returns `query_health` with zero-hit metrics.
+
+---
+
+## Vocabulary enrichment
+
+When the zero-hit rate (queries that return no search results) exceeds
+`health.zero_hit_threshold` (default 20%), the system can automatically
+enrich wiki page metadata to close vocabulary gaps.
+
+The enrichment pass:
+
+1. Reads zero-hit queries from `health.query_log_file` (last 7 days).
+2. For each query, asks the LLM which wiki pages should have matched.
+3. Adds suggested `key_terms` to those pages' frontmatter.
+4. Rebuilds the search index, commits, and records provenance.
+
+Enrichment runs as part of `wotw lint --fix` (respecting
+`health.max_fixes_per_run`). The daemon lint scheduler logs the
+zero-hit rate but defers actual enrichment to the full heal context.
+
+Configure via:
+- `health.enrichment_enabled: true` — master switch
+- `health.zero_hit_threshold: 0.20` — rate trigger
+- `health.query_log_file: .wotw/query-log.jsonl` — query log path
+
+See [retrieval-hardening.md](retrieval-hardening.md) for how this
+fits into the closed-loop retrieval system.

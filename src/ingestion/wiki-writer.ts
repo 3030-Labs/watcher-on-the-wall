@@ -16,6 +16,7 @@
  */
 import { unlinkSync } from "node:fs";
 import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { errMsg } from "../utils/errors.js";
 import { readTextOrNullAsync } from "../utils/fs.js";
 import { getLogger } from "../utils/logger.js";
 import type { WikiPage } from "../utils/types.js";
@@ -106,7 +107,7 @@ export async function reconcileWrittenPages(
       pages.push(page);
     } catch (err) {
       log.warn({ err, path: abs }, "failed to parse written page");
-      skipped.push({ path: abs, reason: (err as Error).message });
+      skipped.push({ path: abs, reason: errMsg(err) });
     }
   }
 

@@ -100,6 +100,21 @@ async function approveOne(
   const destPath = store.pathFor(page.frontmatter.category, page.frontmatter.title);
   page.path = destPath;
 
+  // Check if a newer version of this page already exists in wiki.
+  const existing = await store.readPage(destPath);
+  if (existing && existing.frontmatter.updated > page.frontmatter.updated) {
+    const { getLogger } = await import("../../utils/logger.js");
+    getLogger("approve").warn(
+      {
+        slug: page.frontmatter.title,
+        existing: existing.frontmatter.updated,
+        candidate: page.frontmatter.updated,
+      },
+      "candidate is older than current wiki page — skipping to prevent regression",
+    );
+    return false;
+  }
+
   await store.writePage(page);
   // Remove from candidates.
   try {

@@ -17,6 +17,7 @@
  */
 import { relative, resolve } from "node:path";
 import PQueue from "p-queue";
+import { errMsg } from "../utils/errors.js";
 import { getLogger } from "../utils/logger.js";
 import type { RuntimeMode, WotwConfig } from "../utils/types.js";
 import type { DaemonSubsystem } from "../daemon/index.js";
@@ -124,7 +125,7 @@ export class IngestionQueue implements DaemonSubsystem {
         const outcome: IngestionOutcome = {
           batchId: batch.id,
           skipped: true,
-          skipReason: `process error: ${(err as Error).message}`,
+          skipReason: `process error: ${errMsg(err)}`,
           pagesWritten: 0,
           costUsd: 0,
           gitSha: null,
@@ -258,7 +259,7 @@ export class IngestionQueue implements DaemonSubsystem {
       const outcome: IngestionOutcome = {
         batchId: batch.id,
         skipped: true,
-        skipReason: `agent error: ${(err as Error).message}`,
+        skipReason: `agent error: ${errMsg(err)}`,
         pagesWritten: 0,
         costUsd: 0,
         gitSha: null,
@@ -278,6 +279,22 @@ export class IngestionQueue implements DaemonSubsystem {
     );
     if (skippedWrites.length > 0) {
       log.warn({ skipped: skippedWrites, batchId: batch.id }, "some written paths skipped");
+    }
+
+    // Guard: if the agent produced zero pages, skip all downstream work.
+    if (newPages.length === 0 && skippedWrites.length === 0) {
+      log.warn({ batchId: batch.id }, "agent produced zero pages — marking batch as skipped");
+      const outcome: IngestionOutcome = {
+        batchId: batch.id,
+        skipped: true,
+        skipReason: "agent produced no wiki pages",
+        pagesWritten: 0,
+        costUsd: invokeResult.totalCostUsd,
+        gitSha: null,
+        durationMs: Date.now() - started,
+      };
+      this.lastOutcome = outcome;
+      return outcome;
     }
 
     // 5. Repair bidirectional links across the whole wiki (cheap: in-memory)

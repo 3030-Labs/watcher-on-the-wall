@@ -13,12 +13,23 @@ export interface SearchHit {
   snippet: string;
 }
 
+/** Optional filters for narrowing search results. */
+export interface SearchFilters {
+  /** Only return pages matching this domain. */
+  domain?: string;
+  /** Only return pages matching this scope. */
+  scope?: string;
+}
+
 interface IndexDoc {
   id: string;
   path: string;
   title: string;
   category: string;
   tags: string;
+  key_terms: string;
+  domain: string;
+  scope: string;
   body: string;
 }
 
@@ -31,10 +42,10 @@ export class WikiSearch {
 
   constructor() {
     this.engine = new MiniSearch<IndexDoc>({
-      fields: ["title", "tags", "body"],
-      storeFields: ["path", "title", "category"],
+      fields: ["title", "tags", "key_terms", "body"],
+      storeFields: ["path", "title", "category", "domain", "scope"],
       searchOptions: {
-        boost: { title: 3, tags: 2 },
+        boost: { title: 3, tags: 2, key_terms: 2 },
         fuzzy: 0.2,
         prefix: true,
       },
@@ -43,11 +54,26 @@ export class WikiSearch {
 
   /** Replace the entire index with the given pages. */
   rebuild(pages: WikiPage[]): void {
-    this.engine.removeAll();
-    this.byId.clear();
+    // Build new data structures before mutating existing ones.
     const docs = pages.map((p) => toDoc(p));
-    for (const d of docs) this.byId.set(d.id, d);
-    this.engine.addAll(docs);
+    const newById = new Map<string, IndexDoc>();
+    for (const d of docs) newById.set(d.id, d);
+    // Snapshot old state for rollback.
+    const oldDocs = Array.from(this.byId.values());
+    try {
+      this.engine.removeAll();
+      this.engine.addAll(docs);
+      this.byId = newById;
+    } catch (err) {
+      // Rollback: restore old index.
+      try {
+        this.engine.removeAll();
+        this.engine.addAll(oldDocs);
+      } catch {
+        /* rollback failed — index is now empty */
+      }
+      throw err;
+    }
   }
 
   /** Upsert a single page into the index. */
@@ -68,21 +94,36 @@ export class WikiSearch {
   }
 
   /** Query the index. Returns ranked hits with snippets. */
-  search(query: string, limit = 20): SearchHit[] {
+  search(query: string, limit = 20, filters?: SearchFilters): SearchHit[] {
     if (!query.trim()) return [];
     // OR-combination is the right default for natural-language questions —
     // AND would zero-out any query containing stop words or uncommon terms.
     const results = this.engine.search(query, { combineWith: "OR" });
-    return results.slice(0, limit).map((r) => {
+    let hits = results.map((r) => {
       const doc = this.byId.get(r.id as string);
       return {
         path: (r as unknown as { path: string }).path,
         title: (r as unknown as { title: string }).title,
         category: (r as unknown as { category: string }).category,
+        domain: (r as unknown as { domain: string }).domain,
+        scope: (r as unknown as { scope: string }).scope,
         score: r.score,
         snippet: doc ? makeSnippet(doc.body, query) : "",
       };
     });
+
+    // Apply optional metadata filters.
+    if (filters?.domain) {
+      const d = filters.domain.toLowerCase();
+      hits = hits.filter((h) => h.domain.toLowerCase() === d);
+    }
+    if (filters?.scope) {
+      const s = filters.scope.toLowerCase();
+      hits = hits.filter((h) => h.scope.toLowerCase() === s);
+    }
+
+    // Strip internal fields before returning.
+    return hits.slice(0, limit).map(({ domain: _d, scope: _s, ...rest }) => rest);
   }
 
   /** Number of indexed documents. */
@@ -98,6 +139,9 @@ function toDoc(page: WikiPage): IndexDoc {
     title: page.frontmatter.title,
     category: page.frontmatter.category,
     tags: page.frontmatter.tags.join(" "),
+    key_terms: (page.frontmatter.key_terms ?? []).join(" "),
+    domain: page.frontmatter.domain ?? "",
+    scope: page.frontmatter.scope ?? "",
     body: page.body,
   };
 }

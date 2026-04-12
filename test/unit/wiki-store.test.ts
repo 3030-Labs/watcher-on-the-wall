@@ -34,9 +34,13 @@ describe("sanitizeSlug", () => {
     expect(sanitizeSlug("example.md")).toBe("example");
   });
 
-  it("returns 'untitled' for empty input", () => {
-    expect(sanitizeSlug("")).toBe("untitled");
-    expect(sanitizeSlug("!!!")).toBe("untitled");
+  it("returns 'untitled-<hash>' for empty input to avoid collisions", () => {
+    const a = sanitizeSlug("");
+    const b = sanitizeSlug("!!!");
+    expect(a).toMatch(/^untitled-[0-9a-f]{8}$/);
+    expect(b).toMatch(/^untitled-[0-9a-f]{8}$/);
+    // Different inputs produce different suffixes
+    expect(a).not.toBe(b);
   });
 });
 

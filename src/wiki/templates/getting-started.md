@@ -40,32 +40,32 @@ always trace where information came from.
 
 Your wiki is organized into six categories:
 
-| Category | Directory | What goes here |
-|----------|-----------|----------------|
-| Concepts | `wiki/concepts/` | Ideas, frameworks, theories, patterns |
-| Entities | `wiki/entities/` | People, organizations, products, tools |
-| Sources | `wiki/sources/` | Summaries of ingested raw files |
+| Category    | Directory           | What goes here                          |
+| ----------- | ------------------- | --------------------------------------- |
+| Concepts    | `wiki/concepts/`    | Ideas, frameworks, theories, patterns   |
+| Entities    | `wiki/entities/`    | People, organizations, products, tools  |
+| Sources     | `wiki/sources/`     | Summaries of ingested raw files         |
 | Comparisons | `wiki/comparisons/` | Side-by-side analyses of related topics |
-| Syntheses | `wiki/syntheses/` | Cross-cutting themes and insights |
-| Queries | `wiki/queries/` | Answers to questions you've asked |
+| Syntheses   | `wiki/syntheses/`   | Cross-cutting themes and insights       |
+| Queries     | `wiki/queries/`     | Answers to questions you've asked       |
 
 ## Useful Commands
 
-| Command | Description |
-|---------|-------------|
-| `wotw start` | Start the daemon (watches `raw/` for changes) |
-| `wotw stop` | Stop the daemon |
-| `wotw status` | Check daemon status, page counts, health |
-| `wotw query "question"` | Ask a question (uses the running daemon) |
-| `wotw search <terms>` | Offline full-text search (no daemon needed) |
-| `wotw lint` | Check wiki health and find issues |
-| `wotw lint --fix` | Auto-heal common issues |
-| `wotw stale` | Find pages that haven't been confirmed recently |
-| `wotw candidates` | List pages awaiting approval |
-| `wotw approve <file>` | Approve a candidate page into the wiki |
-| `wotw reject <file>` | Reject a candidate with optional feedback |
-| `wotw audit` | View the provenance chain |
-| `wotw logs` | Tail the daemon log |
+| Command                 | Description                                     |
+| ----------------------- | ----------------------------------------------- |
+| `wotw start`            | Start the daemon (watches `raw/` for changes)   |
+| `wotw stop`             | Stop the daemon                                 |
+| `wotw status`           | Check daemon status, page counts, health        |
+| `wotw query "question"` | Ask a question (uses the running daemon)        |
+| `wotw search <terms>`   | Offline full-text search (no daemon needed)     |
+| `wotw lint`             | Check wiki health and find issues               |
+| `wotw lint --fix`       | Auto-heal common issues                         |
+| `wotw stale`            | Find pages that haven't been confirmed recently |
+| `wotw candidates`       | List pages awaiting approval                    |
+| `wotw approve <file>`   | Approve a candidate page into the wiki          |
+| `wotw reject <file>`    | Reject a candidate with optional feedback       |
+| `wotw audit`            | View the provenance chain                       |
+| `wotw logs`             | Tail the daemon log                             |
 
 ## Tips
 

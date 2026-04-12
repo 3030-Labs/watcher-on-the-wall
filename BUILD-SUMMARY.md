@@ -8,6 +8,53 @@ AI knowledge daemon.
 **Author line in package.json:** 3030 Labs LLC
 **Target runtime:** Node.js ≥ 20
 
+> ### Deep Verification Audit Fix Pass — 2026-04-11
+>
+> All 36 findings from adversarial deep-verification audit resolved:
+> 10 CRITICAL (search health pre-flight, stdin failure guard, CLI token
+> estimation, ENOENT-only cost catch, provenance corruption detection,
+> fsync propagation, watcher retry+DLQ, empty batch guard, token store
+> backup, early fallback logger), 8 HIGH (heal handler search rebuild,
+> provenance gap surfacing, watcher degraded flag, unhandled rejection
+> shutdown, superseded-candidate detection, atomic vocabulary write,
+> real provenance hashes, search rollback), 10 MEDIUM (dead-letter null,
+> bare catch logging, config warning, expansion log level, parsePage
+> coercion logging, PID atomic write, cost cache ordering, reconciliation
+> timer, errMsg utility, lint mode warning), 8 LOW (serve stub update,
+> slug collision avoidance, skip unreadable files, EACCES propagation,
+> temp file cleanup, model pricing warning, dynamic heal model_id,
+> get_index isError). New `errMsg()` utility replaced all 18 unsafe
+> `(err as Error).message` casts across 16 files. Zero bare `catch {}`
+> blocks remain.
+> **394 tests** across **44 files**. **76 source files**, ~13,100 source LoC,
+> ~300 KB CLI bundle. All 5 gates green.
+
+> ### Feature Pass 004: Retrieval Hardening — 2026-04-11
+>
+> Four retrieval-hardening features informed by "The Price of Meaning"
+> (arXiv 2603.27116), closing the semantic coverage gap in BM25 search:
+> (1) **Query Expansion** — LLM-powered keyword variant generation before
+> BM25 search (`query.expand: true`); (2) **Richer YAML Metadata** — new
+> `domain`, `scope`, `key_terms` frontmatter fields; `key_terms` indexed
+> with 2x boost; `--domain`/`--scope` filtering on search + query;
+> (3) **Knowledge Consolidation** — detect fragmented topic clusters via
+> union-find at threshold 40, merge via `wotw lint --fix`, mark originals
+> `status: consolidated`; (4) **Zero-Hit Monitoring + Vocabulary
+> Enrichment** — JSONL query log, `computeZeroHitRate`, automated
+> `key_terms` enrichment when zero-hit rate exceeds 20%.
+> **386 tests** across **42 files**. **75 source files**, ~12,800 source LoC,
+> ~289 KB CLI bundle. All gates green.
+
+> ### Codex Audit Fix Pass — 2026-04-10
+>
+> 3 findings from external Codex audit fixed: (1) version string drift —
+> all hardcoded `0.1.0` replaced with `VERSION` from `src/utils/version.ts`
+> (reads `package.json` via `createRequire`); (2) `TokenStore.load()` crash
+> on corrupt `tokens.json` — `JSON.parse` wrapped in try/catch with
+> empty-store fallback; (3) `pnpm audit --prod` added to CI workflow.
+> **359 tests** across **38 files**. **72 source files**, ~11,950 source LoC,
+> ~273 KB CLI bundle. All gates green.
+
 > ### v0.2 Reconciliation Pass — 2026-04-09
 >
 > Post-sprint reconciliation: 8 features verified/adapted, 4 with new
@@ -372,11 +419,11 @@ from the working tree at build-complete time.
 
 | Metric | Value |
 |---|---|
-| Source TypeScript files | **71** (post v0.2 reconciliation) |
-| Total source LoC | **~11,900** |
-| Test files | **37** |
-| Total test LoC | **~6,100** |
-| **Tests passing** | **356 / 356** (100%, post v0.2 reconciliation) |
+| Source TypeScript files | **72** (post Codex audit fix) |
+| Total source LoC | **~11,950** |
+| Test files | **38** |
+| Total test LoC | **~6,200** |
+| **Tests passing** | **359 / 359** (100%, post Codex audit fix) |
 | Doc files under `docs/` | **9** (includes new `knowledge-health.md`) |
 | Top-level doc files | **6** (README.md, CHANGELOG.md, CONTRIBUTING.md, SECURITY.md, ROADMAP.md, this file) |
 | Total doc LoC | **~2,400** |
@@ -404,6 +451,7 @@ from the working tree at build-complete time.
 | Gate 10 | Feature Pass 002 | PASS | Obsidian-aware interactive `wotw init` wizard. New `src/cli/lib/vault-detect.ts`, rewritten `src/cli/commands/init.ts`, new `@clack/prompts@^1.2.0` dependency, new `docs/obsidian-setup.md`. **272/272** tests passing across **26** files; lint/typecheck/format/build all clean. See `FEATURE-PASS-002.md`. |
 | Gate 11 | Feature Pass 003 | PASS | Knowledge Health System: health scoring, deduplication, auto-healing (`wotw lint --fix`), contradiction detection. New `src/wiki/health.ts`, `src/wiki/heal-handlers.ts`, `health:` config block, `type: "heal"` provenance, new `docs/knowledge-health.md`. **300/300** tests passing across **31** files; lint/typecheck/format/build all clean. See `FEATURE-PASS-003.md`. |
 | Gate 12 | v0.2 Reconciliation | PASS | 8 features reconciled (trust_proxy, zero-hit guard, staging integration, stale rewrite, plus 4 verified-in-place). **356/356** tests passing across **37** files; lint/typecheck/format/build all clean. See `RECONCILIATION-PASS.md`. |
+| Gate 13 | Codex Audit Fix | PASS | 3 findings fixed (version drift → `src/utils/version.ts` via `createRequire`, TokenStore corrupt-JSON guard, `pnpm audit --prod` in CI). **359/359** tests passing across **38** files; lint/typecheck/format/build all clean. |
 
 ---
 
@@ -772,7 +820,7 @@ Every TypeScript file currently in `src/`, grouped by subsystem.
 | `multi-user/index.ts` | Barrel: re-exports `TokenStore`, `Principal`, `TokenInfo`, `TokenStoreOptions`. |
 | `multi-user/token-store.ts` | Atomic JSON token store. `load`, `save`, `authenticate`, `addUser` (issues `wotw_<64hex>`, revokes prior), `revokeToken`, `revokeUser`, `listUsers`, `size`, `clear`. |
 
-### `src/utils/` — 6 files
+### `src/utils/` — 7 files
 
 `src/utils/hash.ts` was deleted in L-DUP-1; the consolidated implementation
 lives at `src/provenance/hash.ts`, which re-exports backwards-compatible
@@ -786,6 +834,7 @@ aliases (`sha256`, `sha256Json`, `stableStringify`, `sha256FileSync`).
 | `utils/logger.ts` | pino-based `getLogger(module)`. Wraps pino-pretty in dev. |
 | `utils/retry.ts` | `retry(fn, {retries, initialDelayMs, maxDelayMs, factor, shouldRetry, onRetry})`. |
 | `utils/sanitize.ts` | Slug, path, and log-output sanitization helpers. The `password-in-url` regex is the strict `scheme://user:pass@host` form (L-SEC-3) so it never matches bare emails or `mailto:`. |
+| `utils/version.ts` | Single source of truth for the package version. Uses `createRequire` to read `version` from `package.json` at runtime — can never drift. Consumed by CLI, MCP server, daemon PID file. |
 
 ### `src/index.ts`
 

@@ -141,19 +141,24 @@ at …" message and exits 0.
 
 ---
 
-## `wotw query <question> [--k N] [--json]`
+## `wotw query <question> [--k N] [--json] [--domain D] [--scope S]`
 
 Ask a natural-language question and print an answer grounded in the
 wiki, with inline `[citation]` markers. If the search index returns
 zero relevant pages, the query short-circuits with a "no relevant
 wiki pages found" message and costs $0 (the LLM is never called).
 
+When `query.expand` is enabled (default), the query is first expanded
+into keyword variants via a small LLM call before hitting BM25.
+
 ```bash
 wotw query "what is a hash chain?"
 wotw query "decisions about auth" --k 12 --json
+wotw query "how do rollbacks work" --domain ops
 ```
 
 `--k` controls how many wiki pages are retrieved as context.
+`--domain` and `--scope` narrow the search to pages matching those metadata values.
 
 ## `wotw audit [--limit N] [--json] [--full]`
 
@@ -195,17 +200,21 @@ per run is capped by `health.max_fixes_per_run` (default 10).
 See [knowledge-health.md](./knowledge-health.md) for the full health
 system documentation.
 
-## `wotw search <terms> [--top N] [--json] [--open]`
+## `wotw search <terms> [--top N] [--json] [--open] [--domain D] [--scope S]`
 
 Offline full-text search over the wiki (no daemon required). Uses the
 MiniSearch index to find pages matching the given terms.
 
 ```bash
-wotw search "hash chain"           # top 5 results
-wotw search "auth" --top 20        # more results
-wotw search "crypto" --json        # machine-readable output
-wotw search "hash chain" --open    # open top result in $EDITOR
+wotw search "hash chain"                  # top 10 results
+wotw search "auth" --top 20               # more results
+wotw search "crypto" --json               # machine-readable output
+wotw search "hash chain" --open           # open top result in Obsidian
+wotw search "deployment" --domain ops     # filter by knowledge domain
+wotw search "api" --scope my-project      # filter by project scope
 ```
+
+`--domain` and `--scope` filter results to pages matching those metadata values.
 
 ## `wotw stale [--since <duration>] [--json] [--dashboard]`
 

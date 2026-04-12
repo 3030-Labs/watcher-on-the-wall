@@ -101,6 +101,25 @@ export class LintScheduler implements DaemonSubsystem {
       } else {
         log.info({ totalPages: result.totalPages }, "lint scheduler: clean sweep — no issues");
       }
+      // After lint, check zero-hit rate and run vocabulary enrichment if needed.
+      if (this.opts.config.health.enrichment_enabled) {
+        try {
+          const { computeZeroHitRate } = await import("../server/query-metrics.js");
+          const metrics = computeZeroHitRate(this.opts.config.health.query_log_file);
+          if (metrics.zero_hit_rate > this.opts.config.health.zero_hit_threshold) {
+            log.info(
+              { rate: (metrics.zero_hit_rate * 100).toFixed(0) },
+              "zero-hit rate exceeds threshold — vocabulary enrichment would run",
+            );
+            // Enrichment requires full context (store, search, etc.) that the scheduler
+            // doesn't have. In daemon mode, enrichment runs via `wotw lint --fix` which
+            // has the full heal context. Log for observability here.
+          }
+        } catch {
+          // Non-fatal — metrics computation may fail if log file doesn't exist yet.
+        }
+      }
+
       return result;
     } catch (err) {
       log.error({ err }, "lint scheduler: sweep failed");

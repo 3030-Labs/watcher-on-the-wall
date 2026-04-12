@@ -8,6 +8,7 @@
  * unknown, we fall back to conservative defaults so the budget guardrails
  * still trip before we blow through real money.
  */
+import { getLogger } from "../utils/logger.js";
 import type { ModelId, OperationType, WotwConfig } from "../utils/types.js";
 
 /** Price table in USD per 1M tokens. */
@@ -57,7 +58,13 @@ export class ModelRouter {
 
   /** Look up pricing for a model ID. Falls back to conservative defaults. */
   pricingFor(modelId: ModelId): ModelPricing {
-    return PRICING[modelId] ?? DEFAULT_PRICING;
+    const p = PRICING[modelId];
+    if (p) return p;
+    getLogger("model-router").warn(
+      { model: modelId },
+      "unknown model — using Opus-tier pricing as fallback",
+    );
+    return DEFAULT_PRICING;
   }
 
   /** Convert usage tokens to USD cost for a given model. */

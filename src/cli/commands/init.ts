@@ -44,6 +44,7 @@
  */
 import * as p from "@clack/prompts";
 import type { Command } from "commander";
+import { errMsg } from "../../utils/errors.js";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -135,12 +136,12 @@ export function registerInitCommand(program: Command): void {
         const pathArg = dir ?? opts.path;
         await runInit({ ...opts, path: pathArg });
       } catch (err) {
-        if ((err as Error).message === "cancelled") {
+        if (errMsg(err) === "cancelled") {
           // User hit Ctrl-C during a prompt — exit quietly.
           process.exitCode = 0;
           return;
         }
-        fail(`init failed: ${(err as Error).message}`);
+        fail(`init failed: ${errMsg(err)}`);
         process.exitCode = 1;
       }
     });

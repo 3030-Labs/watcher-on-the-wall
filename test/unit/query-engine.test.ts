@@ -50,6 +50,7 @@ describe("QueryEngine zero-hit grounding guard", () => {
     const search = new WikiSearch();
     const config = resolveConfigPaths(defaultConfig(), root);
     config.wiki_root = root;
+    config.query.expand = false;
 
     const engine = new QueryEngine({
       config,
@@ -84,6 +85,9 @@ describe("QueryEngine zero-hit grounding guard", () => {
 
     const config = resolveConfigPaths(defaultConfig(), root);
     config.wiki_root = root;
+    // Disable query expansion so the zero-hit test isn't polluted by
+    // expansion terms matching irrelevant pages.
+    config.query.expand = false;
 
     const engine = new QueryEngine({
       config,

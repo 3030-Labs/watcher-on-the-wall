@@ -57,8 +57,20 @@ export async function ensureDir(dir: string): Promise<void> {
 export function atomicWriteSync(filePath: string, contents: string | Buffer): void {
   ensureDirSync(dirname(filePath));
   const tmp = `${filePath}.${randomUUID()}.tmp`;
-  writeFileSync(tmp, contents);
-  renameSync(tmp, filePath);
+  let renamed = false;
+  try {
+    writeFileSync(tmp, contents);
+    renameSync(tmp, filePath);
+    renamed = true;
+  } finally {
+    if (!renamed) {
+      try {
+        rmSync(tmp, { force: true });
+      } catch {
+        /* best effort */
+      }
+    }
+  }
 }
 
 /**
@@ -67,8 +79,20 @@ export function atomicWriteSync(filePath: string, contents: string | Buffer): vo
 export async function atomicWrite(filePath: string, contents: string | Buffer): Promise<void> {
   await ensureDir(dirname(filePath));
   const tmp = `${filePath}.${randomUUID()}.tmp`;
-  await writeFile(tmp, contents);
-  await rename(tmp, filePath);
+  let renamed = false;
+  try {
+    await writeFile(tmp, contents);
+    await rename(tmp, filePath);
+    renamed = true;
+  } finally {
+    if (!renamed) {
+      try {
+        rmSync(tmp, { force: true });
+      } catch {
+        /* best effort */
+      }
+    }
+  }
 }
 
 /**
@@ -110,8 +134,9 @@ export function removeIfExistsSync(filePath: string): void {
 export function fileExists(filePath: string): boolean {
   try {
     return statSync(filePath).isFile();
-  } catch {
-    return false;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw err;
   }
 }
 
@@ -121,7 +146,8 @@ export function fileExists(filePath: string): boolean {
 export function dirExists(dirPath: string): boolean {
   try {
     return statSync(dirPath).isDirectory();
-  } catch {
-    return false;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw err;
   }
 }

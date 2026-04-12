@@ -20,6 +20,8 @@ interface SearchOptions {
   top?: string;
   json?: boolean;
   open?: boolean;
+  domain?: string;
+  scope?: string;
 }
 
 /**
@@ -32,6 +34,8 @@ export function registerSearchCommand(program: Command): void {
     .option("--top <n>", "Maximum number of results (default 10)", "10")
     .option("--json", "Emit machine-readable JSON")
     .option("--open", "Open the top result in Obsidian")
+    .option("--domain <domain>", "Filter results by knowledge domain")
+    .option("--scope <scope>", "Filter results by project/context scope")
     .action(async (terms: string[], opts: SearchOptions) => {
       await runSearch(terms.join(" "), opts);
     });
@@ -59,7 +63,9 @@ export async function runSearch(query: string, opts: SearchOptions): Promise<voi
 
   search.rebuild(pages);
   const limit = Math.max(1, Math.min(100, Number(opts.top) || 10));
-  const hits = search.search(query, limit);
+  const filters =
+    opts.domain || opts.scope ? { domain: opts.domain, scope: opts.scope } : undefined;
+  const hits = search.search(query, limit, filters);
 
   if (hits.length === 0) {
     info(`No results for "${query}".`);

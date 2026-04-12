@@ -11,6 +11,7 @@ import { acquireStartLock, checkDaemonAlive, removePidFile, writePidFile } from 
 import { getLogger, initLogger } from "../utils/logger.js";
 import type { WotwConfig } from "../utils/types.js";
 import { ensureDirSync } from "../utils/fs.js";
+import { VERSION } from "../utils/version.js";
 import {
   resolveExecutionMode,
   type ResolvedExecutionMode,
@@ -133,7 +134,7 @@ export class Daemon {
     writePidFile(this.config.daemon.pid_file, {
       pid: process.pid,
       started_at: new Date().toISOString(),
-      version: "0.1.0",
+      version: VERSION,
     });
     log.info({ pidFile: this.config.daemon.pid_file }, "PID file written");
 
@@ -184,7 +185,11 @@ export class Daemon {
     });
     process.on("unhandledRejection", (reason) => {
       const log = getLogger("daemon");
-      log.error({ reason }, "unhandled rejection");
+      log.fatal(
+        { reason: reason instanceof Error ? reason.message : String(reason) },
+        "unhandled rejection — shutting down",
+      );
+      void this.shutdown(1);
     });
   }
 

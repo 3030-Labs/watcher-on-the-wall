@@ -4,6 +4,7 @@
  * daemon is running before any Claude session begins.
  */
 import type { Command } from "commander";
+import { errMsg } from "../../utils/errors.js";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { homedir, platform } from "node:os";
@@ -58,7 +59,7 @@ export async function runInstallHook(opts: InstallHookOptions): Promise<void> {
     try {
       existing = JSON.parse(readFileSync(settingsPath, "utf8")) as Settings;
     } catch (err) {
-      fail(`Could not parse existing settings at ${settingsPath}: ${(err as Error).message}`);
+      fail(`Could not parse existing settings at ${settingsPath}: ${errMsg(err)}`);
       process.exitCode = 1;
       return;
     }

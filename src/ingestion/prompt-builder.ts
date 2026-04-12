@@ -15,6 +15,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { readTextOrNullAsync } from "../utils/fs.js";
+import { getLogger } from "../utils/logger.js";
 import { sanitize } from "../utils/sanitize.js";
 import type { WotwConfig } from "../utils/types.js";
 import { parsePage } from "../wiki/page.js";
@@ -60,12 +61,9 @@ export async function buildIngestionPrompt(
         truncated,
       });
     } catch (err) {
-      excerpts.push({
-        path: file,
-        excerpt: `[failed to read: ${(err as Error).message}]`,
-        bytes: 0,
-        truncated: false,
-      });
+      const msg = err instanceof Error ? err.message : String(err);
+      getLogger("prompt-builder").warn({ path: file, err: msg }, "skipping unreadable source file");
+      continue;
     }
   }
 
@@ -100,6 +98,11 @@ Each wiki page MUST begin with YAML frontmatter:
   related: [list of wiki/ slugs]
   tags: [strings]
   confidence: high|medium|low
+
+For every wiki page you write, also include these optional frontmatter fields:
+  - domain: a broad knowledge domain category (e.g., ops, security, architecture, research, finance, engineering)
+  - scope: the project or organizational context this knowledge belongs to (e.g., the project name, team name, or "general")
+  - key_terms: an array of 5-15 keywords and phrases that this page should be findable by, including synonyms and alternative phrasings not used in the body text
 
 Rules:
   - Always produce at least one source-category page per raw file.

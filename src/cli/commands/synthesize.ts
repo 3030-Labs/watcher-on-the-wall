@@ -5,6 +5,7 @@
  * trigger + result formatter.
  */
 import type { Command } from "commander";
+import { errMsg } from "../../utils/errors.js";
 import { loadConfig, resolveConfigPaths } from "../../daemon/config.js";
 import { checkDaemonAlive } from "../../daemon/lifecycle.js";
 import { callMcpTool } from "./lib/mcp-client.js";
@@ -79,7 +80,7 @@ export async function runSynthesize(opts: SynthesizeOptions): Promise<void> {
     }
     printSynthesizeResult(payload);
   } catch (err) {
-    fail(`Synthesis failed: ${(err as Error).message}`);
+    fail(`Synthesis failed: ${errMsg(err)}`);
     process.exitCode = 1;
   }
 }

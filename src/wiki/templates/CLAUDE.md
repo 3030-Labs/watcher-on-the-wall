@@ -41,6 +41,7 @@ Followed by markdown content with cross-references using relative links.
 ## Operations
 
 ### INGEST (triggered by new files in raw/)
+
 1. Read the new source file(s)
 2. Create a summary page in `wiki/sources/`
 3. Create or update concept/entity pages as needed
@@ -49,6 +50,7 @@ Followed by markdown content with cross-references using relative links.
 6. Append operation to `wiki/log.md`
 
 ### QUERY (triggered by query_wiki tool call)
+
 1. Read `wiki/index.md` to identify relevant pages
 2. Read the relevant pages
 3. Synthesize an answer
@@ -56,6 +58,7 @@ Followed by markdown content with cross-references using relative links.
 5. Update `wiki/index.md` if a new page was created
 
 ### LINT (triggered by wotw lint or periodic maintenance)
+
 1. Scan all wiki pages for contradictions between pages
 2. Identify orphan pages (no inbound links)
 3. Identify stale pages (sources updated but wiki page not)

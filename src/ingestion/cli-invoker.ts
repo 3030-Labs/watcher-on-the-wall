@@ -124,10 +124,12 @@ export async function invokeClaudeCli(
 
   // Stream the user prompt via stdin. Guard against EPIPE if the CLI exits
   // before accepting all the bytes.
+  let stdinFailed = false;
   try {
     child.stdin.write(opts.userPrompt);
     child.stdin.end();
   } catch (err) {
+    stdinFailed = true;
     log.warn({ err }, "failed to write prompt to claude stdin");
   }
 
@@ -174,12 +176,42 @@ export async function invokeClaudeCli(
   const after = snapshotTree(opts.cwd);
   const writtenPaths = diffSnapshots(before, after);
 
+  if (stdinFailed) {
+    if (writtenPaths.length > 0) {
+      log.error("agent wrote files without receiving prompt — results may be hallucinated");
+    }
+    return {
+      finalText: stdout,
+      totalCostUsd: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      durationMs,
+      numTurns: 0,
+      sessionId: null,
+      writtenPaths: [],
+      stopReason: "stdin_write_failed",
+      success: false,
+    };
+  }
+
+  // Estimate tokens from byte sizes (rough 4 bytes/token approximation).
+  const promptBytes = Buffer.byteLength(opts.userPrompt, "utf8");
+  const totalOutputBytes = writtenPaths.reduce((sum, p) => {
+    try {
+      return sum + statSync(p).size;
+    } catch {
+      return sum;
+    }
+  }, 0);
+  const inputTokens = Math.ceil(promptBytes / 4);
+  const outputTokens = Math.ceil(totalOutputBytes / 4);
+
   return {
     finalText: stdout,
     // CLI mode is covered by the user's subscription — no per-op cost.
     totalCostUsd: 0,
-    inputTokens: 0,
-    outputTokens: 0,
+    inputTokens,
+    outputTokens,
     durationMs,
     numTurns: 0,
     sessionId: null,

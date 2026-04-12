@@ -5,6 +5,7 @@
  * Detached:   forks a child process that survives terminal close. Default.
  */
 import type { Command } from "commander";
+import { errMsg } from "../../utils/errors.js";
 import { loadConfig, resolveConfigPaths } from "../../daemon/config.js";
 import { Daemon } from "../../daemon/index.js";
 import { checkDaemonAlive } from "../../daemon/lifecycle.js";
@@ -34,7 +35,7 @@ export function registerStartCommand(program: Command): void {
       try {
         await runStart(opts);
       } catch (err) {
-        fail(`start failed: ${(err as Error).message}`);
+        fail(`start failed: ${errMsg(err)}`);
         process.exitCode = 1;
       }
     });

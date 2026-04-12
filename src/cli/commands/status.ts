@@ -112,6 +112,22 @@ export async function runStatus(opts: StatusOptions): Promise<void> {
     }
   }
 
+  // Query health — zero-hit rate monitoring.
+  let queryHealthLine = "no queries recorded";
+  try {
+    const { computeZeroHitRate } = await import("../../server/query-metrics.js");
+    const metrics = computeZeroHitRate(config.health.query_log_file);
+    if (metrics.total_queries > 0) {
+      const pct = (metrics.zero_hit_rate * 100).toFixed(0);
+      queryHealthLine = `${pct}% zero-hit rate (${metrics.zero_hits}/${metrics.total_queries} queries, 7d window)`;
+      if (metrics.zero_hit_rate > config.health.zero_hit_threshold) {
+        queryHealthLine = chalk.yellow(queryHealthLine);
+      }
+    }
+  } catch {
+    queryHealthLine = "—";
+  }
+
   const rows: Array<[string, string]> = [
     ["status", running],
     ["pid", status.pid !== null ? String(status.pid) : "—"],
@@ -127,6 +143,7 @@ export async function runStatus(opts: StatusOptions): Promise<void> {
       orphanedCount > 0 ? chalk.yellow(String(orphanedCount)) : String(orphanedCount),
     ],
     ["wiki health", healthLine],
+    ["query health", queryHealthLine],
     ["raw files", String(rawCount)],
     ["provenance records", String(provenanceCount)],
     [

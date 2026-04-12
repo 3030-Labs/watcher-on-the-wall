@@ -83,8 +83,11 @@ echo "FAKE_CLI_DONE"`,
 
       expect(result.success).toBe(true);
       expect(result.totalCostUsd).toBe(0);
-      expect(result.inputTokens).toBe(0);
-      expect(result.outputTokens).toBe(0);
+      // CRITICAL-3: CLI mode now estimates tokens from byte sizes (4 bytes/token).
+      // userPrompt is "do something" (12 bytes) → ceil(12/4) = 3 inputTokens.
+      // The written file contains "wrote it\n" → outputTokens > 0.
+      expect(result.inputTokens).toBeGreaterThan(0);
+      expect(result.outputTokens).toBeGreaterThan(0);
       expect(result.finalText).toContain("FAKE_CLI_DONE");
       expect(result.writtenPaths.length).toBeGreaterThan(0);
       const wroteOurFile = result.writtenPaths.some((p) => p.endsWith("new-page.md"));

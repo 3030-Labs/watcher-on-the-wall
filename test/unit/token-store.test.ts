@@ -2,7 +2,7 @@
  * Unit tests for TokenStore: load/save, addUser, revokeUser, authenticate.
  */
 import { describe, expect, it } from "vitest";
-import { mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { TokenStore } from "../../src/multi-user/token-store.js";
@@ -45,6 +45,18 @@ describe("TokenStore.load", () => {
     const store = new TokenStore({ workspacesDir: dir });
     store.load();
     expect(store.size()).toBe(0);
+  });
+
+  it("survives corrupt (unparseable) tokens.json without throwing", () => {
+    const dir = tmpDir();
+    const file = join(dir, "tokens.json");
+    writeFileSync(file, "not json {{{", "utf8");
+    const store = new TokenStore({ workspacesDir: dir });
+    expect(() => store.load()).not.toThrow();
+    expect(store.size()).toBe(0);
+    // Corrupt file preserved for manual recovery
+    expect(existsSync(file)).toBe(true);
+    expect(readFileSync(file, "utf8")).toBe("not json {{{");
   });
 });
 

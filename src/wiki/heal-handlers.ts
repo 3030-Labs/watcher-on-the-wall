@@ -74,6 +74,9 @@ export async function healStale(finding: HealthFinding, ctx: HealContext): Promi
   const result = await invokeHeal(ctx, prompt, "heal-refresh");
   if (!result) return { finding, fixed: false, reason: "LLM invocation failed", costUsd: 0 };
 
+  // Rebuild search index after page mutation.
+  ctx.search.rebuild(await loadAllPages(ctx.store));
+
   await recordHealProvenance(ctx, result, {
     heal_kind: "refresh",
     page: pageRel,
@@ -178,6 +181,9 @@ export async function healBrokenLinks(
 
   const result = await invokeHeal(ctx, prompt, "heal-links");
   if (!result) return { finding, fixed: false, reason: "LLM invocation failed", costUsd: 0 };
+
+  // Rebuild search index after page mutation.
+  ctx.search.rebuild(await loadAllPages(ctx.store));
 
   await recordHealProvenance(ctx, result, {
     heal_kind: "link-repair",
@@ -288,6 +294,9 @@ export async function healContradiction(
   const result = await invokeHeal(ctx, prompt, "heal-contradiction");
   if (!result) return { finding, fixed: false, reason: "LLM invocation failed", costUsd: 0 };
 
+  // Rebuild search index after page mutation.
+  ctx.search.rebuild(await loadAllPages(ctx.store));
+
   await recordHealProvenance(ctx, result, {
     heal_kind: "contradiction-resolve",
     pages: finding.pages.join(","),
@@ -295,6 +304,79 @@ export async function healContradiction(
 
   await commitHealChanges(ctx, result, "contradiction-resolve", finding.pages.join("+"));
   log.info({ pages: finding.pages, cost: result.totalCostUsd }, "healed contradiction");
+  return { finding, fixed: true, costUsd: result.totalCostUsd };
+}
+
+// ---------------------------------------------------------------------------
+// Knowledge consolidation
+// ---------------------------------------------------------------------------
+
+export async function healConsolidation(
+  finding: HealthFinding,
+  ctx: HealContext,
+): Promise<HealResult> {
+  const log = getLogger("heal");
+  if (finding.pages.length < 2) {
+    return { finding, fixed: false, reason: "need >=2 pages", costUsd: 0 };
+  }
+
+  const pageContents: string[] = [];
+  for (const rel of finding.pages) {
+    const abs = `${ctx.config.wiki_root}/${rel}`;
+    const page = await ctx.store.readPage(abs);
+    if (page) {
+      pageContents.push(`--- ${rel} ---\n${page.raw}`);
+    }
+  }
+
+  const suggestedTitle =
+    finding.description.match(/"([^"]+)"/)?.[1] ??
+    finding.pages[0]?.split("/").pop()?.replace(/\.md$/, "").replace(/[-_]/g, " ") ??
+    "consolidated topic";
+
+  const prompt = [
+    `These ${finding.pages.length} pages all cover the same topic area: "${suggestedTitle}".`,
+    "Merge them into a single authoritative page that preserves all unique information,",
+    "removes redundancy, and maintains all source references.",
+    `Title the consolidated page: "${suggestedTitle}".`,
+    "",
+    "Pages to consolidate:",
+    ...pageContents,
+    "",
+    "Instructions:",
+    "- Write the consolidated page to the first page's path.",
+    "- Preserve ALL unique information from every page.",
+    "- Keep all source references from all pages in the `sources:` frontmatter.",
+    "- Merge all `related:` links.",
+    "- Merge all `tags:` values (deduplicate).",
+    "- Merge all `key_terms:` values (deduplicate).",
+    "- Use the highest confidence level among the source pages.",
+    `- For each original page EXCEPT the first (${finding.pages.slice(1).join(", ")}):`,
+    `  - Clear the body.`,
+    `  - Set frontmatter: status: consolidated, consolidated_into: ${finding.pages[0]}`,
+    "  - Keep the title and category for reference.",
+    "- Do NOT delete any files.",
+  ].join("\n");
+
+  const result = await invokeHeal(ctx, prompt, "heal-consolidation");
+  if (!result) return { finding, fixed: false, reason: "LLM invocation failed", costUsd: 0 };
+
+  // Repair bidirectional links after consolidation.
+  const allPages = await loadAllPages(ctx.store);
+  const mutated = repairBidirectionalLinks(ctx.store, allPages);
+  for (const p of mutated) {
+    await ctx.store.writePage(p);
+  }
+  ctx.search.rebuild(await loadAllPages(ctx.store));
+
+  await recordHealProvenance(ctx, result, {
+    heal_kind: "consolidation",
+    source_pages: finding.pages.join(","),
+    consolidated_page: finding.pages[0] ?? "",
+  });
+
+  await commitHealChanges(ctx, result, "consolidation", finding.pages.join("+"));
+  log.info({ pages: finding.pages, cost: result.totalCostUsd }, "consolidated topic pages");
   return { finding, fixed: true, costUsd: result.totalCostUsd };
 }
 
@@ -321,6 +403,8 @@ export async function healFinding(
       return healMissingBacklinks(finding, ctx);
     case "contradiction":
       return healContradiction(finding, ctx);
+    case "consolidation":
+      return healConsolidation(finding, ctx);
     case "orphan":
       // Already handled by archive system — not auto-fixable.
       return null;
@@ -409,7 +493,12 @@ async function recordHealProvenance(
       source_files: [],
       source_hashes: [],
       prompt_hash: sha256Hex("heal"),
-      model_id: result.finalText ? "claude" : "none",
+      model_id:
+        result.writtenPaths.length > 0
+          ? ctx.runtimeMode === "cli"
+            ? ctx.config.execution.cli_model
+            : ctx.modelRouter.modelFor("lint")
+          : "none",
       response_hash: sha256Hex(result.finalText || ""),
       wiki_files_written: writtenRels,
       wiki_file_hashes_after: wikiFileHashes,

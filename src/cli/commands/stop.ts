@@ -2,6 +2,7 @@
  * `wotw stop` — gracefully shut down the running daemon by sending SIGTERM.
  */
 import type { Command } from "commander";
+import { errMsg } from "../../utils/errors.js";
 import { loadConfig, resolveConfigPaths } from "../../daemon/config.js";
 import { checkDaemonAlive, removePidFile, terminateAndWait } from "../../daemon/lifecycle.js";
 import { fail, info, success, warn } from "../output.js";
@@ -24,7 +25,7 @@ export function registerStopCommand(program: Command): void {
       try {
         await runStop(opts);
       } catch (err) {
-        fail(`stop failed: ${(err as Error).message}`);
+        fail(`stop failed: ${errMsg(err)}`);
         process.exitCode = 1;
       }
     });
