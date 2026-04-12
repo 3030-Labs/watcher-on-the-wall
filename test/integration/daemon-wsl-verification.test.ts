@@ -25,7 +25,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { mkdtempSync, writeFileSync, existsSync } from "node:fs";
-import { tmpdir, platform } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   acquireStartLock,
@@ -113,9 +113,12 @@ describe("daemon WSL verification — proper-lockfile on WSL filesystems", () =>
     const lockPath = join(root, "wotw.lock");
     // Lock file does not exist yet — acquireStartLock must create it.
     const release = await acquireStartLock(lockPath);
-    expect(typeof release).toBe("function");
     expect(existsSync(lockPath)).toBe(true);
+    // Release the lock and verify it can be re-acquired (proving release worked).
     await release();
+    const release2 = await acquireStartLock(lockPath);
+    expect(existsSync(lockPath)).toBe(true);
+    await release2();
   });
 
   it("rejects a second acquisition while the lock is held (mutual exclusion)", async () => {
@@ -136,14 +139,5 @@ describe("daemon WSL verification — proper-lockfile on WSL filesystems", () =>
     // The second acquire must succeed once the first has fully released.
     const release2 = await acquireStartLock(lockPath);
     await release2();
-  });
-});
-
-describe("daemon WSL verification — host platform sanity", () => {
-  it("reports the expected platform string", () => {
-    // WSL2 reports as "linux" — this test exists to fail loudly if a future
-    // Node release ever exposes a distinct WSL identifier we should handle.
-    const p = platform();
-    expect(["linux", "darwin", "win32"]).toContain(p);
   });
 });

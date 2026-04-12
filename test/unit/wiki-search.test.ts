@@ -2,6 +2,7 @@
  * Unit tests for WikiSearch: full-text search over wiki pages using minisearch.
  */
 import { describe, expect, it } from "vitest";
+import MiniSearch from "minisearch";
 import { WikiSearch } from "../../src/wiki/search.js";
 import { newPage } from "../../src/wiki/page.js";
 import type { WikiPage } from "../../src/utils/types.js";
@@ -31,6 +32,59 @@ describe("WikiSearch.rebuild", () => {
     search.rebuild([page("Alpha")]);
     search.rebuild([page("Beta"), page("Gamma")]);
     expect(search.size()).toBe(2);
+  });
+
+  it("preserves old index when rebuild fails and rollback succeeds", () => {
+    const search = new WikiSearch();
+
+    // Build an initial index with 5 pages.
+    const originalPages = [
+      page("Provenance", "concept", "Provenance chains ensure integrity"),
+      page("Hash Functions", "concept", "Hash functions map data to fixed size"),
+      page("Merkle Trees", "concept", "Binary tree of hashes"),
+      page("Digital Signatures", "concept", "Cryptographic proof of origin"),
+      page("Key Management", "concept", "Secure storage and rotation of keys"),
+    ];
+    search.rebuild(originalPages);
+    expect(search.size()).toBe(5);
+
+    // Verify search works on original index.
+    const beforeResults = search.search("provenance");
+    expect(beforeResults.length).toBeGreaterThan(0);
+    expect(beforeResults[0]!.title).toBe("Provenance");
+
+    // Monkey-patch addAll to fail only on the first call (the new docs),
+    // but succeed on the second call (the rollback restoration).
+    const originalAddAll = MiniSearch.prototype.addAll;
+    let callCount = 0;
+    MiniSearch.prototype.addAll = function (...args: unknown[]) {
+      callCount++;
+      if (callCount === 1) {
+        throw new Error("synthetic addAll failure");
+      }
+      // Second call (rollback) uses real implementation.
+      return originalAddAll.apply(this, args as Parameters<typeof originalAddAll>);
+    };
+
+    try {
+      const badPages = [page("Bad Page", "concept", "This will fail")];
+      expect(() => search.rebuild(badPages)).toThrow("synthetic addAll failure");
+    } finally {
+      MiniSearch.prototype.addAll = originalAddAll;
+    }
+
+    // The old index should be fully restored after rollback.
+    expect(search.size()).toBe(5);
+
+    // Searching for an original term should still return results.
+    const afterResults = search.search("provenance");
+    expect(afterResults.length).toBeGreaterThan(0);
+    expect(afterResults[0]!.title).toBe("Provenance");
+
+    // Searching for the failed page's content should return nothing.
+    const failedResults = search.search("Bad Page");
+    const exactMatch = failedResults.find((r) => r.title === "Bad Page");
+    expect(exactMatch).toBeUndefined();
   });
 });
 
@@ -100,6 +154,7 @@ describe("WikiSearch.search", () => {
     }
     search.rebuild(pages);
     const results = search.search("content", 5);
+    expect(results.length).toBeGreaterThan(0);
     expect(results.length).toBeLessThanOrEqual(5);
   });
 

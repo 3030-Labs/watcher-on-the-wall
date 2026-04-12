@@ -51,6 +51,86 @@ describe("sanitize — password-in-url (L-SEC-3 regression)", () => {
   });
 });
 
+describe("sanitize — aws-access-key", () => {
+  it("redacts an AWS access key ID", () => {
+    const input = "key = AKIAIOSFODNN7EXAMPLE";
+    const output = sanitize(input);
+    expect(output).toBe("key = [REDACTED:AWS_ACCESS_KEY]");
+    expect(output).not.toContain("AKIAIOSFODNN7EXAMPLE");
+  });
+});
+
+describe("sanitize — aws-secret-key", () => {
+  it("redacts an AWS secret access key when context word follows", () => {
+    // The regex uses a lookahead (?=.*(?:secret|aws)) — the context word
+    // must appear AFTER the key on the same line for the match to trigger.
+    const secretKey = "wJalrXUtnFEMIK7MDENGbPxRfiCYEXAMPLEKEYab";
+    expect(secretKey.length).toBe(40);
+    const input = `${secretKey} aws_secret_access_key`;
+    const output = sanitize(input);
+    expect(output).toBe("[REDACTED:AWS_SECRET_KEY] aws_secret_access_key");
+    expect(output).not.toContain(secretKey);
+  });
+});
+
+describe("sanitize — github-token", () => {
+  it("redacts a GitHub personal access token", () => {
+    const token = "ghp_" + "A".repeat(36);
+    const input = `GITHUB_TOKEN=${token}`;
+    const output = sanitize(input);
+    expect(output).toBe("GITHUB_TOKEN=[REDACTED:GITHUB_TOKEN]");
+    expect(output).not.toContain(token);
+  });
+});
+
+describe("sanitize — anthropic-api-key", () => {
+  it("redacts an Anthropic API key", () => {
+    const token = "sk-ant-" + "a".repeat(80);
+    const input = `key: ${token}`;
+    const output = sanitize(input);
+    expect(output).toBe("key: [REDACTED:ANTHROPIC_API_KEY]");
+    expect(output).not.toContain(token);
+  });
+});
+
+describe("sanitize — openai-api-key", () => {
+  it("redacts an OpenAI API key", () => {
+    const token = "sk-" + "x".repeat(48);
+    const input = `OPENAI_API_KEY=${token}`;
+    const output = sanitize(input);
+    expect(output).toBe("OPENAI_API_KEY=[REDACTED:OPENAI_API_KEY]");
+    expect(output).not.toContain(token);
+  });
+});
+
+describe("sanitize — private-key-block", () => {
+  it("redacts a PEM private key block", () => {
+    const input = `before\n-----BEGIN RSA PRIVATE KEY-----\nMIIBogIBAAJBALx...\n-----END RSA PRIVATE KEY-----\nafter`;
+    const output = sanitize(input);
+    expect(output).toBe("before\n[REDACTED:PRIVATE_KEY_BLOCK]\nafter");
+    expect(output).not.toContain("MIIBogIBAAJBALx");
+  });
+});
+
+describe("sanitize — jwt", () => {
+  it("redacts a JWT token", () => {
+    const jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dummysignature123";
+    const input = `Authorization: Bearer ${jwt}`;
+    const output = sanitize(input);
+    expect(output).toContain("[REDACTED:JWT]");
+    expect(output).not.toContain("eyJhbGciOiJIUzI1NiJ9");
+  });
+});
+
+describe("sanitize — credit-card", () => {
+  it("redacts a credit card number", () => {
+    const input = "card: 4111111111111111";
+    const output = sanitize(input);
+    expect(output).toBe("card: [REDACTED:PAN]");
+    expect(output).not.toContain("4111111111111111");
+  });
+});
+
 describe("sanitize — DEFAULT_REDACTIONS shape", () => {
   it("includes password-in-url among the default rules", () => {
     const names = DEFAULT_REDACTIONS.map((r) => r.name);

@@ -120,7 +120,7 @@ describe("wotw lint --fix --yes", () => {
     const result = await runLintPass(config, { fix: true, yes: true });
 
     expect(result.missingWikiDir).toBe(false);
-    expect(result.healResults.length).toBeGreaterThanOrEqual(0);
+    expect(result.healResults.length).toBeGreaterThanOrEqual(1);
 
     // Check if B now references A (backlink repair doesn't require LLM).
     const bPath = join(root, "wiki", "concepts", "b.md");

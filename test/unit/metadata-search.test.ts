@@ -114,6 +114,7 @@ describe("Search with scope filter", () => {
       page("API Design", "REST patterns.", { scope: "acme-corp" }),
     ]);
     const hits = search.search("guide design", 20, { scope: "wotw" });
+    expect(hits.length).toBeGreaterThan(0);
     expect(hits.every((h) => h.title === "Deployment Guide")).toBe(true);
   });
 });

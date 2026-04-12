@@ -220,8 +220,10 @@ describe("computePageHealthScore", () => {
       false,
     );
     expect(result.page).toContain("concepts/test.md");
-    expect(result.score).toBeGreaterThanOrEqual(0);
-    expect(result.score).toBeLessThanOrEqual(100);
+    // No provenance -> staleness=0, not orphaned + no records -> sourceAvailability=100,
+    // no wikilinks -> linkHealth=100, single page -> duplicateRisk=0, contradictionRisk=0.
+    // Weighted: 0*0.25 + 100*0.25 + 100*0.2 + 100*0.15 + 100*0.15 = 75
+    expect(result.score).toBe(75);
     expect(result.factors).toBeDefined();
     expect(result.factors.staleness).toBeDefined();
     expect(result.factors.sourceAvailability).toBeDefined();

@@ -2,7 +2,14 @@
  * Unit tests for TokenStore: load/save, addUser, revokeUser, authenticate.
  */
 import { describe, expect, it } from "vitest";
-import { existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { TokenStore } from "../../src/multi-user/token-store.js";
@@ -50,13 +57,36 @@ describe("TokenStore.load", () => {
   it("survives corrupt (unparseable) tokens.json without throwing", () => {
     const dir = tmpDir();
     const file = join(dir, "tokens.json");
-    writeFileSync(file, "not json {{{", "utf8");
+    const corruptContent = "not json {{{";
+    writeFileSync(file, corruptContent, "utf8");
     const store = new TokenStore({ workspacesDir: dir });
     expect(() => store.load()).not.toThrow();
     expect(store.size()).toBe(0);
     // Corrupt file preserved for manual recovery
     expect(existsSync(file)).toBe(true);
-    expect(readFileSync(file, "utf8")).toBe("not json {{{");
+    expect(readFileSync(file, "utf8")).toBe(corruptContent);
+  });
+
+  it("creates a .corrupt backup file preserving the original corrupt content (CRITICAL-9)", () => {
+    const dir = tmpDir();
+    const file = join(dir, "tokens.json");
+    const corruptContent = "not json {{{";
+    writeFileSync(file, corruptContent, "utf8");
+    const store = new TokenStore({ workspacesDir: dir });
+    store.load();
+
+    // Glob for tokens.json.corrupt.* backup files in the directory
+    const entries = readdirSync(dir);
+    const backupFiles = entries.filter((e) => e.startsWith("tokens.json.corrupt."));
+    expect(backupFiles.length).toBeGreaterThanOrEqual(1);
+
+    // The backup file should contain the original corrupt content
+    const backupPath = join(dir, backupFiles[0]!);
+    const backupContent = readFileSync(backupPath, "utf8");
+    expect(backupContent).toBe(corruptContent);
+
+    // The store should still be empty and usable
+    expect(store.size()).toBe(0);
   });
 });
 

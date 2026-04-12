@@ -26,8 +26,21 @@ AI knowledge daemon.
 > get_index isError). New `errMsg()` utility replaced all 18 unsafe
 > `(err as Error).message` casts across 16 files. Zero bare `catch {}`
 > blocks remain.
-> **394 tests** across **44 files**. **76 source files**, ~13,100 source LoC,
+> **446 tests** across **51 files**. **76 source files**, ~13,100 source LoC,
 > ~300 KB CLI bundle. All 5 gates green.
+>
+> ### Test Suite Fix Pass — 2026-04-12
+>
+> Every CRITICAL and HIGH audit fix now has a regression test that fails
+> if the fix is reverted. 53 tests added, 18 strengthened, 2 deleted,
+> 2 rewritten. 7 new test files: `watcher-retry`, `ingestion-queue`,
+> `provenance-gaps`, `daemon-unhandled-rejection`, `vocabulary-enricher`,
+> `debounce`, `event-classifier`. Coverage gaps filled for sanitize rules
+> (8 of 9 patterns), `loadConfig()`, `fileExists`/`dirExists` EACCES,
+> `atomicWrite` temp cleanup, `DebounceBatcher`, `EventClassifier`,
+> `healContradiction`. P4 cleanup removed 2 tests that tested Node.js
+> internals, not production code. `typeof === "number"` assertions in
+> tests reduced to zero. Tracker: `TEST-FIX-PASS.md`.
 
 > ### Feature Pass 004: Retrieval Hardening — 2026-04-11
 >

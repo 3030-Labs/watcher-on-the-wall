@@ -91,6 +91,7 @@ describe("search", () => {
     const pages = await loadAllPages(store);
     search.rebuild(pages);
     const hits = search.search("alpha", 3);
+    expect(hits.length).toBeGreaterThan(0);
     expect(hits.length).toBeLessThanOrEqual(3);
   });
 

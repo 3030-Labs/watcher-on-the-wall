@@ -1,10 +1,14 @@
 /**
- * Unit tests for daemon/config.ts: defaults, deep-merge, and path resolution.
+ * Unit tests for daemon/config.ts: defaults, deep-merge, path resolution,
+ * and cosmiconfig-based loadConfig() composition.
  */
 import { describe, expect, it } from "vitest";
-import { isAbsolute } from "node:path";
+import { isAbsolute, join } from "node:path";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import {
   defaultConfig,
+  loadConfig,
   mergeConfig,
   resolveConfigPaths,
   validateConfig,
@@ -13,7 +17,7 @@ import {
 describe("defaultConfig", () => {
   it("returns a full config object with sensible defaults", () => {
     const cfg = defaultConfig();
-    expect(cfg.wiki_root).toBeDefined();
+    expect(cfg.wiki_root).toBe("./wiki-store");
     expect(cfg.models.ingest).toBe("claude-haiku-4-5");
     expect(cfg.models.query).toBe("claude-sonnet-4-5");
     expect(cfg.server.port).toBe(8787);
@@ -167,5 +171,34 @@ describe("resolveConfigPaths", () => {
     cfg.provenance.chain_file = "provenance-chain.jsonl";
     const resolved = resolveConfigPaths(cfg, "/tmp/base");
     expect(resolved.provenance.chain_file).toBe("/abs/wiki/provenance-chain.jsonl");
+  });
+});
+
+function tmp(): string {
+  return mkdtempSync(join(tmpdir(), "wotw-cfg-"));
+}
+
+describe("loadConfig", () => {
+  it("returns defaults when no config file exists", async () => {
+    const emptyDir = tmp();
+    const result = await loadConfig(emptyDir);
+    const defaults = defaultConfig();
+    expect(result.path).toBeNull();
+    expect(result.config.wiki_root).toBe(defaults.wiki_root);
+    expect(result.config.server.port).toBe(defaults.server.port);
+    expect(result.config.cost.max_daily_usd).toBe(defaults.cost.max_daily_usd);
+    expect(result.config.models.ingest).toBe(defaults.models.ingest);
+  });
+
+  it("merges file values over defaults", async () => {
+    const dir = tmp();
+    writeFileSync(join(dir, "wotw.config.yaml"), "server:\n  port: 3333\n");
+    const result = await loadConfig(dir);
+    expect(result.path).not.toBeNull();
+    expect(result.config.server.port).toBe(3333);
+    // Other defaults preserved
+    const defaults = defaultConfig();
+    expect(result.config.server.host).toBe(defaults.server.host);
+    expect(result.config.cost.max_daily_usd).toBe(defaults.cost.max_daily_usd);
   });
 });

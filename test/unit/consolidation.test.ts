@@ -43,16 +43,54 @@ describe("detectConsolidationCandidates", () => {
     config.health.consolidation_threshold = 2; // low threshold for testing
     config.health.consolidation_enabled = true;
 
-    // Create 3 pages with very similar titles to trigger similarity grouping.
-    writePage(root, "concept", "deploy-guide", "Deploy Guide", "How to deploy applications.");
-    writePage(root, "concept", "deploy-process", "Deploy Process", "The deploy process for apps.");
+    // Target pages that share rare terms ("quasar", "nebula") in their titles and bodies.
     writePage(
       root,
       "concept",
-      "deploy-strategy",
-      "Deploy Strategy",
-      "Deployment strategy overview.",
+      "quasar-nebula-overview",
+      "Quasar Nebula Overview",
+      "Quasar nebula overview details.",
     );
+    writePage(
+      root,
+      "concept",
+      "quasar-nebula-reference",
+      "Quasar Nebula Reference",
+      "Quasar nebula reference details.",
+    );
+    writePage(
+      root,
+      "concept",
+      "quasar-nebula-guide",
+      "Quasar Nebula Guide",
+      "Quasar nebula guide details.",
+    );
+
+    // Filler pages with unrelated vocabulary. These raise the IDF of "quasar" and "nebula"
+    // so that MiniSearch scores cross-matches above the normalized >= 40 threshold.
+    const fillerTopics: Array<[string, string, string]> = [
+      [
+        "authentication",
+        "Authentication System",
+        "Login flow using JWT tokens and OAuth providers.",
+      ],
+      [
+        "database-design",
+        "Database Design",
+        "Schema normalization and query optimization patterns.",
+      ],
+      ["load-balancing", "Load Balancing", "Round robin and consistent hashing distribution."],
+      ["caching-strategy", "Caching Strategy", "Redis memcached LRU eviction policies."],
+      ["monitoring-alerts", "Monitoring Alerts", "Prometheus grafana alertmanager notifications."],
+      ["ci-cd-pipeline", "CI CD Pipeline", "GitHub actions deployment automation testing."],
+      ["api-versioning", "API Versioning", "Semantic versioning backward compatibility."],
+      ["error-handling", "Error Handling", "Exception propagation retry circuit breaker."],
+      ["logging-tracing", "Logging Tracing", "Structured logging distributed tracing."],
+      ["security-hardening", "Security Hardening", "Input validation CSRF XSS prevention."],
+    ];
+    for (const [slug, title, body] of fillerTopics) {
+      writePage(root, "concept", slug, title, body);
+    }
 
     const store = new WikiStore({ wikiRoot: root });
     const search = new WikiSearch();
@@ -63,9 +101,9 @@ describe("detectConsolidationCandidates", () => {
     search.rebuild(pages);
 
     const groups = detectConsolidationCandidates(store, search, config);
-    // With threshold=2, 3 similar deploy pages should form a group.
-    // The result depends on minisearch similarity scores; at minimum it shouldn't crash.
+    // With threshold=2 and high IDF for "quasar"/"nebula", the 3 target pages should group.
     expect(Array.isArray(groups)).toBe(true);
+    expect(groups.length).toBeGreaterThan(0);
     for (const g of groups) {
       expect(g.pages.length).toBeGreaterThan(config.health.consolidation_threshold);
       expect(g.topic).toBeDefined();
@@ -178,5 +216,8 @@ describe("healConsolidation", () => {
     const result = await healConsolidation(finding, ctx);
     expect(result.fixed).toBe(true);
     expect(result.costUsd).toBe(0.002);
+    // Verify the finding is preserved in the result for downstream tracking.
+    expect(result.finding.kind).toBe("consolidation");
+    expect(result.finding.pages).toEqual(["wiki/concepts/topic-a.md", "wiki/concepts/topic-b.md"]);
   });
 });

@@ -2,8 +2,9 @@
  * Unit tests for ProvenanceChain: append, recovery on restart, verification,
  * tamper detection, and concurrent append ordering.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { open } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ProvenanceChain, type ProvenanceAppendInput } from "../../src/provenance/chain.js";
@@ -95,10 +96,8 @@ describe("ProvenanceChain.append", () => {
       chain.append(makeInput({ metadata: { idx: i } })),
     );
     const results = await Promise.all(promises);
-    // Seqs should be strictly increasing and contiguous.
     const seqs = results.map((r) => r.seq);
     expect(seqs).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
-    // Each record's previous_chain_hash must match the prior chain_hash.
     for (let i = 1; i < results.length; i++) {
       expect(results[i]!.previous_chain_hash).toBe(results[i - 1]!.chain_hash);
     }
@@ -113,7 +112,6 @@ describe("ProvenanceChain recovery", () => {
     const r1 = await first.append(makeInput());
     const r2 = await first.append(makeInput({ type: "query" }));
 
-    // New instance on same file should pick up where the last left off.
     const second = new ProvenanceChain({ path });
     await second.init();
     expect(second.count()).toBe(2);
@@ -147,7 +145,6 @@ describe("ProvenanceChain.verify", () => {
     await chain.append(makeInput());
     await chain.append(makeInput({ type: "query" }));
 
-    // Tamper: change metadata.cost_usd on record 1 without recomputing id.
     const lines = readFileSync(path, "utf8").trim().split("\n");
     const r1 = JSON.parse(lines[0]!) as ProvenanceRecord;
     r1.metadata = { ...(r1.metadata ?? {}), cost_usd: 9999 };
@@ -169,7 +166,6 @@ describe("ProvenanceChain.verify", () => {
     await chain.append(makeInput({ type: "query" }));
     await chain.append(makeInput({ type: "compound" }));
 
-    // Delete the middle line.
     const lines = readFileSync(path, "utf8").trim().split("\n");
     writeFileSync(path, lines[0]! + "\n" + lines[2]! + "\n");
 
@@ -251,5 +247,85 @@ describe("ProvenanceChain queries", () => {
     await chain.append(makeInput({ type: "query" }));
     const s2 = await chain.signature();
     expect(s2).not.toBe(s1a);
+  });
+});
+
+describe("CRITICAL-5: chain corruption detection on init", () => {
+  // REVERT CHECK: If the corruption guard in init() (lines ~99-113 in
+  // chain.ts) is reverted, a file full of garbage will silently parse as
+  // 0 valid records and the chain will reset to GENESIS_HASH -- the next
+  // append will start at seq=1, destroying the integrity of the entire
+  // provenance history. This test verifies init() throws instead.
+
+  it("throws when the file has content but no valid records (full corruption)", async () => {
+    const path = tmpChainPath();
+    // Build a real chain with 5 records.
+    const chain = new ProvenanceChain({ path });
+    await chain.init();
+    for (let i = 0; i < 5; i++) {
+      await chain.append(makeInput({ metadata: { idx: i } }));
+    }
+    expect(chain.count()).toBe(5);
+
+    // Overwrite the entire file with garbage.
+    writeFileSync(path, "this is not json\ncorrupted line 2\ngarbage\n");
+
+    // A new chain instance must detect corruption and throw.
+    const corrupted = new ProvenanceChain({ path });
+    await expect(corrupted.init()).rejects.toThrow(/corrupted|no valid records/);
+  });
+
+  it("partial corruption: init succeeds but reads fewer records", async () => {
+    const path = tmpChainPath();
+    const chain = new ProvenanceChain({ path });
+    await chain.init();
+    for (let i = 0; i < 5; i++) {
+      await chain.append(makeInput({ metadata: { idx: i } }));
+    }
+
+    // Corrupt just the middle line (line 3 = index 2) by replacing it
+    // with garbage. Lines 1, 2, 4, 5 remain valid JSON.
+    const lines = readFileSync(path, "utf8").trim().split("\n");
+    expect(lines.length).toBe(5);
+    lines[2] = "THIS_IS_GARBAGE_NOT_JSON";
+    writeFileSync(path, lines.join("\n") + "\n");
+
+    // A new chain should still init (there are valid records), but it
+    // will read fewer than 5 records because the corrupted line is skipped.
+    const recovered = new ProvenanceChain({ path });
+    await recovered.init();
+    const allRecords = await recovered.readAll();
+    expect(allRecords.length).toBe(4); // 5 minus 1 corrupted
+    expect(allRecords.length).toBeLessThan(5);
+  });
+});
+
+describe("CRITICAL-6: fsync error propagation in append", () => {
+  // REVERT CHECK: If the `await handle.sync()` at line ~192 in chain.ts
+  // is wrapped in a .catch() or removed, fsync failures will be silently
+  // swallowed. The in-memory state would advance (nextSeq, lastChainHash)
+  // even though the record was never durably persisted, causing silent
+  // data loss. This test forces sync() to throw and verifies append rejects.
+
+  it("append rejects when handle.sync() fails", async () => {
+    const path = tmpChainPath();
+    const chain = new ProvenanceChain({ path });
+    await chain.init();
+
+    // Get the FileHandle prototype by opening a temporary file, then spy
+    // on its sync method to make it throw on the next call.
+    const tmpHandle = await open(path, "a");
+    const fileHandleProto = Object.getPrototypeOf(tmpHandle) as { sync: () => Promise<void> };
+    await tmpHandle.close();
+
+    const syncSpy = vi
+      .spyOn(fileHandleProto, "sync")
+      .mockRejectedValueOnce(new Error("simulated fsync failure"));
+
+    try {
+      await expect(chain.append(makeInput())).rejects.toThrow("simulated fsync failure");
+    } finally {
+      syncSpy.mockRestore();
+    }
   });
 });

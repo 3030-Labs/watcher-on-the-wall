@@ -2,10 +2,10 @@
  * Unit tests for CostTracker: append, daily totals, budget checks.
  */
 import { describe, expect, it, beforeEach, vi } from "vitest";
-import { appendFileSync, mkdtempSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { appendFileSync, chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir, platform } from "node:os";
 import { join } from "node:path";
-import { CostTracker } from "../../src/ingestion/cost-tracker.js";
+import { CostTracker, sumCostsForDay } from "../../src/ingestion/cost-tracker.js";
 
 function tmpTrackFile(): string {
   const dir = mkdtempSync(join(tmpdir(), "wotw-cost-"));
@@ -66,6 +66,9 @@ describe("CostTracker.spentToday", () => {
     vi.useRealTimers();
   });
 
+  // Tests the ENOENT path specifically: when the cost log file does not exist
+  // on disk, spentToday() must return 0 (not throw). This is the graceful
+  // fallback for first-run or fresh installs where no cost has been recorded.
   it("returns 0 when the log does not exist", () => {
     const t = makeTracker();
     expect(t.spentToday()).toBe(0);
@@ -79,7 +82,7 @@ describe("CostTracker.spentToday", () => {
       timestamp: "2026-04-06T23:59:00.000Z",
       operation: "ingest",
       model_id: "claude-haiku-4-5",
-      cost_usd: 1.0, // yesterday — excluded
+      cost_usd: 1.0, // yesterday -- excluded
     });
     t.record({
       timestamp: "2026-04-07T01:00:00.000Z",
@@ -183,5 +186,44 @@ describe("CostTracker.logUsage", () => {
     expect(parsed.input_tokens).toBe(100);
     expect(parsed.output_tokens).toBe(50);
     expect(parsed.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+});
+
+describe("CRITICAL-4: cost file EACCES throws instead of returning $0", () => {
+  // REVERT CHECK: If the ENOENT-specific catch in sumCostsForDay (lines
+  // ~32-37 in cost-tracker.ts) is reverted to a blanket catch that returns 0
+  // for ALL errors, this test will fail because the function will silently
+  // return 0 instead of throwing "cost log unreadable". That bug would let
+  // the budget guard think $0 has been spent, allowing unlimited API spend.
+
+  it.skipIf(platform() === "win32")(
+    "throws 'cost log unreadable' when the file exists but is permission-denied",
+    () => {
+      const file = tmpTrackFile();
+      // Write a valid cost entry so the file exists and is non-empty.
+      const entry = JSON.stringify({
+        timestamp: "2026-04-07T01:00:00.000Z",
+        operation: "ingest",
+        model_id: "claude-haiku-4-5",
+        cost_usd: 0.5,
+      });
+      writeFileSync(file, entry + "\n");
+
+      // Remove all permissions -- readFileSync will throw EACCES.
+      chmodSync(file, 0o000);
+      try {
+        expect(() => sumCostsForDay(file, "2026-04-07")).toThrow("cost log unreadable");
+      } finally {
+        // Restore permissions so cleanup (rmSync) doesn't fail.
+        chmodSync(file, 0o644);
+      }
+    },
+  );
+
+  it("returns 0 for a genuinely missing file (ENOENT is still graceful)", () => {
+    // This is the complementary case: a file that doesn't exist should
+    // return 0 without throwing, confirming the ENOENT branch is intact.
+    const missingFile = join(mkdtempSync(join(tmpdir(), "wotw-cost-")), "nonexistent.jsonl");
+    expect(sumCostsForDay(missingFile, "2026-04-07")).toBe(0);
   });
 });

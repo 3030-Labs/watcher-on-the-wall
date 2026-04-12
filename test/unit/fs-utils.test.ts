@@ -2,8 +2,16 @@
  * Unit tests for utils/fs.ts: path resolution, atomic writes, existence checks.
  */
 import { describe, expect, it } from "vitest";
-import { mkdtempSync, readFileSync, writeFileSync, existsSync, readdirSync } from "node:fs";
-import { tmpdir, homedir } from "node:os";
+import {
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+  existsSync,
+  readdirSync,
+  chmodSync,
+  mkdirSync,
+} from "node:fs";
+import { tmpdir, homedir, platform } from "node:os";
 import { isAbsolute, join } from "node:path";
 import {
   atomicWrite,
@@ -164,5 +172,52 @@ describe("removeIfExistsSync", () => {
   it("is a no-op when the file does not exist", () => {
     removeIfExistsSync("/nowhere/x");
     // should not throw
+  });
+});
+
+describe("fileExists / dirExists — EACCES", () => {
+  it.skipIf(platform() === "win32")("fileExists throws on EACCES", () => {
+    const root = tmp();
+    const dir = join(root, "noperm");
+    mkdirSync(dir);
+    const file = join(dir, "secret.txt");
+    writeFileSync(file, "data");
+    chmodSync(dir, 0o000);
+    try {
+      expect(() => fileExists(file)).toThrow();
+    } finally {
+      chmodSync(dir, 0o755);
+    }
+  });
+
+  it.skipIf(platform() === "win32")("dirExists throws on EACCES", () => {
+    const root = tmp();
+    const parent = join(root, "noperm-dir");
+    mkdirSync(parent);
+    const child = join(parent, "inner");
+    mkdirSync(child);
+    chmodSync(parent, 0o000);
+    try {
+      expect(() => dirExists(child)).toThrow();
+    } finally {
+      chmodSync(parent, 0o755);
+    }
+  });
+});
+
+describe("atomicWriteSync — temp file cleanup on rename failure", () => {
+  it("cleans up temp file when rename fails", () => {
+    const root = tmp();
+    // Make the target an existing non-empty directory -- renameSync will throw
+    // EISDIR (or ENOTDIR / ENOTEMPTY) when attempting to rename a regular file
+    // over a directory, which exercises the finally cleanup branch.
+    const target = join(root, "target-dir");
+    mkdirSync(target);
+    writeFileSync(join(target, "blocker.txt"), "x");
+
+    expect(() => atomicWriteSync(target, "data")).toThrow();
+    // Verify no .tmp files remain in the parent directory
+    const leftovers = readdirSync(root).filter((f) => f.endsWith(".tmp"));
+    expect(leftovers).toHaveLength(0);
   });
 });

@@ -106,6 +106,31 @@ describe("heal handlers", () => {
     expect(call[0].userPrompt).toContain("Review and refresh");
   });
 
+  it("healStale rebuilds search index after healing", async () => {
+    const { healStale } = await import("../../src/wiki/heal-handlers.js");
+    const root = tmp();
+    writePage(root, "concepts", "stale-rebuild", "Stale Rebuild", "Old content.");
+    const ctx = makeCtx(root);
+    const rebuildSpy = vi.spyOn(ctx.search, "rebuild");
+
+    const finding: HealthFinding = {
+      id: "stale:wiki/concepts/stale-rebuild.md",
+      kind: "stale",
+      severity: "medium",
+      pages: ["wiki/concepts/stale-rebuild.md"],
+      description: "Page is stale.",
+      autoFixable: true,
+    };
+
+    const result = await healStale(finding, ctx);
+    expect(result.fixed).toBe(true);
+    expect(rebuildSpy).toHaveBeenCalledTimes(1);
+    // The rebuild should receive an array of WikiPage objects.
+    const rebuildArg = rebuildSpy.mock.calls[0]![0];
+    expect(Array.isArray(rebuildArg)).toBe(true);
+    rebuildSpy.mockRestore();
+  });
+
   it("healBrokenLinks invokes with correct tools", async () => {
     const { healBrokenLinks } = await import("../../src/wiki/heal-handlers.js");
     const { invokeIngestionAgent } = await import("../../src/ingestion/llm-invoker.js");
@@ -127,6 +152,30 @@ describe("heal handlers", () => {
     const call = vi.mocked(invokeIngestionAgent).mock.calls[0]!;
     expect(call[0].allowedTools).toContain("Read");
     expect(call[0].allowedTools).toContain("Write");
+  });
+
+  it("healBrokenLinks rebuilds search index after healing", async () => {
+    const { healBrokenLinks } = await import("../../src/wiki/heal-handlers.js");
+    const root = tmp();
+    writePage(root, "concepts", "linker2", "Linker Two", "See [[bad/ref]].");
+    const ctx = makeCtx(root);
+    const rebuildSpy = vi.spyOn(ctx.search, "rebuild");
+
+    const finding: HealthFinding = {
+      id: "broken-link:wiki/concepts/linker2.md",
+      kind: "broken-link",
+      severity: "medium",
+      pages: ["wiki/concepts/linker2.md"],
+      description: "1 broken wikilink(s): bad/ref.",
+      autoFixable: true,
+    };
+
+    const result = await healBrokenLinks(finding, ctx);
+    expect(result.fixed).toBe(true);
+    expect(rebuildSpy).toHaveBeenCalledTimes(1);
+    const rebuildArg = rebuildSpy.mock.calls[0]![0];
+    expect(Array.isArray(rebuildArg)).toBe(true);
+    rebuildSpy.mockRestore();
   });
 
   it("healMissingBacklinks runs repairBidirectionalLinks without LLM", async () => {
@@ -239,5 +288,66 @@ describe("heal handlers", () => {
     expect(invokeIngestionAgent).toHaveBeenCalled();
     const call = vi.mocked(invokeIngestionAgent).mock.calls[0]!;
     expect(call[0].userPrompt).toContain("Merge them");
+  });
+
+  it("healContradiction resolves conflicting pages and rebuilds search", async () => {
+    const { healContradiction } = await import("../../src/wiki/heal-handlers.js");
+    const { invokeIngestionAgent } = await import("../../src/ingestion/llm-invoker.js");
+    vi.mocked(invokeIngestionAgent).mockClear();
+
+    const root = tmp();
+    // Create two pages with contradictory claims.
+    writePage(root, "concepts", "page-x", "Page X", "The default timeout is 30 seconds.");
+    writePage(root, "concepts", "page-y", "Page Y", "The default timeout is 60 seconds.");
+
+    const ctx = makeCtx(root);
+    const allPages = await loadAllPages(ctx.store);
+    ctx.search.rebuild(allPages);
+    const rebuildSpy = vi.spyOn(ctx.search, "rebuild");
+
+    const finding: HealthFinding = {
+      id: "contradiction:wiki/concepts/page-x.md+wiki/concepts/page-y.md",
+      kind: "contradiction",
+      severity: "high",
+      pages: ["wiki/concepts/page-x.md", "wiki/concepts/page-y.md"],
+      description: "Page X says timeout is 30s, Page Y says timeout is 60s.",
+      autoFixable: true,
+    };
+
+    const result = await healContradiction(finding, ctx);
+    expect(result.fixed).toBe(true);
+    expect(result.costUsd).toBeGreaterThan(0);
+    expect(invokeIngestionAgent).toHaveBeenCalled();
+
+    // Verify the LLM prompt contains the contradiction description.
+    const call2 = vi.mocked(invokeIngestionAgent).mock.calls[0]!;
+    expect(call2[0].userPrompt).toContain("contradict");
+    expect(call2[0].userPrompt).toContain("Page X says timeout is 30s");
+
+    // Verify search index was rebuilt after healing.
+    expect(rebuildSpy).toHaveBeenCalledTimes(1);
+    const rebuildArg = rebuildSpy.mock.calls[0]![0];
+    expect(Array.isArray(rebuildArg)).toBe(true);
+    rebuildSpy.mockRestore();
+  });
+
+  it("healContradiction returns not-fixed when fewer than 2 pages", async () => {
+    const { healContradiction } = await import("../../src/wiki/heal-handlers.js");
+    const root = tmp();
+    const ctx = makeCtx(root);
+
+    const finding: HealthFinding = {
+      id: "contradiction:single",
+      kind: "contradiction",
+      severity: "high",
+      pages: ["wiki/concepts/only-one.md"],
+      description: "Only one page.",
+      autoFixable: true,
+    };
+
+    const result = await healContradiction(finding, ctx);
+    expect(result.fixed).toBe(false);
+    expect(result.reason).toBe("need >=2 pages");
+    expect(result.costUsd).toBe(0);
   });
 });

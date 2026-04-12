@@ -88,7 +88,7 @@ export async function runApprove(
   }
 }
 
-async function approveOne(
+export async function approveOne(
   absPath: string,
   store: WikiStore,
   config: ReturnType<typeof resolveConfigPaths>,

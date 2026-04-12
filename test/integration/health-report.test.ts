@@ -103,9 +103,9 @@ describe("computeHealthReport — integration", () => {
     const report = await computeHealthReport(store, null, search, { config });
 
     // Basic structure checks.
-    expect(report.timestamp).toBeTruthy();
+    expect(report.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}/);
     expect(report.scores.length).toBe(5); // all 5 pages scored
-    expect(report.summary.total).toBeGreaterThanOrEqual(0);
+    expect(report.summary.total).toBe(report.findings.length);
 
     // Should detect orphan.
     const orphanFindings = report.findings.filter((f) => f.kind === "orphan");
@@ -144,10 +144,12 @@ describe("computeHealthReport — integration", () => {
 
     const report = await computeHealthReport(store, null, search, { config });
     expect(report.summary).toBeDefined();
-    expect(typeof report.summary.total).toBe("number");
-    expect(typeof report.summary.high).toBe("number");
-    expect(typeof report.summary.medium).toBe("number");
-    expect(typeof report.summary.low).toBe("number");
-    expect(typeof report.summary.autoFixable).toBe("number");
+    // Single page with no provenance: staleness=0 (<40 threshold) -> 1 stale finding, severity "high" (staleness<=20).
+    // No broken links, orphans, duplicates, or backlink issues with a single page.
+    expect(report.summary.total).toBe(1);
+    expect(report.summary.high).toBe(1);
+    expect(report.summary.medium).toBe(0);
+    expect(report.summary.low).toBe(0);
+    expect(report.summary.autoFixable).toBe(1);
   });
 });

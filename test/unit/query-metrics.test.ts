@@ -2,7 +2,7 @@
  * Tests for Feature 4: Zero-hit monitoring and vocabulary enrichment.
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { computeZeroHitRate, recordQueryOutcome } from "../../src/server/query-metrics.js";
@@ -109,6 +109,8 @@ describe("recordQueryOutcome", () => {
   it("does nothing with empty path", () => {
     // Should not throw.
     recordQueryOutcome("", "test", 0);
+    // Verify no file was created at the empty path -- the function short-circuits on empty string.
+    expect(existsSync("")).toBe(false);
   });
 });
 

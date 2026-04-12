@@ -1,12 +1,32 @@
 /**
  * Unit tests for the candidates workflow: approve, reject, candidates listing.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { WikiStore } from "../../src/wiki/store.js";
 import { newPage, parsePage, serializePage } from "../../src/wiki/page.js";
+import { defaultConfig, resolveConfigPaths } from "../../src/daemon/config.js";
+import { approveOne } from "../../src/cli/commands/approve.js";
+
+// Mock git-committer so approveOne does not try to commit.
+vi.mock("../../src/ingestion/git-committer.js", () => ({
+  commitWikiChanges: vi.fn().mockResolvedValue({
+    committed: true,
+    sha: "abc123",
+    message: "test",
+    fileCount: 1,
+  }),
+}));
+
+function makeConfig(root: string) {
+  const config = defaultConfig();
+  config.wiki_root = root;
+  // Disable provenance so approveOne does not try to init a chain file.
+  config.provenance.enabled = false;
+  return resolveConfigPaths(config, root);
+}
 
 function tmpDir(): string {
   return mkdtempSync(join(tmpdir(), "wotw-candidates-"));
@@ -78,9 +98,10 @@ describe("WikiStore candidates", () => {
 });
 
 describe("approve workflow", () => {
-  it("moves a candidate page to the correct wiki category directory", async () => {
+  it("moves a candidate page to the correct wiki category directory via approveOne", async () => {
     const root = tmpDir();
     const store = setupStore(root);
+    const config = makeConfig(root);
 
     const page = newPage(
       join(store.candidatesDir, "machine-learning.md"),
@@ -91,22 +112,20 @@ describe("approve workflow", () => {
     );
     writeFileSync(page.path, serializePage(page));
 
-    // Simulate approveOne logic: read, parse, move to wiki.
-    const raw = readFileSync(page.path, "utf8");
-    const parsed = parsePage(page.path, raw);
-    const destPath = store.pathFor(parsed.frontmatter.category, parsed.frontmatter.title);
-    parsed.path = destPath;
-    await store.writePage(parsed);
+    const ok = await approveOne(page.path, store, config);
+    expect(ok).toBe(true);
 
+    const destPath = store.pathFor("concept", "Machine Learning");
     expect(existsSync(destPath)).toBe(true);
     const written = readFileSync(destPath, "utf8");
     expect(written).toContain("Machine Learning");
     expect(written).toContain("concept");
   });
 
-  it("approved page has correct frontmatter after move", async () => {
+  it("approved page has correct frontmatter after move via approveOne", async () => {
     const root = tmpDir();
     const store = setupStore(root);
+    const config = makeConfig(root);
 
     const page = newPage(
       join(store.candidatesDir, "testing.md"),
@@ -117,18 +136,53 @@ describe("approve workflow", () => {
     );
     writeFileSync(page.path, serializePage(page));
 
-    const raw = readFileSync(page.path, "utf8");
-    const parsed = parsePage(page.path, raw);
-    const destPath = store.pathFor(parsed.frontmatter.category, parsed.frontmatter.title);
-    parsed.path = destPath;
-    await store.writePage(parsed);
+    const ok = await approveOne(page.path, store, config);
+    expect(ok).toBe(true);
 
+    const destPath = store.pathFor("concept", "Testing Basics");
     const finalRaw = readFileSync(destPath, "utf8");
     const final = parsePage(destPath, finalRaw);
     expect(final.frontmatter.title).toBe("Testing Basics");
     expect(final.frontmatter.category).toBe("concept");
     expect(final.frontmatter.tags).toEqual(["testing", "quality"]);
     expect(final.frontmatter.sources).toEqual(["testing-guide.md"]);
+  });
+
+  it("rejects candidate that is older than existing wiki page (superseded)", async () => {
+    const root = tmpDir();
+    const store = setupStore(root);
+    const config = makeConfig(root);
+
+    // Write a candidate with an older timestamp.
+    const candidate = newPage(
+      join(store.candidatesDir, "superseded-topic.md"),
+      "Superseded Topic",
+      "concept",
+      "Outdated content from candidate.",
+      { updated: "2026-04-01T00:00:00Z" },
+    );
+    writeFileSync(candidate.path, serializePage(candidate));
+
+    // Write a wiki page at the same slug with a newer timestamp.
+    const wikiPath = store.pathFor("concept", "Superseded Topic");
+    const existing = newPage(
+      wikiPath,
+      "Superseded Topic",
+      "concept",
+      "Newer authoritative content.",
+      { updated: "2026-04-10T00:00:00Z" },
+    );
+    writeFileSync(wikiPath, serializePage(existing));
+
+    // approveOne should return false because the candidate is older.
+    const ok = await approveOne(candidate.path, store, config);
+    expect(ok).toBe(false);
+
+    // Wiki page should still have the newer content.
+    const wikiRaw = readFileSync(wikiPath, "utf8");
+    const wikiPage = parsePage(wikiPath, wikiRaw);
+    expect(wikiPage.body).toBe("Newer authoritative content.");
+    expect(wikiPage.frontmatter.updated).toBe("2026-04-10T00:00:00Z");
   });
 });
 
