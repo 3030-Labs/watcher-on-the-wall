@@ -18,3 +18,9 @@
 - [x] IngestBytesCounter
 - [x] HealCooldown
 - [x] Tests (14 new — storage, daily import, ingest bytes, heal cooldown)
+
+## Prompt 4: Filesystem Hardening & Acceptance Tests
+- [x] Symlink rejection
+- [x] Tenant root enforcement on all file ops
+- [x] Hosted-mode file operation wrapper (TenantFs)
+- [x] Acceptance tests (14 new — fs isolation, queue fairness, kill switch, quotas)
