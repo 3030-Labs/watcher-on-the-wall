@@ -9,3 +9,12 @@
 - [x] Kill switch (paused tenants)
 - [x] Hosted mode config
 - [x] Tests (9 new — round-robin, concurrency cap, global limit, pause/unpause, stop)
+
+## Prompt 3: Quota Enforcement
+- [x] TenantLimits config + Zod validation
+- [x] StorageAccountant
+- [x] DailyImportCounter (timezone-aware)
+- [x] Onboarding burst
+- [x] IngestBytesCounter
+- [x] HealCooldown
+- [x] Tests (14 new — storage, daily import, ingest bytes, heal cooldown)

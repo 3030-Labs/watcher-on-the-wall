@@ -10,6 +10,26 @@ import type { WotwConfig } from "../utils/types.js";
 
 const MODULE_NAME = "wotw";
 
+/** Default plan limits. Active only when `hosted.enabled: true`. */
+export const PLAN_DEFAULTS = {
+  founding: {
+    storage_bytes: 2 * 1024 ** 3, // 2 GB
+    max_files_per_day: 50,
+    max_file_size_bytes: 25 * 1024 ** 2, // 25 MB
+    max_ingest_bytes_per_day: 250 * 1024 ** 2, // 250 MB
+    heal_cooldown_seconds: 3600, // 1 hour
+    query_rate_limit_per_hour: 60,
+  },
+  pro: {
+    storage_bytes: 10 * 1024 ** 3, // 10 GB
+    max_files_per_day: 200,
+    max_file_size_bytes: 100 * 1024 ** 2, // 100 MB
+    max_ingest_bytes_per_day: 1024 ** 3, // 1 GB
+    heal_cooldown_seconds: 900, // 15 min
+    query_rate_limit_per_hour: 300,
+  },
+} as const;
+
 /**
  * Default configuration applied when no file is found (or when fields are missing).
  */
@@ -110,6 +130,19 @@ export function defaultConfig(): WotwConfig {
       tenant_id: null,
       concurrency_cap: 1,
       paused: false,
+      plan: "pro",
+      limits: {
+        storage_bytes: PLAN_DEFAULTS.pro.storage_bytes,
+        max_files_per_day: PLAN_DEFAULTS.pro.max_files_per_day,
+        max_file_size_bytes: PLAN_DEFAULTS.pro.max_file_size_bytes,
+        max_ingest_bytes_per_day: PLAN_DEFAULTS.pro.max_ingest_bytes_per_day,
+        heal_cooldown_seconds: PLAN_DEFAULTS.pro.heal_cooldown_seconds,
+        query_rate_limit_per_hour: PLAN_DEFAULTS.pro.query_rate_limit_per_hour,
+        onboarding_burst_multiplier: 3,
+        onboarding_burst_hours: 48,
+      },
+      timezone: "America/New_York",
+      created_at: null,
     },
   };
 }
@@ -285,6 +318,19 @@ const WotwConfigSchema = z.object({
     tenant_id: z.string().nullable(),
     concurrency_cap: z.number().int().positive(),
     paused: z.boolean(),
+    plan: z.enum(["founding", "pro"]),
+    limits: z.object({
+      storage_bytes: positiveNumber,
+      max_files_per_day: z.number().int().positive(),
+      max_file_size_bytes: positiveNumber,
+      max_ingest_bytes_per_day: positiveNumber,
+      heal_cooldown_seconds: nonNegativeNumber,
+      query_rate_limit_per_hour: z.number().int().positive(),
+      onboarding_burst_multiplier: positiveNumber,
+      onboarding_burst_hours: positiveNumber,
+    }),
+    timezone: z.string().min(1),
+    created_at: z.string().nullable(),
   }),
   health: z.object({
     staleness_thresholds: z.array(z.number().int().min(0)),

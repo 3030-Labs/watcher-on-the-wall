@@ -170,6 +170,23 @@ export interface WotwConfig {
     concurrency_cap: number;
     /** Kill switch — when true, jobs are held (not dropped). */
     paused: boolean;
+    /** Plan name — determines default limits. */
+    plan: "founding" | "pro";
+    /** Per-tenant resource limits. */
+    limits: {
+      storage_bytes: number;
+      max_files_per_day: number;
+      max_file_size_bytes: number;
+      max_ingest_bytes_per_day: number;
+      heal_cooldown_seconds: number;
+      query_rate_limit_per_hour: number;
+      onboarding_burst_multiplier: number;
+      onboarding_burst_hours: number;
+    };
+    /** Timezone for daily limit resets. */
+    timezone: string;
+    /** Workspace creation time (ISO string) for burst calculation. */
+    created_at: string | null;
   };
 }
 
