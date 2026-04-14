@@ -34,6 +34,7 @@ import { commitWikiChanges } from "./git-committer.js";
 import { invokeIngestionAgent } from "./llm-invoker.js";
 import type { ModelRouter } from "./model-router.js";
 import { buildIngestionPrompt } from "./prompt-builder.js";
+import { TenantScheduler } from "./tenant-scheduler.js";
 import { loadAllPages, reconcileWrittenPages } from "./wiki-writer.js";
 
 export interface IngestionQueueOptions {
@@ -73,6 +74,8 @@ export class IngestionQueue implements DaemonSubsystem {
   readonly name = "ingestion";
   private readonly opts: IngestionQueueOptions;
   private readonly queue: PQueue;
+  /** Tenant-aware scheduler used when `hosted.enabled: true`. */
+  private readonly tenantScheduler: TenantScheduler | null;
   private resumeSessionId: string | null = null;
   /** Last enqueued outcome — exposed for tests. */
   private lastOutcome: IngestionOutcome | null = null;
@@ -80,11 +83,47 @@ export class IngestionQueue implements DaemonSubsystem {
   constructor(opts: IngestionQueueOptions) {
     this.opts = opts;
     this.queue = new PQueue({ concurrency: 1 });
+
+    // In hosted mode, construct a TenantScheduler that manages per-tenant
+    // subqueues with round-robin fairness and concurrency caps. The p-queue
+    // stays as a fallback for single-user mode.
+    const hosted = opts.config.hosted;
+    if (hosted.enabled && hosted.tenant_id) {
+      const pausedState = new Map<string, boolean>();
+      if (hosted.paused) pausedState.set(hosted.tenant_id, true);
+      this.tenantScheduler = new TenantScheduler({
+        globalConcurrency: hosted.concurrency_cap,
+        getConcurrencyCap: () => hosted.concurrency_cap,
+        isPaused: (tid) => pausedState.get(tid) ?? false,
+      });
+      // Expose setPaused so the admin API can toggle it at runtime
+      (this as { _pausedState?: Map<string, boolean> })._pausedState = pausedState;
+    } else {
+      this.tenantScheduler = null;
+    }
   }
 
   async start(): Promise<void> {
     const log = getLogger("ingestion");
-    log.info("ingestion queue ready");
+    if (this.tenantScheduler) {
+      const hosted = this.opts.config.hosted;
+      log.info(
+        {
+          tenantId: hosted.tenant_id,
+          concurrencyCap: hosted.concurrency_cap,
+          paused: hosted.paused,
+        },
+        "ingestion queue ready (hosted mode)",
+      );
+      if (hosted.paused) {
+        log.warn(
+          { tenantId: hosted.tenant_id },
+          "tenant is paused — ingestion jobs will be held until unpaused",
+        );
+      }
+    } else {
+      log.info("ingestion queue ready");
+    }
     // Eagerly rebuild search + index so queries are immediately useful
     // even before the first batch lands.
     await this.opts.store.ensureLayout();
@@ -96,27 +135,35 @@ export class IngestionQueue implements DaemonSubsystem {
 
   async stop(): Promise<void> {
     const log = getLogger("ingestion");
-    log.info({ pending: this.queue.size, active: this.queue.pending }, "draining ingestion queue");
-    this.queue.pause();
-    // Wait briefly for any in-flight batch to finish, then clear.
-    const drainTimeout = 5_000;
-    await Promise.race([
-      this.queue.onIdle(),
-      new Promise<void>((r) => setTimeout(r, drainTimeout)),
-    ]);
-    this.queue.clear();
+    if (this.tenantScheduler) {
+      log.info("stopping tenant scheduler");
+      this.tenantScheduler.stop();
+      const drainTimeout = 5_000;
+      await Promise.race([
+        this.tenantScheduler.drain(),
+        new Promise<void>((r) => setTimeout(r, drainTimeout)),
+      ]);
+    } else {
+      log.info(
+        { pending: this.queue.size, active: this.queue.pending },
+        "draining ingestion queue",
+      );
+      this.queue.pause();
+      const drainTimeout = 5_000;
+      await Promise.race([
+        this.queue.onIdle(),
+        new Promise<void>((r) => setTimeout(r, drainTimeout)),
+      ]);
+      this.queue.clear();
+    }
   }
 
   /** Enqueue a batch. Returns a promise that resolves with the outcome. */
   enqueue(batch: WatcherBatch): Promise<IngestionOutcome> {
-    return this.queue.add(async () => {
+    const processWithCatch = async (): Promise<IngestionOutcome> => {
       try {
         return await this.process(batch);
       } catch (err) {
-        // Downstream catch (reconcile, cross-ref, index, commit). The
-        // inner `invokeIngestionAgent` try/catch already records its own
-        // failures; anything that reaches here is an unexpected
-        // post-invoke error. Record it so we don't drop it silently.
         const log = getLogger("ingestion");
         log.error({ err, batchId: batch.id }, "batch processing threw");
         if (this.opts.deadLetter) {
@@ -134,11 +181,30 @@ export class IngestionQueue implements DaemonSubsystem {
         this.lastOutcome = outcome;
         return outcome;
       }
-    }) as Promise<IngestionOutcome>;
+    };
+
+    // In hosted mode, route through the tenant scheduler for fair scheduling.
+    // In single-user mode, use the existing p-queue.
+    if (this.tenantScheduler && this.opts.config.hosted.tenant_id) {
+      return new Promise<IngestionOutcome>((resolve) => {
+        this.tenantScheduler!.enqueue({
+          tenantId: this.opts.config.hosted.tenant_id!,
+          batchId: batch.id,
+          execute: async () => {
+            const result = await processWithCatch();
+            resolve(result);
+            return result;
+          },
+        });
+      });
+    }
+
+    return this.queue.add(processWithCatch) as Promise<IngestionOutcome>;
   }
 
   /** Number of pending batches waiting on the queue. */
   pendingCount(): number {
+    if (this.tenantScheduler) return this.tenantScheduler.getTotalQueueDepth();
     return this.queue.size;
   }
 

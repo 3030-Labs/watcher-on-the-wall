@@ -156,6 +156,21 @@ export interface WotwConfig {
     /** JSONL file for query logging. Resolved relative to wiki_root. */
     query_log_file: string;
   };
+  /**
+   * Hosted mode configuration. When `enabled: true`, the daemon runs in a
+   * multi-tenant cloud environment with per-tenant scheduling, concurrency
+   * caps, and kill switches. Default off — single-user mode unchanged.
+   */
+  hosted: {
+    /** Master switch for hosted mode. Default false. */
+    enabled: boolean;
+    /** Tenant identifier, set by the cloud control plane. */
+    tenant_id: string | null;
+    /** Max concurrent jobs for this tenant. */
+    concurrency_cap: number;
+    /** Kill switch — when true, jobs are held (not dropped). */
+    paused: boolean;
+  };
 }
 
 /**

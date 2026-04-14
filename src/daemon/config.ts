@@ -105,6 +105,12 @@ export function defaultConfig(): WotwConfig {
       enrichment_enabled: true,
       query_log_file: ".wotw/query-log.jsonl",
     },
+    hosted: {
+      enabled: false,
+      tenant_id: null,
+      concurrency_cap: 1,
+      paused: false,
+    },
   };
 }
 
@@ -187,6 +193,7 @@ export function mergeConfig(base: WotwConfig, override: Partial<WotwConfig>): Wo
       out.health.weights = { ...healthBase.weights, ...healthOverride.weights };
     }
   }
+  if (override.hosted) assign("hosted", override.hosted);
   return out;
 }
 
@@ -272,6 +279,12 @@ const WotwConfigSchema = z.object({
     schedule_enabled: z.boolean(),
     interval_hours: positiveNumber,
     auto_fix: z.boolean(),
+  }),
+  hosted: z.object({
+    enabled: z.boolean(),
+    tenant_id: z.string().nullable(),
+    concurrency_cap: z.number().int().positive(),
+    paused: z.boolean(),
   }),
   health: z.object({
     staleness_thresholds: z.array(z.number().int().min(0)),
