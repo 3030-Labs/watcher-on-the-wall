@@ -1,20 +1,18 @@
 {
-  "name": "watcher-on-the-wall",
+  "name": "@driftvane/wotw",
   "version": "0.2.0",
-  "description": "A self-bootstrapping persistent AI knowledge daemon. Your AI agents share a brain. It builds itself.",
+  "description": "Self-bootstrapping AI knowledge daemon that turns a folder of raw files into a persistent, compounding LLM wiki with provenance signing, MCP serving, and zero manual maintenance.",
   "type": "module",
   "bin": {
-    "wotw": "./dist/cli/index.js",
-    "watcher-on-the-wall": "./dist/cli/index.js"
+    "wotw": "dist/cli/index.js"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [
     "dist",
-    "templates",
-    "README.md",
+    "src/wiki/templates",
     "LICENSE",
-    "CHANGELOG.md"
+    "README.md"
   ],
   "scripts": {
     "build": "tsup",
@@ -28,24 +26,32 @@
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\"",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "pnpm build"
+    "prepublishOnly": "pnpm build",
+    "prepare": "husky"
   },
   "keywords": [
-    "ai",
-    "llm",
-    "claude",
-    "mcp",
+    "llm-wiki",
     "knowledge-base",
-    "daemon",
-    "wiki",
+    "obsidian",
+    "mcp",
     "provenance",
-    "compliance",
-    "agent"
+    "ai-daemon",
+    "knowledge-management",
+    "claude",
+    "markdown-wiki"
   ],
-  "author": "3030 Labs LLC",
+  "author": "3030 Labs LLC <support@3030labs.io>",
   "license": "AGPL-3.0-or-later",
+  "homepage": "https://github.com/DriftVane/watcher-on-the-wall",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DriftVane/watcher-on-the-wall.git"
+  },
+  "bugs": {
+    "url": "https://github.com/DriftVane/watcher-on-the-wall/issues"
+  },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=20"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.92",
@@ -76,10 +82,22 @@
     "@typescript-eslint/parser": "^8.18.2",
     "eslint": "^9.17.0",
     "globals": "^15.15.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
     "prettier": "^3.4.2",
     "tsup": "^8.3.5",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
+  },
+  "lint-staged": {
+    "src/**/*.ts": [
+      "prettier --write",
+      "eslint --fix"
+    ],
+    "test/**/*.ts": [
+      "prettier --write",
+      "eslint --fix"
+    ]
   }
 }

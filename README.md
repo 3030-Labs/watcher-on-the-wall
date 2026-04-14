@@ -1,161 +1,74 @@
 # watcher-on-the-wall
 
-**A self-bootstrapping persistent AI knowledge daemon.**
-Your AI agents share a brain. It builds itself.
+> Self-bootstrapping AI knowledge daemon that turns a folder of raw files into a persistent, compounding LLM wiki with provenance signing, MCP serving, and zero manual maintenance.
 
-`wotw` is a background daemon that watches a directory of raw notes (markdown,
-text, or anything else you drop in), turns them into a structured wiki of
-cross-linked pages using Claude, serves that wiki to any MCP-capable client
-(Claude Desktop, Claude Code, IDEs), and cryptographically signs every change
-so you can prove exactly which model wrote what, from which inputs, at what
-cost. When your wiki gets large enough, it starts compounding — synthesizing
-higher-level pages that span multiple source documents.
+## What it does
 
-It is designed to run for months at a time on a personal machine or a small
-server, to be cheap to operate (claude-haiku-4-5 by default), and to be
-verifiable down to the byte.
+Drop files into a `raw/` directory and `wotw` watches for changes, batches them through a Claude agent, and writes interlinked markdown wiki pages with YAML frontmatter. Every operation is signed into an append-only SHA-256 provenance chain so you can prove which model wrote what, from which inputs, at what cost. The wiki is served to any MCP-capable client (Claude Code, Claude Desktop, IDEs) and designed to use Obsidian as the visual frontend.
 
----
-
-## Features
-
-- **Dual-mode runtime.** Hosts the Claude agent loop via either the local
-  `claude` CLI binary (free, subscription-covered) or the Claude Agent SDK
-  (pay-per-token). Auto-detects which one is available at startup. See
-  [docs/execution-modes.md](docs/execution-modes.md).
-- **File-watch ingestion.** Drop a note into `wiki-store/raw/` and the
-  daemon picks it up, batches with its neighbors (exponential backoff), and
-  hands the batch to a Claude agent that writes structured wiki pages.
-- **Structured wiki store.** Pages are YAML-frontmatter markdown under
-  `wiki-store/wiki/{concepts,entities,events,decisions,syntheses,...}/`.
-  Every page has a title, category, tags, sources, related links, and a
-  confidence score.
-- **Full-text search** via minisearch with title/tag boost and OR-combined
-  natural-language queries.
-- **MCP server** exposing tools: `search`, `list_pages`, `read_page`,
-  `query`, `get_index`, `get_stats`, `related_pages`, `get_provenance_log`,
-  `verify_provenance`, `synthesize`. Stateless streamable-HTTP transport.
-- **Cryptographic provenance chain.** Every ingestion, query, and synthesis
-  appends a SHA-256-chained JSONL record committing to its inputs, prompt,
-  model, response, and written files. `wotw audit` walks the chain and
-  reports tampering.
-- **Compounding synthesis.** When multiple pages share a tag, the daemon
-  runs a background pass that reads them all and writes a higher-level
-  `syntheses/<topic>.md` page. Budget-gated, idempotent.
-- **Multi-user auth.** Optional per-user bearer tokens stored in a
-  JSON file under `workspaces_dir`, managed by `wotw user add|list|revoke`.
-- **Cost tracking.** Every LLM call is logged with dollar cost; a hard
-  daily budget prevents runaway spend.
-- **Git-backed history.** The wiki root is a git repo. Every batch is a
-  commit with the operation id and cost in the message.
-- **Candidates workflow.** Generated pages can optionally land in
-  `candidates/` for human review before entering the wiki. `wotw approve`,
-  `wotw reject`, and `wotw candidates` manage the review queue.
-- **Knowledge lifecycle.** Every page tracks `last_compiled`,
-  `last_confirmed`, and `source_count` in frontmatter. `wotw stale`
-  surfaces pages that haven't been confirmed recently.
-- **Provenance footers.** Every wiki page carries a `[[wikilink]]` footer
-  linking back to its source files — click-through provenance in Obsidian.
-- **Config validation.** Zod schema validates every config field on load with
-  clear error messages naming the offending field and constraint.
-- **Single binary.** One `wotw` CLI covers everything: `init`, `start`,
-  `stop`, `status`, `query`, `search`, `audit`, `lint`, `stale`,
-  `approve`, `reject`, `candidates`, `synthesize`, `user`, `serve`.
-
----
-
-## Quickstart
+## Install
 
 ```bash
-# 1. Install
-pnpm add -g watcher-on-the-wall
-# or clone & build from source:
-git clone https://github.com/your-org/watcher-on-the-wall.git
-cd watcher-on-the-wall && pnpm install && pnpm build && pnpm link --global
-
-# 2. Interactive setup wizard — detects Obsidian vaults, scaffolds the
-#    layout, writes the config, initializes git, and offers to open the
-#    result in Obsidian. For non-interactive use (CI, scripts) pass --yes.
-wotw init               # interactive wizard
-# or: wotw init ./my-brain --yes   # non-interactive, explicit path
-cd my-brain
-
-# 3. Either install the Claude CLI (free, subscription-covered)...
-#    https://docs.claude.com/claude-code
-#    ...OR set an Anthropic API key (pay-per-token):
-export ANTHROPIC_API_KEY=sk-ant-...
-
-# 4. Start the daemon (auto-detects whichever runtime is available)
+npm i -g @driftvane/wotw
+wotw init
 wotw start
-
-# 5. Drop a note into the raw dir
-echo "Hash chains are sequences where each record commits to the previous via SHA-256." \
-  > raw/notes.md
-
-# 6. Watch the wiki get built
-wotw status --watch
-
-# 7. Ask it something
-wotw query "what is a hash chain?"
 ```
 
-The `wotw init` wizard is Obsidian-aware: it reads your Obsidian
-registry, lists existing vaults, overlays `raw/` + `wiki/` into an
-existing vault (or creates a fresh one with sensible defaults), and
-offers to launch the vault in Obsidian on completion. See
-[docs/obsidian-setup.md](docs/obsidian-setup.md) for the full
-integration guide.
+Drop files into `raw/`. The daemon ingests them, writes wiki pages, and serves them to Claude Code via MCP.
 
-Once the daemon is running, point any MCP client at
-`http://127.0.0.1:8787/mcp` with a bearer token (see
-[docs/multi-user.md](docs/multi-user.md)).
+## Key features
 
----
+The daemon runs as a detached background process with PID/lock management and graceful shutdown. `wotw init` is an interactive wizard that auto-detects Obsidian vaults from the system registry, overlays into existing vaults or scaffolds new ones, and offers to launch the result in Obsidian. Generated pages land in a candidates queue for human review before entering the wiki — approve, reject with feedback, or configure auto-approve. The wiki is full-text searchable via BM25 with title and tag boosting, and supports natural-language queries grounded in retrieved pages with inline citations.
 
-## Architecture at a glance
+A knowledge health system scores every page on staleness, source availability, link integrity, duplicate risk, and contradiction risk. `wotw lint --fix` auto-heals stale pages, broken links, missing backlinks, duplicates, and contradictions — all budget-gated and capped per run. Every state-mutating operation appends a SHA-256-chained JSONL record; `wotw audit` walks the chain and reports tampering. The MCP server exposes 10 tools over streamable HTTP with bearer-token auth and per-IP rate limiting.
+
+The runtime is dual-mode: use the local `claude` CLI binary (free with a subscription) or the Claude Agent SDK (pay-per-token) — auto-detected at startup. Multi-user authentication supports per-user bearer tokens with atomic token storage. Failed batches are tracked in a dead-letter queue. All credentials and secrets in wiki content are automatically redacted before storage.
+
+## How it works
+
+The file watcher detects changes in `raw/`, debounces them with exponential backoff, and hands batches to the ingestion queue. The queue builds a prompt, runs it through a Claude agent, reconciles the output into categorized wiki pages, rebuilds the search index, signs a provenance record, and commits to git. A compounding engine periodically synthesizes higher-level pages across tag clusters. The MCP server makes the entire wiki queryable by external AI agents.
+
+## CLI
 
 ```
-┌─────────────┐      ┌──────────────┐      ┌──────────────┐
-│  raw/*.md   │─────▶│   watcher    │─────▶│  ingestion   │
-└─────────────┘      └──────────────┘      └──────┬───────┘
-                                                  │ claude-haiku-4-5
-                                                  ▼
-                                           ┌──────────────┐
-                                           │  wiki pages  │
-                                           │  (markdown)  │
-                                           └──────┬───────┘
-                                                  │
-                  ┌───────────────────────────────┼─────────────────────────┐
-                  ▼                               ▼                         ▼
-           ┌─────────────┐                 ┌─────────────┐          ┌──────────────┐
-           │   search    │                 │ provenance  │          │ compounding  │
-           │ (minisearch)│                 │   chain     │          │  synthesis   │
-           └──────┬──────┘                 │ (sha-256)   │          └──────────────┘
-                  │                        └─────────────┘
-                  ▼
-           ┌─────────────┐
-           │  mcp server │──▶ Claude Desktop / Claude Code / custom clients
-           └─────────────┘
+wotw init          Scaffold wiki inside an Obsidian vault
+wotw start         Start the daemon
+wotw stop          Stop the daemon
+wotw status        Show daemon health and wiki stats
+wotw search        Full-text search across wiki
+wotw query         Ask the wiki a natural-language question
+wotw lint          Run health checks (--fix to auto-heal)
+wotw approve       Approve a candidate wiki page
+wotw reject        Reject a candidate with feedback
+wotw candidates    List pages awaiting review
+wotw audit         Verify the provenance chain
+wotw logs          Tail the daemon log
 ```
-
-See [docs/architecture.md](docs/architecture.md) for the full picture.
-
----
 
 ## Documentation
 
-- [docs/architecture.md](docs/architecture.md) — system design
-- [docs/configuration.md](docs/configuration.md) — every knob in `wotw.config.yaml`
-- [docs/execution-modes.md](docs/execution-modes.md) — CLI vs API runtime modes
-- [docs/cli-reference.md](docs/cli-reference.md) — every CLI command and flag
-- [docs/mcp-tools.md](docs/mcp-tools.md) — every MCP tool
-- [docs/provenance.md](docs/provenance.md) — the cryptographic chain format
-- [docs/multi-user.md](docs/multi-user.md) — per-user tokens and workspace isolation
+- [Architecture](docs/architecture.md) — system design and subsystem interactions
+- [Configuration](docs/configuration.md) — every knob in `wotw.yaml`
+- [CLI Reference](docs/cli-reference.md) — every command and flag
+- [MCP Tools](docs/mcp-tools.md) — the 10 MCP tools and their schemas
+- [Provenance](docs/provenance.md) — the cryptographic chain format
+- [Execution Modes](docs/execution-modes.md) — CLI vs API runtime
+- [Knowledge Health](docs/knowledge-health.md) — scoring, deduplication, and auto-healing
+- [Obsidian Setup](docs/obsidian-setup.md) — vault integration guide
+- [Multi-User](docs/multi-user.md) — per-user tokens and workspace isolation
+- [Retrieval Hardening](docs/retrieval-hardening.md) — query expansion and metadata enrichment
 
----
+## Requirements
+
+Node.js >= 20. Claude Code or an Anthropic API key.
 
 ## License
 
-AGPL-3.0-or-later. Copyright © 3030 Labs LLC.
+AGPL-3.0-or-later — [3030 Labs LLC](https://3030labs.io)
 
-If you need a commercial-friendly license, open an issue.
+## Links
+
+- [GitHub](https://github.com/DriftVane/watcher-on-the-wall)
+- [Documentation](https://github.com/DriftVane/watcher-on-the-wall/tree/main/docs)
+- [Contributing](./CONTRIBUTING.md)
+- [Security](./SECURITY.md)

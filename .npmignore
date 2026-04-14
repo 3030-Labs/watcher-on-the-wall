@@ -1,14 +1,47 @@
+# Source (dist/ is the published artifact)
 src/
 test/
-docs/
 scripts/
-.github/
-*.ts
-!dist/**/*.d.ts
+
+# Config
 tsconfig.json
+tsconfig.eslint.json
 tsup.config.ts
 vitest.config.ts
+eslint.config.js
 .eslintrc.cjs
-.prettierrc
+
+# Dev/CI
+.github/
+.git/
 .gitignore
-coverage/
+.husky/
+
+# Docs (README.md is in "files", these are not)
+docs/
+*.md
+!README.md
+!LICENSE
+
+# Audit/build reports
+AUDIT-REPORT*.md
+AUDIT-FIXES.md
+AUDIT-V2-FIXES.md
+BUILD-SUMMARY.md
+CODEX-AUDIT-FIXES.md
+DEEP-VERIFICATION-*.md
+FEATURE-PASS-*.md
+RECONCILIATION-PASS.md
+TEST-SUITE-REVIEW.md
+TEST-FIX-PASS.md
+LAUNCH-PREP.md
+ROADMAP.md
+CONTRIBUTING.md
+SECURITY.md
+CHANGELOG.md
+
+# Runtime artifacts
+*.log
+.wotw/
+node_modules/
+pnpm-lock.yaml

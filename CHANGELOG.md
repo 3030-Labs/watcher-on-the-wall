@@ -5,6 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] — 2026-04-12
+
+### Features
+
+- **Interactive init wizard** (`wotw init`): 7-step @clack/prompts wizard with
+  Obsidian vault auto-detection, overlay support, and optional vault launch.
+- **Knowledge health system**: 5-factor quality scoring (staleness, source
+  availability, link health, duplicate risk, contradiction risk) with
+  configurable weights and thresholds.
+- **Auto-healing** (`wotw lint --fix`): 5 heal handlers (stale pages, duplicates,
+  broken links, missing backlinks, contradictions) with budget pre-flight,
+  per-run caps, and provenance records.
+- **Deletion handling**: archive provenance type for removed source files;
+  orphaned wiki pages get `status: orphaned` frontmatter instead of deletion.
+- **Lint scheduler**: optional background lint runs via `lint.schedule_enabled`
+  config with configurable interval.
+- **Dead-letter queue**: JSONL ledger for failed batches, surfaced in
+  `wotw status` and `get_stats` MCP tool.
+- **`wotw logs` command**: tail daemon log with `-f`/`--follow` and rotation
+  detection.
+- **Retrieval hardening**: LLM-powered query expansion, richer YAML metadata
+  extraction, query-performance metrics logging, and consolidated search
+  results.
+- **Candidates workflow**: human review queue with `wotw approve`, `wotw reject`,
+  `wotw candidates`. Superseded-candidate detection on re-ingestion.
+
+### Security
+
+- Timing-safe token comparison via `crypto.timingSafeEqual` for legacy
+  single-token auth.
+- Canonical path validation (`resolveWikiPath`) rejects directory traversal.
+- No-auth safety rail refuses MCP server start on non-loopback host without
+  auth configured.
+- Eager provenance hashing eliminates lazy end-of-batch race window.
+- Credential redaction (9 patterns) applied to all wiki content before storage.
+- `errMsg()` utility replaced all 18 unsafe `(err as Error).message` casts.
+- Zero bare `catch {}` blocks.
+
+### Quality
+
+- 446 tests across 51 files (up from 192 across 16 in 0.1.0).
+- Deep verification audit: 36 findings (10 CRITICAL, 8 HIGH) all resolved with
+  regression tests that fail on revert.
+- Two independent adversarial audits (V1: 16 findings, V2: 13 findings) all
+  resolved.
+
 ## [0.1.0] — initial release
 
 ### Added
