@@ -12,6 +12,7 @@ import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } f
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { defaultConfig, resolveConfigPaths } from "../../src/daemon/config.js";
+import type { WotwConfig } from "../../src/utils/types.js";
 import { CostTracker } from "../../src/ingestion/cost-tracker.js";
 import { ModelRouter } from "../../src/ingestion/model-router.js";
 import { WikiSearch } from "../../src/wiki/search.js";
@@ -50,7 +51,13 @@ function tmp(): string {
   return mkdtempSync(join(tmpdir(), "wotw-vocab-"));
 }
 
-function makeOpts(root: string) {
+function makeOpts(root: string): {
+  config: WotwConfig;
+  store: WikiStore;
+  search: WikiSearch;
+  costTracker: CostTracker;
+  modelRouter: ModelRouter;
+} {
   const cfg = defaultConfig();
   cfg.wiki_root = root;
   cfg.raw_path = join(root, "raw");

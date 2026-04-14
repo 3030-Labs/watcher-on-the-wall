@@ -16,6 +16,8 @@ import { join } from "node:path";
 import { FileWatcher, type WatcherOptions } from "../../src/watcher/index.js";
 import { defaultConfig } from "../../src/daemon/config.js";
 import type { WotwConfig } from "../../src/utils/types.js";
+import type { DebounceBatcher } from "../../src/watcher/debounce.js";
+import type { FSWatcher } from "chokidar";
 
 function tmpDir(): string {
   return mkdtempSync(join(tmpdir(), "wotw-watcher-retry-"));
@@ -39,17 +41,17 @@ function testConfig(rawPath: string): WotwConfig {
  * Helper to access the internal batcher. The FileWatcher stores it as a
  * private field, so we use bracket notation to reach it for test purposes.
  */
-function getBatcher(watcher: FileWatcher) {
+function getBatcher(watcher: FileWatcher): DebounceBatcher {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (watcher as any).batcher as import("../../src/watcher/debounce.js").DebounceBatcher;
+  return (watcher as any).batcher as DebounceBatcher;
 }
 
 /**
  * Helper to access the internal chokidar watcher field for synthetic events.
  */
-function getInternalWatcher(watcher: FileWatcher) {
+function getInternalWatcher(watcher: FileWatcher): FSWatcher | null {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (watcher as any).watcher as import("chokidar").FSWatcher | null;
+  return (watcher as any).watcher as FSWatcher | null;
 }
 
 describe("FileWatcher retry logic (CRITICAL-7)", () => {

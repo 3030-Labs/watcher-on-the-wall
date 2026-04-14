@@ -9,6 +9,7 @@ import { WikiStore } from "../../src/wiki/store.js";
 import { newPage, parsePage, serializePage } from "../../src/wiki/page.js";
 import { defaultConfig, resolveConfigPaths } from "../../src/daemon/config.js";
 import { approveOne } from "../../src/cli/commands/approve.js";
+import type { WotwConfig } from "../../src/utils/types.js";
 
 // Mock git-committer so approveOne does not try to commit.
 vi.mock("../../src/ingestion/git-committer.js", () => ({
@@ -20,7 +21,7 @@ vi.mock("../../src/ingestion/git-committer.js", () => ({
   }),
 }));
 
-function makeConfig(root: string) {
+function makeConfig(root: string): WotwConfig {
   const config = defaultConfig();
   config.wiki_root = root;
   // Disable provenance so approveOne does not try to init a chain file.

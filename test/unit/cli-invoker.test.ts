@@ -27,6 +27,7 @@ let _sabotageStdin = false;
 import { vi } from "vitest";
 
 vi.mock("node:child_process", async (importOriginal) => {
+  // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- vitest importOriginal requires inline import()
   const mod = await importOriginal<typeof import("node:child_process")>();
   return {
     ...mod,
