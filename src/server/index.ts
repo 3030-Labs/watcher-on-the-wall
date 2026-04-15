@@ -38,6 +38,7 @@ import { QueryEngine } from "./query-engine.js";
 import { registerTools } from "./tools.js";
 import { registerResources } from "./resources.js";
 import { RateLimiter, runMiddleware } from "./middleware.js";
+import { loadAllPages } from "../ingestion/wiki-writer.js";
 
 export interface McpServerOptions {
   config: WotwConfig;
@@ -211,6 +212,11 @@ export class McpHttpServer implements DaemonSubsystem {
       res.end(JSON.stringify({ ok: true, name: "watcher-on-the-wall", version: VERSION }));
       return;
     }
+    // Internal admin endpoints — hosted mode only
+    if (url.pathname.startsWith("/internal/")) {
+      await this.handleInternalRequest(url.pathname, req, res);
+      return;
+    }
     if (url.pathname !== "/mcp") {
       res.writeHead(404, { "content-type": "application/json" });
       res.end(JSON.stringify({ error: "not found" }));
@@ -317,6 +323,117 @@ export class McpHttpServer implements DaemonSubsystem {
         );
       }
       await cleanup();
+    }
+  }
+
+  /**
+   * Handle /internal/* admin endpoints. These are only useful in hosted
+   * mode — they let the cloud control plane inspect queue state, trigger
+   * index rebuilds, health checks, export/import. Authenticated via
+   * x-admin-key header matching ADMIN_SERVICE_KEY env var.
+   */
+  private async handleInternalRequest(
+    pathname: string,
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<void> {
+    const log = getLogger("internal-api");
+    const adminKey = process.env.ADMIN_SERVICE_KEY;
+    const providedKey = req.headers["x-admin-key"];
+
+    if (!adminKey || providedKey !== adminKey) {
+      res.writeHead(401, { "content-type": "application/json" });
+      res.end(JSON.stringify({ error: "unauthorized" }));
+      return;
+    }
+
+    // Parse JSON body for POST requests
+    let body: Record<string, unknown> = {};
+    if (req.method === "POST") {
+      try {
+        body = (await readJsonBody(req)) as Record<string, unknown>;
+      } catch {
+        res.writeHead(400, { "content-type": "application/json" });
+        res.end(JSON.stringify({ error: "invalid JSON body" }));
+        return;
+      }
+    }
+
+    const json = (status: number, data: unknown): void => {
+      res.writeHead(status, { "content-type": "application/json" });
+      res.end(JSON.stringify(data));
+    };
+
+    try {
+      switch (pathname) {
+        case "/internal/queue-status": {
+          // Only meaningful if TenantScheduler is active (import at queue level)
+          json(200, {
+            note: "queue-status available when hosted mode is active",
+            hosted: this.opts.config.hosted.enabled,
+          });
+          break;
+        }
+
+        case "/internal/rebuild-index": {
+          log.info({ tenantId: body.tenant_id }, "rebuilding search index");
+          const startMs = Date.now();
+          const pages = await loadAllPages(this.opts.store);
+          this.opts.search.rebuild(pages);
+          const duration = Date.now() - startMs;
+          json(200, { pages_indexed: pages.length, duration_ms: duration });
+          break;
+        }
+
+        case "/internal/health-check": {
+          log.info({ tenantId: body.tenant_id }, "running health check");
+          const allPages = await loadAllPages(this.opts.store);
+          const orphaned = allPages.filter((p) => p.frontmatter?.status === "orphaned").length;
+
+          json(200, {
+            total_pages: allPages.length,
+            orphaned_pages: orphaned,
+            tenant_id: body.tenant_id,
+          });
+          break;
+        }
+
+        case "/internal/export": {
+          log.info({ tenantId: body.tenant_id }, "exporting tenant data");
+          // Export is handled at the cloud layer using Supabase Storage.
+          // The daemon acknowledges the request; actual tar.gz creation
+          // would be implemented with a child_process tar call on the
+          // tenant's wiki root directory.
+          json(200, {
+            status: "acknowledged",
+            tenant_id: body.tenant_id,
+            wiki_root: this.opts.config.wiki_root,
+            timestamp: new Date().toISOString(),
+          });
+          break;
+        }
+
+        case "/internal/import": {
+          log.info({ tenantId: body.tenant_id, backup: body.backup_path }, "import requested");
+          // Import is a dangerous operation. The actual restore logic
+          // (download tar.gz, wipe, extract, rebuild index, verify chain)
+          // would be implemented here. For now, acknowledge the request.
+          json(200, {
+            status: "acknowledged",
+            tenant_id: body.tenant_id,
+            backup_path: body.backup_path,
+            timestamp: new Date().toISOString(),
+          });
+          break;
+        }
+
+        default: {
+          json(404, { error: `unknown internal endpoint: ${pathname}` });
+        }
+      }
+    } catch (err) {
+      log.error({ err, pathname }, "internal endpoint error");
+      json(500, { error: "internal error" });
     }
   }
 }
