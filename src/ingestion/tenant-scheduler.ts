@@ -118,6 +118,46 @@ export class TenantScheduler {
     }
   }
 
+  /** Per-tenant timestamps of last completed job. */
+  private readonly lastCompletedAt = new Map<string, Date>();
+  /** Per-tenant rolling latency accumulators. */
+  private readonly latencySum = new Map<string, number>();
+  private readonly latencyCount = new Map<string, number>();
+
+  /**
+   * Returns a snapshot of queue state across all tenants.
+   */
+  getStatus(): {
+    tenants: Array<{
+      tenantId: string;
+      queueDepth: number;
+      activeJobs: number;
+      paused: boolean;
+      lastCompletedAt: Date | null;
+      avgLatencyMs: number | null;
+    }>;
+    globalActiveJobs: number;
+    globalQueueDepth: number;
+  } {
+    const tenants = this.tenantOrder.map((tenantId) => {
+      const sum = this.latencySum.get(tenantId) ?? 0;
+      const count = this.latencyCount.get(tenantId) ?? 0;
+      return {
+        tenantId,
+        queueDepth: this.getQueueDepth(tenantId),
+        activeJobs: this.getActiveJobs(tenantId),
+        paused: this.isPaused(tenantId),
+        lastCompletedAt: this.lastCompletedAt.get(tenantId) ?? null,
+        avgLatencyMs: count > 0 ? Math.round(sum / count) : null,
+      };
+    });
+    return {
+      tenants,
+      globalActiveJobs: this.globalActive,
+      globalQueueDepth: this.getTotalQueueDepth(),
+    };
+  }
+
   // ---------------------------------------------------------------------------
   // Internal scheduling
   // ---------------------------------------------------------------------------
@@ -180,6 +220,7 @@ export class TenantScheduler {
 
   private executeJob(job: TenantJob): void {
     const log = getLogger("tenant-scheduler");
+    const startMs = Date.now();
     job
       .execute()
       .catch((err: unknown) => {
@@ -189,6 +230,13 @@ export class TenantScheduler {
         const prev = this.activeByTenant.get(job.tenantId) ?? 1;
         this.activeByTenant.set(job.tenantId, prev - 1);
         this.globalActive--;
+
+        // Track completion time and latency
+        this.lastCompletedAt.set(job.tenantId, new Date());
+        const elapsed = Date.now() - startMs;
+        this.latencySum.set(job.tenantId, (this.latencySum.get(job.tenantId) ?? 0) + elapsed);
+        this.latencyCount.set(job.tenantId, (this.latencyCount.get(job.tenantId) ?? 0) + 1);
+
         this.scheduleTick();
       });
   }

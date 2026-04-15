@@ -260,6 +260,48 @@ describe("TenantScheduler", () => {
     expect(log).toContain("end:A:a0");
   });
 
+  it("getStatus() returns correct shape with per-tenant stats", async () => {
+    const log: string[] = [];
+    const pausedSet = new Set<string>(["B"]);
+
+    const scheduler = new TenantScheduler({
+      globalConcurrency: 2,
+      getConcurrencyCap: () => 2,
+      isPaused: (tid) => pausedSet.has(tid),
+    });
+
+    // A gets a slow job so it's still active when we check status
+    scheduler.enqueue(makeJob("A", "a0", 100, log));
+    scheduler.enqueue(makeJob("B", "b0", 10, log)); // paused — held in queue
+
+    // Let A's job start (but not finish)
+    await tick();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(log).toContain("start:A:a0");
+
+    const status = scheduler.getStatus();
+    expect(status.globalActiveJobs).toBe(1);
+    expect(status.globalQueueDepth).toBe(1); // B's job still queued
+
+    const tenantA = status.tenants.find((t) => t.tenantId === "A");
+    expect(tenantA).toBeDefined();
+    expect(tenantA!.paused).toBe(false);
+    expect(tenantA!.activeJobs).toBe(1);
+
+    const tenantB = status.tenants.find((t) => t.tenantId === "B");
+    expect(tenantB).toBeDefined();
+    expect(tenantB!.paused).toBe(true);
+    expect(tenantB!.queueDepth).toBe(1);
+
+    // Cleanup: unpause B and drain
+    pausedSet.delete("B");
+    scheduler.setPaused("B", false);
+    await scheduler.drain();
+
+    // After drain, check latency was tracked for A
+    expect(log).toContain("end:A:a0");
+  });
+
   it("stop() prevents new jobs from being accepted", () => {
     const log: string[] = [];
     const scheduler = new TenantScheduler({

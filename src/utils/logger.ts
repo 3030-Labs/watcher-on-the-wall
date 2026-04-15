@@ -39,12 +39,26 @@ export function initLogger(level: LogLevel = "info", logFile?: string): Logger {
   return rootLogger;
 }
 
+/** Default context fields merged into every child logger (e.g. tenantId in hosted mode). */
+let defaultContext: Record<string, unknown> = {};
+
+/**
+ * Set default context fields that are merged into every child logger.
+ * Call once at startup when hosted.enabled is true.
+ */
+export function setLoggerContext(ctx: Record<string, unknown>): void {
+  defaultContext = ctx;
+}
+
 /**
  * Return the root logger, initializing with defaults if none exists.
+ * When defaultContext has been set (hosted mode), every child logger
+ * automatically includes those fields.
  */
-export function getLogger(module?: string): Logger {
+export function getLogger(module?: string, extra?: Record<string, unknown>): Logger {
   if (!rootLogger) {
     rootLogger = initLogger("info");
   }
-  return module ? rootLogger.child({ module }) : rootLogger;
+  const ctx = { ...defaultContext, ...extra, ...(module ? { module } : {}) };
+  return Object.keys(ctx).length > 0 ? rootLogger.child(ctx) : rootLogger;
 }

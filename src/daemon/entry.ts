@@ -6,7 +6,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { Daemon } from "./index.js";
 import { LintScheduler } from "./lint-scheduler.js";
-import { getLogger, initLogger } from "../utils/logger.js";
+import { getLogger, initLogger, setLoggerContext } from "../utils/logger.js";
 import { WikiStore } from "../wiki/store.js";
 import { IndexManager } from "../wiki/index-manager.js";
 import { WikiSearch } from "../wiki/search.js";
@@ -53,6 +53,12 @@ async function main(): Promise<void> {
   const daemon = new Daemon({ configPath, workingDir });
   try {
     const config = await daemon.init();
+
+    // Hosted mode: tag every log line with the tenant ID
+    if (config.hosted.enabled && config.hosted.tenant_id) {
+      setLoggerContext({ tenantId: config.hosted.tenant_id });
+    }
+
     const log = getLogger("daemon-entry");
 
     // Resolved by daemon.init() — guaranteed non-null at this point.

@@ -24,3 +24,10 @@
 - [x] Tenant root enforcement on all file ops
 - [x] Hosted-mode file operation wrapper (TenantFs)
 - [x] Acceptance tests (14 new — fs isolation, queue fairness, kill switch, quotas)
+
+## Prompt 7: Observability & Metrics
+- [x] Per-tenant wiki_id on every log line (setLoggerContext)
+- [x] MetricsCollector class (HTTP-based, no Supabase SDK)
+- [x] Queue/job visibility methods (getStatus on TenantScheduler)
+- [x] Guardrail hit tracking (recordGuardrailHit → guardrail_hits table)
+- [x] Admin audit log integration (logAdminAction helper in wotw-cloud)
