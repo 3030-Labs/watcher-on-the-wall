@@ -14,4 +14,3 @@ coverage/
 .wotw/
 wiki-store/
 !templates/**
-pnpm-lock.yaml
