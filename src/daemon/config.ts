@@ -157,6 +157,16 @@ export interface LoadConfigResult {
  * Load configuration from cosmiconfig's discovery of `wotw.config.*`, `.wotwrc`, or
  * a `wotw` key in package.json. If no file is found, the default config is returned.
  *
+ * Resolution order (highest to lowest priority):
+ *   1. Environment variables (see {@link applyEnvOverrides})
+ *   2. User config file
+ *   3. Defaults
+ *
+ * In hosted mode (`WOTW_HOSTED=true` or `hosted.enabled` in the file), the
+ * resulting config is additionally checked by {@link validateHostedConfig}
+ * which throws when `tenant_id` is missing, malformed, or `wiki_root` is
+ * unset.
+ *
  * @param searchFrom optional directory to search from (defaults to process.cwd())
  */
 export async function loadConfig(searchFrom?: string): Promise<LoadConfigResult> {
@@ -179,18 +189,124 @@ export async function loadConfig(searchFrom?: string): Promise<LoadConfigResult>
 
   const result: CosmiconfigResult = await explorer.search(searchFrom ?? process.cwd());
   const defaults = defaultConfig();
+  let merged: WotwConfig;
+  let path: string | null = null;
   if (!result || !result.config) {
     // eslint-disable-next-line no-console -- runs before pino logger is initialized
     console.warn(
       "[wotw] no wotw.yaml found — using all defaults (auth disabled, max_daily_usd: 10.0)",
     );
-    return { config: defaults, path: null };
+    merged = defaults;
+  } else {
+    merged = mergeConfig(defaults, result.config as Partial<WotwConfig>);
+    path = result.filepath;
   }
-  const merged = mergeConfig(defaults, result.config as Partial<WotwConfig>);
-  return {
-    config: validateConfig(merged),
-    path: result.filepath,
-  };
+  // Env overrides take precedence over the file. Applied here so the
+  // hosted-mode validation below sees the final, fully-resolved values.
+  const withEnv = applyEnvOverrides(merged);
+  const validated = validateConfig(withEnv);
+  validateHostedConfig(validated);
+  return { config: validated, path };
+}
+
+/**
+ * Apply runtime environment-variable overrides to a parsed config. Returns
+ * a new object; the input is not mutated. Each override is read from the
+ * corresponding env var and only set if the value is non-empty.
+ *
+ * Variables consumed (each optional):
+ *   WOTW_HOSTED           "true" / "false" — `hosted.enabled`
+ *   TENANT_ID             UUID — `hosted.tenant_id` (validated downstream)
+ *   WIKI_ROOT             absolute path — `wiki_root`
+ *   WOTW_PLAN             "founding" | "pro" — `hosted.plan`
+ *   WOTW_TIMEZONE         IANA tz — `hosted.timezone`
+ *   WOTW_PORT             integer — `server.port`
+ *   WOTW_HOST             host string — `server.host`
+ *   WOTW_LOG_LEVEL        pino level — `daemon.log_level`
+ *   WOTW_RUNTIME_MODE     "auto" | "cli" | "api" — `execution.mode`
+ *   ADMIN_SERVICE_KEY     bearer token — `server.auth_token`
+ */
+export function applyEnvOverrides(config: WotwConfig): WotwConfig {
+  const out = structuredClone(config);
+  const env = process.env;
+
+  if (env.WOTW_HOSTED !== undefined) {
+    out.hosted.enabled = env.WOTW_HOSTED === "true";
+  }
+  if (env.TENANT_ID && env.TENANT_ID.length > 0) {
+    out.hosted.tenant_id = env.TENANT_ID;
+  }
+  if (env.WIKI_ROOT && env.WIKI_ROOT.length > 0) {
+    out.wiki_root = env.WIKI_ROOT;
+  }
+  if (env.WOTW_PLAN === "founding" || env.WOTW_PLAN === "pro") {
+    out.hosted.plan = env.WOTW_PLAN;
+  }
+  if (env.WOTW_TIMEZONE && env.WOTW_TIMEZONE.length > 0) {
+    out.hosted.timezone = env.WOTW_TIMEZONE;
+  }
+  if (env.WOTW_PORT) {
+    const n = Number.parseInt(env.WOTW_PORT, 10);
+    if (Number.isFinite(n) && n > 0 && n < 65536) {
+      out.server.port = n;
+    }
+  }
+  if (env.WOTW_HOST && env.WOTW_HOST.length > 0) {
+    out.server.host = env.WOTW_HOST;
+  }
+  if (env.WOTW_LOG_LEVEL) {
+    const lvl = env.WOTW_LOG_LEVEL;
+    if (
+      lvl === "trace" ||
+      lvl === "debug" ||
+      lvl === "info" ||
+      lvl === "warn" ||
+      lvl === "error" ||
+      lvl === "fatal"
+    ) {
+      out.daemon.log_level = lvl;
+    }
+  }
+  if (
+    env.WOTW_RUNTIME_MODE === "auto" ||
+    env.WOTW_RUNTIME_MODE === "cli" ||
+    env.WOTW_RUNTIME_MODE === "api"
+  ) {
+    out.execution.mode = env.WOTW_RUNTIME_MODE;
+  }
+  if (env.ADMIN_SERVICE_KEY && env.ADMIN_SERVICE_KEY.length > 0) {
+    out.server.auth_token = env.ADMIN_SERVICE_KEY;
+  }
+  return out;
+}
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Hosted-mode runtime invariants. Throws with a precise message when:
+ *   - `hosted.enabled` is true but `tenant_id` is missing
+ *   - `tenant_id` is set but is not a valid UUID
+ *   - `wiki_root` is an empty/relative path that won't resolve to a stable
+ *     mount point under `/data`
+ *
+ * Called from {@link loadConfig}. Community-mode configs (where
+ * `hosted.enabled` is false) are unaffected.
+ */
+export function validateHostedConfig(config: WotwConfig): void {
+  if (!config.hosted.enabled) return;
+  if (!config.hosted.tenant_id || config.hosted.tenant_id.length === 0) {
+    throw new Error(
+      "Config error: hosted.enabled is true but TENANT_ID / hosted.tenant_id is unset.",
+    );
+  }
+  if (!UUID_REGEX.test(config.hosted.tenant_id)) {
+    throw new Error(
+      `Config error: hosted.tenant_id "${config.hosted.tenant_id}" is not a valid UUID.`,
+    );
+  }
+  if (!config.wiki_root || config.wiki_root.length === 0) {
+    throw new Error("Config error: hosted.enabled is true but wiki_root / WIKI_ROOT is unset.");
+  }
 }
 
 /**

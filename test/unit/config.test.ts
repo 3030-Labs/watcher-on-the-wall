@@ -7,11 +7,13 @@ import { isAbsolute, join } from "node:path";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import {
+  applyEnvOverrides,
   defaultConfig,
   loadConfig,
   mergeConfig,
   resolveConfigPaths,
   validateConfig,
+  validateHostedConfig,
 } from "../../src/daemon/config.js";
 
 describe("defaultConfig", () => {
@@ -200,5 +202,162 @@ describe("loadConfig", () => {
     const defaults = defaultConfig();
     expect(result.config.server.host).toBe(defaults.server.host);
     expect(result.config.cost.max_daily_usd).toBe(defaults.cost.max_daily_usd);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 24 — Pass 006 — Hosted-mode env overrides + validation
+// ---------------------------------------------------------------------------
+
+describe("applyEnvOverrides", () => {
+  // Each test snapshots and restores the env vars it touches so the suite
+  // remains deterministic regardless of run order.
+  const ENV_KEYS = [
+    "WOTW_HOSTED",
+    "TENANT_ID",
+    "WIKI_ROOT",
+    "WOTW_PLAN",
+    "WOTW_TIMEZONE",
+    "WOTW_PORT",
+    "WOTW_HOST",
+    "WOTW_LOG_LEVEL",
+    "WOTW_RUNTIME_MODE",
+    "ADMIN_SERVICE_KEY",
+  ] as const;
+
+  function withEnv<T>(
+    overrides: Partial<Record<(typeof ENV_KEYS)[number], string | undefined>>,
+    fn: () => T,
+  ): T {
+    const saved: Record<string, string | undefined> = {};
+    for (const k of ENV_KEYS) saved[k] = process.env[k];
+    try {
+      for (const k of ENV_KEYS) {
+        const v = overrides[k];
+        if (v === undefined) {
+          delete process.env[k];
+        } else {
+          process.env[k] = v;
+        }
+      }
+      return fn();
+    } finally {
+      for (const k of ENV_KEYS) {
+        const orig = saved[k];
+        if (orig === undefined) delete process.env[k];
+        else process.env[k] = orig;
+      }
+    }
+  }
+
+  it("is a no-op when no env vars are set", () => {
+    withEnv({}, () => {
+      const out = applyEnvOverrides(defaultConfig());
+      expect(out).toEqual(defaultConfig());
+    });
+  });
+
+  it("WOTW_HOSTED=true flips hosted.enabled", () => {
+    withEnv({ WOTW_HOSTED: "true" }, () => {
+      const out = applyEnvOverrides(defaultConfig());
+      expect(out.hosted.enabled).toBe(true);
+    });
+  });
+
+  it("TENANT_ID overrides hosted.tenant_id", () => {
+    withEnv({ TENANT_ID: "11111111-2222-3333-4444-555555555555" }, () => {
+      const out = applyEnvOverrides(defaultConfig());
+      expect(out.hosted.tenant_id).toBe("11111111-2222-3333-4444-555555555555");
+    });
+  });
+
+  it("WIKI_ROOT overrides wiki_root", () => {
+    withEnv({ WIKI_ROOT: "/data/myorg" }, () => {
+      const out = applyEnvOverrides(defaultConfig());
+      expect(out.wiki_root).toBe("/data/myorg");
+    });
+  });
+
+  it("WOTW_PORT and WOTW_HOST override server bindings", () => {
+    withEnv({ WOTW_PORT: "3000", WOTW_HOST: "0.0.0.0" }, () => {
+      const out = applyEnvOverrides(defaultConfig());
+      expect(out.server.port).toBe(3000);
+      expect(out.server.host).toBe("0.0.0.0");
+    });
+  });
+
+  it("ADMIN_SERVICE_KEY sets server.auth_token", () => {
+    withEnv({ ADMIN_SERVICE_KEY: "tok_xxx" }, () => {
+      const out = applyEnvOverrides(defaultConfig());
+      expect(out.server.auth_token).toBe("tok_xxx");
+    });
+  });
+
+  it("invalid WOTW_PORT is ignored (out-of-range)", () => {
+    withEnv({ WOTW_PORT: "99999" }, () => {
+      const out = applyEnvOverrides(defaultConfig());
+      expect(out.server.port).toBe(defaultConfig().server.port);
+    });
+  });
+
+  it("invalid WOTW_PLAN is ignored", () => {
+    withEnv({ WOTW_PLAN: "notathing" }, () => {
+      const out = applyEnvOverrides(defaultConfig());
+      expect(out.hosted.plan).toBe(defaultConfig().hosted.plan);
+    });
+  });
+
+  it("invalid WOTW_LOG_LEVEL is ignored", () => {
+    withEnv({ WOTW_LOG_LEVEL: "screaming" }, () => {
+      const out = applyEnvOverrides(defaultConfig());
+      expect(out.daemon.log_level).toBe(defaultConfig().daemon.log_level);
+    });
+  });
+
+  it("does not mutate the input config", () => {
+    withEnv({ TENANT_ID: "11111111-2222-3333-4444-555555555555" }, () => {
+      const input = defaultConfig();
+      applyEnvOverrides(input);
+      expect(input.hosted.tenant_id).toBeNull();
+    });
+  });
+});
+
+describe("validateHostedConfig", () => {
+  it("is a no-op when hosted.enabled is false", () => {
+    const cfg = defaultConfig();
+    expect(cfg.hosted.enabled).toBe(false);
+    expect(() => validateHostedConfig(cfg)).not.toThrow();
+  });
+
+  it("throws when hosted.enabled is true but tenant_id is missing", () => {
+    const cfg = defaultConfig();
+    cfg.hosted.enabled = true;
+    cfg.hosted.tenant_id = null;
+    expect(() => validateHostedConfig(cfg)).toThrowError(/TENANT_ID.*hosted\.tenant_id is unset/);
+  });
+
+  it("throws when tenant_id is present but not a UUID", () => {
+    const cfg = defaultConfig();
+    cfg.hosted.enabled = true;
+    cfg.hosted.tenant_id = "not-a-uuid";
+    cfg.wiki_root = "/data/x";
+    expect(() => validateHostedConfig(cfg)).toThrowError(/not a valid UUID/);
+  });
+
+  it("accepts a valid UUID with mixed case", () => {
+    const cfg = defaultConfig();
+    cfg.hosted.enabled = true;
+    cfg.hosted.tenant_id = "AAAAAAAA-bbbb-CCCC-dddd-EEEEEEEEEEEE";
+    cfg.wiki_root = "/data/x";
+    expect(() => validateHostedConfig(cfg)).not.toThrow();
+  });
+
+  it("throws when wiki_root is empty in hosted mode", () => {
+    const cfg = defaultConfig();
+    cfg.hosted.enabled = true;
+    cfg.hosted.tenant_id = "11111111-2222-3333-4444-555555555555";
+    cfg.wiki_root = "";
+    expect(() => validateHostedConfig(cfg)).toThrowError(/wiki_root.*WIKI_ROOT is unset/);
   });
 });
