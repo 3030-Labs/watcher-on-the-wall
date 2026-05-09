@@ -38,8 +38,12 @@ RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY . .
 
 # Build TypeScript -> dist/ and prune dev deps.
+# --ignore-scripts on prune for the same reason it's used on install above:
+# pnpm runs the `prepare` lifecycle after the prune, but devDependencies
+# (husky) have just been removed, so `prepare: husky` would fail with
+# "husky: not found".
 RUN pnpm build \
- && pnpm prune --prod
+ && pnpm prune --prod --ignore-scripts
 
 FROM node:20-slim AS runtime
 
