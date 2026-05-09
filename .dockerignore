@@ -1,0 +1,44 @@
+# Build artifacts and deps
+node_modules
+dist
+coverage
+
+# Editor / OS
+.idea
+.vscode
+.DS_Store
+
+# Tests and dev-only configs (not needed in the runtime image)
+test
+docs
+templates
+*.test.ts
+vitest.config.ts
+tsconfig.eslint.json
+eslint.config.js
+
+# Local state
+.wotw
+.git
+.github
+.husky
+
+# Audit / planning markdown — not part of the runtime
+AUDIT-*.md
+DEEP-VERIFICATION-*.md
+TEST-*.md
+RECONCILIATION-*.md
+LAUNCH-PREP.md
+TENANT-GUARDRAILS.md
+FEATURE-PASS-*.md
+BUILD-SUMMARY.md
+CODEX-AUDIT-FIXES.md
+ROADMAP.md
+CHANGELOG.md
+SECURITY.md
+CONTRIBUTING.md
+wotw-*.md
+wotw-*.md:Zone.Identifier
+
+# Lockfile & npm cache (kept package.json + pnpm-lock.yaml in COPY)
+.npmrc

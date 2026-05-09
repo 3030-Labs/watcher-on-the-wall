@@ -14,3 +14,9 @@ coverage/
 .wotw/
 wiki-store/
 !templates/**
+
+# Strategic / internal docs (live in brain/, not in OSS repo)
+wotw-*.md
+
+# Windows mark-of-the-web sidecar files
+*:Zone.Identifier
