@@ -3,8 +3,16 @@
 #
 # As of Pass 006, the daemon reads hosted-mode settings directly from env
 # vars via applyEnvOverrides() in src/daemon/config.ts. This entrypoint
-# now just preflights the env, ensures the wiki root exists and is
-# writable, then exec's `wotw start --foreground`.
+# preflights the env, ensures the wiki root exists and is writable, then
+# exec's the daemon's child-process entrypoint (`dist/daemon/entry.js`)
+# which attaches all subsystems (wiki store, search, ingestion, watcher,
+# McpHttpServer, lintScheduler) before running.
+#
+# IMPORTANT: do NOT use `wotw start --foreground` here. That CLI path
+# currently runs Daemon.init() + Daemon.run() *without* attaching any
+# subsystems, so the process stays alive but never binds the HTTP port
+# (TCP 3000 returns "connection refused"). Surfaced 2026-05-10 during
+# Step 5 BYOK live verification.
 #
 # Required env (when WOTW_HOSTED=true):
 #   TENANT_ID            tenant UUID (becomes hosted.tenant_id)
@@ -55,5 +63,6 @@ fi
 cd "${WIKI_ROOT}"
 
 # exec replaces this shell so signals (SIGTERM from Fly) reach the daemon
-# directly. --foreground keeps it in the foreground (no fork).
-exec wotw start --foreground
+# directly. The entry script attaches all subsystems including the
+# McpHttpServer that owns the /healthz + /mcp endpoints.
+exec node /app/dist/daemon/entry.js
