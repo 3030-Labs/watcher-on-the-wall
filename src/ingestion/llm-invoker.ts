@@ -139,6 +139,12 @@ export async function invokeIngestionAgent(opts: InvokeOptions): Promise<InvokeR
       tools,
       permissionMode: "bypassPermissions",
       abortController: abort,
+      // Point SDK at @anthropic-ai/claude-code launcher. SDK 0.2.138+ otherwise
+      // looks for the binary inside a platform-specific sibling package whose
+      // postinstall is skipped by our Dockerfile's --ignore-scripts. Closes
+      // validation-gap instance #11.
+      pathToClaudeCodeExecutable:
+        process.env.WOTW_CLAUDE_CLI_PATH ?? "/app/node_modules/.bin/claude",
       ...(opts.resumeSessionId ? { resume: opts.resumeSessionId } : {}),
     };
 
