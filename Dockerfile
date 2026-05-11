@@ -74,9 +74,20 @@ RUN chmod +x /app/dist/cli/index.js \
 VOLUME ["/data"]
 
 # Sensible defaults; the orchestrator overrides via env.
+#
+# WOTW_HOST=:: binds to IPv6 dual-stack (Node.js default). This accepts BOTH
+# IPv6 (required for Fly 6PN cross-machine traffic — wotw-cloud reaches the
+# daemon via `<machine_id>.vm.<app>.internal` which resolves to an IPv6 addr
+# in the fdaa::/16 range) AND IPv4 (required for Fly's local healthcheck
+# which probes 127.0.0.1:3000 from inside the machine's own netns).
+#
+# Earlier default `WOTW_HOST=0.0.0.0` was IPv4-only — local healthcheck
+# passed but cross-machine 6PN fetches got ECONNREFUSED. Surfaced as
+# validation-gap instance #8 during Pass 009 Step 4 (the first time cross-
+# machine traffic to the daemon was actually exercised). v0.2.2 fix.
 ENV WOTW_HOSTED=true \
     WOTW_PORT=3000 \
-    WOTW_HOST=0.0.0.0 \
+    WOTW_HOST=:: \
     WOTW_RUNTIME_MODE=api \
     WOTW_LOG_LEVEL=info \
     NODE_ENV=production
