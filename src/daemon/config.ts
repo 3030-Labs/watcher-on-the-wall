@@ -238,6 +238,13 @@ export function applyEnvOverrides(config: WotwConfig): WotwConfig {
   }
   if (env.WIKI_ROOT && env.WIKI_ROOT.length > 0) {
     out.wiki_root = env.WIKI_ROOT;
+    // When WIKI_ROOT is explicitly set, the wiki layout is flat — the env
+    // value IS the wiki root, no wiki-store/ wrapper. Flatten default paths
+    // that assume the wrapper. (User-overridden values in wotw.yaml stay
+    // intact; we only touch defaults.)
+    if (out.raw_path === "./wiki-store/raw") {
+      out.raw_path = "raw";
+    }
   }
   if (env.WOTW_PLAN === "founding" || env.WOTW_PLAN === "pro") {
     out.hosted.plan = env.WOTW_PLAN;
@@ -276,6 +283,16 @@ export function applyEnvOverrides(config: WotwConfig): WotwConfig {
   }
   if (env.ADMIN_SERVICE_KEY && env.ADMIN_SERVICE_KEY.length > 0) {
     out.server.auth_token = env.ADMIN_SERVICE_KEY;
+  }
+  // In hosted mode, default to stdout logging so container log streams
+  // (Fly, Kubernetes, Docker) capture daemon output without ssh+cat. The
+  // file-default ~/.wotw/daemon.log is invisible to Fly's log stream which
+  // is a critical observability blind spot for production support. Users
+  // who explicitly want file logging in hosted mode can set WOTW_LOG_FILE.
+  if (env.WOTW_LOG_FILE !== undefined) {
+    out.daemon.log_file = env.WOTW_LOG_FILE;
+  } else if (out.hosted.enabled) {
+    out.daemon.log_file = "";
   }
   return out;
 }
@@ -495,7 +512,12 @@ export function resolveConfigPaths(config: WotwConfig, baseDir?: string): WotwCo
   out.cost.track_file = resolvePath(out.cost.track_file, baseDir);
   out.daemon.pid_file = resolvePath(out.daemon.pid_file, baseDir);
   out.daemon.lock_file = resolvePath(out.daemon.lock_file, baseDir);
-  out.daemon.log_file = resolvePath(out.daemon.log_file, baseDir);
+  // Empty log_file is meaningful (means "log to stdout" in hosted mode);
+  // resolvePath would prepend baseDir to it, producing a path that points
+  // at the baseDir itself. Skip resolution when empty.
+  if (out.daemon.log_file.length > 0) {
+    out.daemon.log_file = resolvePath(out.daemon.log_file, baseDir);
+  }
   out.multi_user.workspaces_dir = resolvePath(out.multi_user.workspaces_dir, baseDir);
   // Provenance chain lives inside the wiki root by default — resolve it
   // against the (already resolved) wiki_root so a relative default like
