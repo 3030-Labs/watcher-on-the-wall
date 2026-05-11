@@ -421,7 +421,10 @@ const WotwConfigSchema = z.object({
   daemon: z.object({
     pid_file: z.string().min(1),
     lock_file: z.string().min(1),
-    log_file: z.string().min(1),
+    // Empty string is meaningful: "log to stdout" (used by hosted mode for
+    // container log capture). initLogger treats empty as no destination
+    // and defaults to pino's stdout output.
+    log_file: z.string(),
     log_level: logLevelSchema,
   }),
   compounding: z.object({
