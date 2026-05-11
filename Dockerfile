@@ -33,6 +33,16 @@ COPY package.json pnpm-lock.yaml ./
 # scripts are run explicitly below.
 RUN pnpm install --frozen-lockfile --ignore-scripts
 
+# Run @anthropic-ai/claude-code's postinstall manually. The package ships a
+# launcher script at node_modules/.bin/claude that needs a platform-native
+# binary, which the postinstall fetches. We skipped postinstall above via
+# --ignore-scripts (needed to avoid husky's `prepare` failing in CI), so
+# claude-code's native binary install must be invoked explicitly here.
+# Without this step the daemon's agent SDK can spawn the launcher but the
+# launcher exits 1 with "claude native binary not installed." Validation-gap
+# instance #9 surfaced this during Pass 009 Step 7B verification.
+RUN node /app/node_modules/@anthropic-ai/claude-code/install.cjs
+
 # Copy the rest of the repo. .dockerignore drops node_modules, dist, tests,
 # docs, etc. so this layer is small.
 COPY . .
@@ -60,6 +70,11 @@ COPY --from=build /app/package.json /app/package.json
 COPY --from=build /app/node_modules /app/node_modules
 COPY --from=build /app/dist /app/dist
 COPY --from=build /app/src/wiki/templates /app/src/wiki/templates
+
+# Sanity check that the claude CLI native binary survived the multi-stage
+# copy (it was installed in the build stage; node_modules is COPY'd into
+# the runtime stage so the binary lives at the same path).
+RUN /app/node_modules/.bin/claude --version
 
 # Runtime entrypoint bridges container env vars into a wotw.yaml.
 COPY docker/entrypoint.sh /usr/local/bin/wotw-entrypoint
