@@ -1,6 +1,6 @@
 {
   "name": "@driftvane/wotw",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "Self-bootstrapping AI knowledge daemon that turns a folder of raw files into a persistent, compounding LLM wiki with provenance signing, MCP serving, and zero manual maintenance.",
   "type": "module",
   "bin": {
@@ -54,7 +54,7 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.2.92",
+    "@anthropic-ai/claude-agent-sdk": "^0.2.138",
     "@anthropic-ai/claude-code": "^2.1.138",
     "@anthropic-ai/sdk": "^0.82.0",
     "@clack/prompts": "^1.2.0",
