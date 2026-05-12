@@ -57,12 +57,14 @@ RUN pnpm build \
 
 FROM node:20-slim AS runtime
 
-# git is required at runtime for the daemon's git-committer subsystem and for
-# any future on-image diagnostics. ca-certificates is required for HTTPS
-# fetches (Anthropic API, MetricsCollector).
+# git: daemon's git-committer subsystem. ca-certificates: HTTPS fetches.
+# gosu: entrypoint-time privilege drop (the daemon must run as non-root; see
+# the user-create + chown blocks below and the entrypoint script for details).
 RUN apt-get update \
- && apt-get install -y --no-install-recommends git ca-certificates \
- && rm -rf /var/lib/apt/lists/*
+ && apt-get install -y --no-install-recommends git ca-certificates gosu \
+ && rm -rf /var/lib/apt/lists/* \
+ && groupadd -g 1001 wotw \
+ && useradd -m -u 1001 -g wotw -s /bin/sh wotw
 
 WORKDIR /app
 
@@ -73,10 +75,14 @@ COPY --from=build /app/src/wiki/templates /app/src/wiki/templates
 
 # Sanity check that the claude CLI native binary survived the multi-stage
 # copy (it was installed in the build stage; node_modules is COPY'd into
-# the runtime stage so the binary lives at the same path).
+# the runtime stage so the binary lives at the same path). The --version
+# invocation does not include --dangerously-skip-permissions, so the CLI's
+# root-check (instance #11) does not fire even though this RUN executes as
+# root during build.
 RUN /app/node_modules/.bin/claude --version
 
-# Runtime entrypoint bridges container env vars into a wotw.yaml.
+# Runtime entrypoint: chowns /data and drops to wotw via gosu, then bridges
+# container env vars into a wotw.yaml.
 COPY docker/entrypoint.sh /usr/local/bin/wotw-entrypoint
 RUN chmod +x /usr/local/bin/wotw-entrypoint
 
@@ -84,6 +90,12 @@ RUN chmod +x /usr/local/bin/wotw-entrypoint
 # path. The shebang on dist/cli/index.js handles the Node invocation.
 RUN chmod +x /app/dist/cli/index.js \
  && ln -s /app/dist/cli/index.js /usr/local/bin/wotw
+
+# Chown /app to the wotw user. Must come AFTER all writes to /app are
+# complete in this stage. The daemon process (running as wotw) needs read +
+# execute on its own dist/ and node_modules/, including the claude-code
+# launcher at node_modules/.bin/claude.
+RUN chown -R wotw:wotw /app
 
 # /data is the wiki root volume. Per-tenant deployments mount a Fly volume here.
 VOLUME ["/data"]
@@ -109,4 +121,8 @@ ENV WOTW_HOSTED=true \
 
 EXPOSE 3000
 
+# No USER directive — entrypoint runs as root long enough to chown the Fly
+# volume mount at /data (volumes arrive root-owned), then exec's gosu wotw to
+# drop privileges before invoking the daemon. USER here would prevent the
+# chown from succeeding.
 CMD ["/usr/local/bin/wotw-entrypoint"]

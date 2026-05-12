@@ -139,10 +139,13 @@ export async function invokeIngestionAgent(opts: InvokeOptions): Promise<InvokeR
       tools,
       permissionMode: "bypassPermissions",
       abortController: abort,
-      // Point SDK at @anthropic-ai/claude-code launcher. SDK 0.2.138+ otherwise
-      // looks for the binary inside a platform-specific sibling package whose
-      // postinstall is skipped by our Dockerfile's --ignore-scripts. Closes
-      // validation-gap instance #11.
+      // Point SDK at the user-installed @anthropic-ai/claude-code launcher.
+      // SDK default resolution looks for a platform-specific sibling package
+      // binary (not installed in our container — we use claude-code's
+      // install.cjs to fetch the native binary), then falls back to ./cli.js
+      // adjacent to the SDK module (also not present in 2.1.x layout).
+      // Without this override the SDK throws "Native CLI binary for
+      // ${process.platform}-${process.arch} not found" at spawn time.
       pathToClaudeCodeExecutable:
         process.env.WOTW_CLAUDE_CLI_PATH ?? "/app/node_modules/.bin/claude",
       ...(opts.resumeSessionId ? { resume: opts.resumeSessionId } : {}),

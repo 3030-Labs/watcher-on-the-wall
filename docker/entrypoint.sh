@@ -32,6 +32,32 @@
 
 set -eu
 
+# === Privilege drop ===
+#
+# The daemon must run as non-root because the claude-code CLI refuses to
+# start with --dangerously-skip-permissions under root (instance #11
+# closure, 2026-05-12). Non-root also closes a baseline container hardening
+# gap independent of the CLI's check.
+#
+# Done here, not via Dockerfile USER directive, because Fly volumes arrive
+# root-owned and need a chown at boot — which requires the entrypoint to
+# start as root and drop privileges itself.
+#
+# The chown only fires when the volume's top-level dir is root-owned (fresh
+# mount or pre-Pass-009 state). On subsequent restarts of an already-wotw-
+# owned volume, the stat short-circuits and the chown is skipped. Avoids
+# re-chown'ing millions of files on every restart of an active wiki.
+#
+# exec replaces this shell so PID 1 inside the container is the re-exec'd
+# entrypoint as wotw, not a shell wrapper. Preserves SIGTERM propagation
+# from Fly's runtime for graceful shutdown.
+if [ "$(id -u)" = "0" ]; then
+  if [ "$(stat -c %U /data 2>/dev/null || echo unknown)" = "root" ]; then
+    chown -R wotw:wotw /data
+  fi
+  exec gosu wotw "$0" "$@"
+fi
+
 WOTW_HOSTED="${WOTW_HOSTED:-true}"
 export WOTW_HOSTED
 
