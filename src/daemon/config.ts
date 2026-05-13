@@ -294,6 +294,21 @@ export function applyEnvOverrides(config: WotwConfig): WotwConfig {
   } else if (out.hosted.enabled) {
     out.daemon.log_file = "";
   }
+
+  // In hosted mode, disable candidates staging. The interactive `wotw start
+  // --auto-approve` flag sets `ingestion.staging = false` to bypass the
+  // human-review queue; the hosted entry point (dist/daemon/entry.js)
+  // bypasses the CLI entirely, so the flag never fires and the
+  // interactive-mode default `staging: true` leaks into hosted operation.
+  // Without this override, every ingestion writes to candidates/ and waits
+  // forever for a human reviewer who doesn't exist in the hosted topology
+  // (per-tenant Fly Machine, BYOK, autonomous operation). BM25 indexes
+  // wiki/{plural-category}/ and never sees candidates/, so MCP query returns
+  // "no relevant wiki pages found" despite successful ingestion. Validation-
+  // gap instance #12 closure, 2026-05-12.
+  if (out.hosted.enabled) {
+    out.ingestion.staging = false;
+  }
   return out;
 }
 
