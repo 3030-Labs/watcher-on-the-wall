@@ -143,7 +143,16 @@ export interface WotwConfig {
     auto_fix_staleness_below: number;
     /** Cap LLM calls per lint --fix pass. */
     max_fixes_per_run: number;
-    /** Enable LLM-powered contradiction detection (expensive). */
+    /**
+     * Enable LLM-powered contradiction detection (expensive).
+     *
+     * TODO: No runtime consumer at v0.2.12. When the LLM contradiction
+     * detection pass is implemented, re-visit hosted-mode default —
+     * interactive default is false; hosted mode likely wants true
+     * (autonomous operation, no human reviewer to opt in). See
+     * `applyEnvOverrides()` in `src/daemon/config.ts` for the pattern
+     * other hosted-mode defaults follow.
+     */
     detect_contradictions: boolean;
     /** Merge when a topic has more than N pages. */
     consolidation_threshold: number;

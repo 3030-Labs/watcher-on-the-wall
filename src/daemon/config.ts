@@ -308,6 +308,18 @@ export function applyEnvOverrides(config: WotwConfig): WotwConfig {
   // gap instance #12 closure, 2026-05-12.
   if (out.hosted.enabled) {
     out.ingestion.staging = false;
+    // Pass 012-completion (2026-05-19): two additional hosted-mode
+    // defaults ratified from Pass 012's audit. See
+    // feedback_hosted_mode_default_audit.md for the inversion-shape framing.
+    //
+    // A third candidate (health.detect_contradictions) was originally in
+    // Pass 012's audit but surfaced during Pass 012-completion verification
+    // as having no runtime consumer at v0.2.12 — the LLM contradiction
+    // detection pass that would check this flag is not yet implemented.
+    // Hosted-mode override deferred to a future consumer-implementation
+    // pass. See TODO at the field's declaration in src/utils/types.ts.
+    out.lint.schedule_enabled = true;
+    out.lint.auto_fix = true;
   }
   return out;
 }
