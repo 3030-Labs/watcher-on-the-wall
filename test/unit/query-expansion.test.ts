@@ -4,21 +4,24 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { defaultConfig } from "../../src/daemon/config.js";
 
-// Mock the LLM invoker before importing the module under test.
-vi.mock("../../src/ingestion/llm-invoker.js", () => ({
-  invokeIngestionAgent: vi.fn(),
+// Mock the runtime-aware complete wrapper before importing the module
+// under test. Post Phase 2, expandQuery dispatches through
+// runtimeAwareComplete (API mode → AnthropicProvider; CLI mode →
+// subprocess). The wrapper layer is the right mock boundary.
+vi.mock("../../src/llm/runtime-aware.js", () => ({
+  runtimeAwareComplete: vi.fn(),
 }));
 
 import { expandQuery } from "../../src/server/query-expansion.js";
-import { invokeIngestionAgent } from "../../src/ingestion/llm-invoker.js";
-import type { InvokeResult } from "../../src/ingestion/llm-invoker.js";
+import { runtimeAwareComplete } from "../../src/llm/runtime-aware.js";
+import type { RuntimeAwareCompleteResult } from "../../src/llm/runtime-aware.js";
 import { CostTracker } from "../../src/ingestion/cost-tracker.js";
 import { ModelRouter } from "../../src/ingestion/model-router.js";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const mockedInvoke = vi.mocked(invokeIngestionAgent);
+const mockedInvoke = vi.mocked(runtimeAwareComplete);
 
 function tmp(): string {
   return mkdtempSync(join(tmpdir(), "wotw-qe-"));
@@ -45,18 +48,13 @@ function makeOpts(overrides: Partial<ReturnType<typeof defaultConfig>> = {}) {
   };
 }
 
-function mockLlmResponse(text: string): InvokeResult {
+function mockLlmResponse(text: string): RuntimeAwareCompleteResult {
   return {
-    finalText: text,
-    totalCostUsd: 0.001,
+    text,
+    costUsd: 0.001,
     inputTokens: 100,
     outputTokens: 50,
     durationMs: 200,
-    numTurns: 1,
-    sessionId: "test",
-    writtenPaths: [],
-    stopReason: "end_turn",
-    success: true,
   };
 }
 

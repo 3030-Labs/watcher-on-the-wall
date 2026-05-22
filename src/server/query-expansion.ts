@@ -5,7 +5,7 @@
  * Gate: `config.query.expand`. Falls back to original query on any failure.
  */
 import { getLogger } from "../utils/logger.js";
-import { invokeIngestionAgent } from "../ingestion/llm-invoker.js";
+import { runtimeAwareComplete } from "../llm/runtime-aware.js";
 import type { CostTracker } from "../ingestion/cost-tracker.js";
 import type { ModelRouter } from "../ingestion/model-router.js";
 import type { RuntimeMode, WotwConfig } from "../utils/types.js";
@@ -62,50 +62,43 @@ export async function expandQuery(
   }
 
   try {
-    const result = await invokeIngestionAgent({
-      cwd: opts.config.wiki_root,
-      systemPrompt:
-        "You are a search query expansion assistant. Return ONLY a JSON array of strings, no other text.",
-      userPrompt: `Expand this search query into keyword variants. Return a JSON array of 5-10 alternative search terms that someone might use to describe the same concept. Include synonyms, related technical terms, and common phrasings. Query: "${originalQuery}". Respond ONLY with a JSON array of strings, no other text.`,
-      model,
-      maxTurns: 1,
-      allowedTools: [],
-      runtimeMode: opts.runtimeMode,
-      cliConfig:
-        opts.runtimeMode === "cli"
-          ? {
-              cliPath: opts.config.execution.cli_path,
-              cliModel: opts.config.execution.cli_model,
-            }
-          : undefined,
-    });
+    const result = await runtimeAwareComplete(
+      `Expand this search query into keyword variants. Return a JSON array of 5-10 alternative search terms that someone might use to describe the same concept. Include synonyms, related technical terms, and common phrasings. Query: "${originalQuery}". Respond ONLY with a JSON array of strings, no other text.`,
+      {
+        systemPrompt:
+          "You are a search query expansion assistant. Return ONLY a JSON array of strings, no other text.",
+        model,
+        config: opts.config,
+        runtimeMode: opts.runtimeMode,
+      },
+    );
 
     opts.costTracker.logUsage({
       operation: "query",
       model,
-      costUsd: result.totalCostUsd,
+      costUsd: result.costUsd,
       inputTokens: result.inputTokens,
       outputTokens: result.outputTokens,
     });
 
     // Parse the response as a JSON array of strings.
-    const text = result.finalText.trim();
+    const text = result.text.trim();
     // Try to extract a JSON array from the response (it might have markdown fences).
     const jsonMatch = text.match(/\[[\s\S]*\]/);
     if (!jsonMatch) {
       log.debug({ text }, "query expansion returned non-JSON — falling back");
-      return { ...notExpanded, costUsd: result.totalCostUsd };
+      return { ...notExpanded, costUsd: result.costUsd };
     }
 
     const parsed: unknown = JSON.parse(jsonMatch[0]);
     if (!Array.isArray(parsed)) {
       log.debug("query expansion returned non-array — falling back");
-      return { ...notExpanded, costUsd: result.totalCostUsd };
+      return { ...notExpanded, costUsd: result.costUsd };
     }
 
     const terms = parsed.filter((t): t is string => typeof t === "string" && t.trim().length > 0);
     if (terms.length === 0) {
-      return { ...notExpanded, costUsd: result.totalCostUsd };
+      return { ...notExpanded, costUsd: result.costUsd };
     }
 
     // Combine original query + expansion terms via space (minisearch uses OR by default).
@@ -116,7 +109,7 @@ export async function expandQuery(
       expandedQuery,
       expansionTerms: terms,
       expanded: true,
-      costUsd: result.totalCostUsd,
+      costUsd: result.costUsd,
     };
   } catch (err) {
     log.warn(

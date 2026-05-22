@@ -7,7 +7,7 @@
  */
 import { relative } from "node:path";
 import { getLogger } from "../utils/logger.js";
-import { invokeIngestionAgent } from "../ingestion/llm-invoker.js";
+import { runtimeAwareComplete } from "../llm/runtime-aware.js";
 import type { CostTracker } from "../ingestion/cost-tracker.js";
 import type { ModelRouter } from "../ingestion/model-router.js";
 import type { ProvenanceChain } from "../provenance/chain.js";
@@ -112,47 +112,39 @@ export async function runVocabularyEnrichment(
     }
 
     try {
-      const result = await invokeIngestionAgent({
-        cwd: config.wiki_root,
+      const userPrompt = [
+        `This query returned no results in our wiki: "${query}"`,
+        "",
+        "Here are all wiki pages and their titles:",
+        pageTitles,
+        "",
+        "Which pages, if any, should have matched this query? For each matching page, what keywords should be added to its `key_terms` frontmatter so this query would find it in the future?",
+        "",
+        'Respond in JSON: { "matches": [{ "page": "relative/path.md", "add_terms": ["term1", "term2"] }] } or { "matches": [] } if no pages are relevant.',
+      ].join("\n");
+
+      const result = await runtimeAwareComplete(userPrompt, {
         systemPrompt:
           "You are a vocabulary enrichment assistant. Analyze which wiki pages should match a query and suggest keywords. Return ONLY valid JSON, no other text.",
-        userPrompt: [
-          `This query returned no results in our wiki: "${query}"`,
-          "",
-          "Here are all wiki pages and their titles:",
-          pageTitles,
-          "",
-          "Which pages, if any, should have matched this query? For each matching page, what keywords should be added to its `key_terms` frontmatter so this query would find it in the future?",
-          "",
-          'Respond in JSON: { "matches": [{ "page": "relative/path.md", "add_terms": ["term1", "term2"] }] } or { "matches": [] } if no pages are relevant.',
-        ].join("\n"),
         model,
-        maxTurns: 1,
-        allowedTools: [],
+        config,
         runtimeMode: opts.runtimeMode,
-        cliConfig:
-          opts.runtimeMode === "cli"
-            ? {
-                cliPath: config.execution.cli_path,
-                cliModel: config.execution.cli_model,
-              }
-            : undefined,
       });
 
       allPrompts.push(query);
-      allResponses.push(result.finalText);
+      allResponses.push(result.text);
 
       opts.costTracker.logUsage({
         operation: "heal",
         model,
-        costUsd: result.totalCostUsd,
+        costUsd: result.costUsd,
         inputTokens: result.inputTokens,
         outputTokens: result.outputTokens,
       });
-      totalCost += result.totalCostUsd;
+      totalCost += result.costUsd;
 
       // Parse the LLM response.
-      const text = result.finalText.trim();
+      const text = result.text.trim();
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (!jsonMatch) continue;
 

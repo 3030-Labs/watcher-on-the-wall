@@ -21,19 +21,17 @@ import { newPage, parsePage, serializePage } from "../../src/wiki/page.js";
 import { ProvenanceChain } from "../../src/provenance/chain.js";
 import { sha256Hex } from "../../src/provenance/hash.js";
 
-// Mock the LLM invoker to avoid actual API calls.
-vi.mock("../../src/ingestion/llm-invoker.js", () => ({
-  invokeIngestionAgent: vi.fn().mockResolvedValue({
-    finalText: '{ "matches": [] }',
-    totalCostUsd: 0.001,
+// Mock the runtime-aware complete wrapper to avoid actual API calls.
+// Post Phase 2, runVocabularyEnrichment dispatches through
+// runtimeAwareComplete (API mode → AnthropicProvider; CLI mode →
+// subprocess). The wrapper is the right mock boundary.
+vi.mock("../../src/llm/runtime-aware.js", () => ({
+  runtimeAwareComplete: vi.fn().mockResolvedValue({
+    text: '{ "matches": [] }',
+    costUsd: 0.001,
     inputTokens: 100,
     outputTokens: 50,
     durationMs: 500,
-    numTurns: 1,
-    sessionId: null,
-    writtenPaths: [],
-    stopReason: "end_turn",
-    success: true,
   }),
 }));
 
@@ -125,7 +123,7 @@ describe("HIGH-7: vocabulary enricher real hashes", () => {
   });
 
   it("enriches page key_terms via LLM and writes updated page", async () => {
-    const { invokeIngestionAgent } = await import("../../src/ingestion/llm-invoker.js");
+    const { runtimeAwareComplete } = await import("../../src/llm/runtime-aware.js");
     const root = tmp();
     const { config, store, search, costTracker, modelRouter } = makeOpts(root);
     await store.ensureLayout();
@@ -153,8 +151,8 @@ describe("HIGH-7: vocabulary enricher real hashes", () => {
     ]);
 
     // Mock the LLM to suggest adding terms to our page.
-    vi.mocked(invokeIngestionAgent).mockResolvedValue({
-      finalText: JSON.stringify({
+    vi.mocked(runtimeAwareComplete).mockResolvedValue({
+      text: JSON.stringify({
         matches: [
           {
             page: relPath,
@@ -162,15 +160,10 @@ describe("HIGH-7: vocabulary enricher real hashes", () => {
           },
         ],
       }),
-      totalCostUsd: 0.002,
+      costUsd: 0.002,
       inputTokens: 200,
       outputTokens: 100,
       durationMs: 600,
-      numTurns: 1,
-      sessionId: null,
-      writtenPaths: [],
-      stopReason: "end_turn",
-      success: true,
     });
 
     const { runVocabularyEnrichment } = await import("../../src/wiki/vocabulary-enricher.js");
@@ -185,7 +178,7 @@ describe("HIGH-7: vocabulary enricher real hashes", () => {
     });
 
     // Verify LLM was called.
-    expect(invokeIngestionAgent).toHaveBeenCalled();
+    expect(runtimeAwareComplete).toHaveBeenCalled();
 
     // Verify enrichment occurred.
     expect(result.skipped).toBe(false);
@@ -201,7 +194,7 @@ describe("HIGH-7: vocabulary enricher real hashes", () => {
   });
 
   it("records provenance with real content hashes (not static)", async () => {
-    const { invokeIngestionAgent } = await import("../../src/ingestion/llm-invoker.js");
+    const { runtimeAwareComplete } = await import("../../src/llm/runtime-aware.js");
     const root = tmp();
     const { config, store, search, costTracker, modelRouter } = makeOpts(root);
     await store.ensureLayout();
@@ -229,17 +222,12 @@ describe("HIGH-7: vocabulary enricher real hashes", () => {
       ],
     });
 
-    vi.mocked(invokeIngestionAgent).mockResolvedValue({
-      finalText: llmResponseText,
-      totalCostUsd: 0.003,
+    vi.mocked(runtimeAwareComplete).mockResolvedValue({
+      text: llmResponseText,
+      costUsd: 0.003,
       inputTokens: 300,
       outputTokens: 150,
       durationMs: 700,
-      numTurns: 1,
-      sessionId: null,
-      writtenPaths: [],
-      stopReason: "end_turn",
-      success: true,
     });
 
     // Create a real ProvenanceChain to capture the appended record.
@@ -379,7 +367,7 @@ describe("HIGH-7: vocabulary enricher real hashes", () => {
   });
 
   it("does not add duplicate key_terms that already exist on the page", async () => {
-    const { invokeIngestionAgent } = await import("../../src/ingestion/llm-invoker.js");
+    const { runtimeAwareComplete } = await import("../../src/llm/runtime-aware.js");
     const root = tmp();
     const { config, store, search, costTracker, modelRouter } = makeOpts(root);
     await store.ensureLayout();
@@ -403,8 +391,8 @@ describe("HIGH-7: vocabulary enricher real hashes", () => {
       { query: "hit", zero_hit: false },
     ]);
 
-    vi.mocked(invokeIngestionAgent).mockResolvedValue({
-      finalText: JSON.stringify({
+    vi.mocked(runtimeAwareComplete).mockResolvedValue({
+      text: JSON.stringify({
         matches: [
           {
             page: relPath,
@@ -412,15 +400,10 @@ describe("HIGH-7: vocabulary enricher real hashes", () => {
           },
         ],
       }),
-      totalCostUsd: 0.001,
+      costUsd: 0.001,
       inputTokens: 100,
       outputTokens: 50,
       durationMs: 500,
-      numTurns: 1,
-      sessionId: null,
-      writtenPaths: [],
-      stopReason: "end_turn",
-      success: true,
     });
 
     const { runVocabularyEnrichment } = await import("../../src/wiki/vocabulary-enricher.js");

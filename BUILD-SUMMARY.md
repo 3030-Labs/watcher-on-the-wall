@@ -1,5 +1,19 @@
 # BUILD-SUMMARY — watcher-on-the-wall v0.2.0
 
+> ### Multi-LLM Phase 2 — query-expansion + vocabulary-enricher migration — 2026-05-22
+>
+> Two lowest-risk auxiliary call sites migrated to the LLMProvider
+> abstraction via a new daemon-side `runtimeAwareComplete` wrapper that
+> dispatches API mode → `AnthropicProvider.completeWithUsage`, CLI mode →
+> existing `invokeIngestionAgent` subprocess path. The wrapper is the
+> right boundary because `LLMProvider.complete()` is API-mode-only by
+> design (provider-agnostic); CLI mode is Anthropic-only by construction
+> and stays on the subprocess path. 5 new wrapper tests + 6 existing
+> caller tests updated to mock at the new boundary (no test deletion,
+> behavior assertions preserved). **554 tests** across **59 files** —
+> 549 prior baseline + 5 new. All 5 gates green.
+> Daemon-only phase; no wotw-cloud changes beyond the pass doc.
+
 > ### Multi-LLM Phase 1 — LLMProvider interface + AnthropicProvider — 2026-05-22
 >
 > Establishes the architectural target abstraction in parallel with the

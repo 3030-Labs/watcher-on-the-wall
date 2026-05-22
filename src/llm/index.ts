@@ -22,3 +22,6 @@ export type {
 
 export { AnthropicProvider } from "./providers/anthropic.js";
 export type { AnthropicProviderConfig } from "./providers/anthropic.js";
+
+export { runtimeAwareComplete } from "./runtime-aware.js";
+export type { RuntimeAwareCompleteOptions, RuntimeAwareCompleteResult } from "./runtime-aware.js";
