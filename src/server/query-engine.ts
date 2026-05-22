@@ -13,7 +13,7 @@ import { errMsg } from "../utils/errors.js";
 import { getLogger } from "../utils/logger.js";
 import type { RuntimeMode, WotwConfig } from "../utils/types.js";
 import type { CostTracker } from "../ingestion/cost-tracker.js";
-import { invokeIngestionAgent } from "../ingestion/llm-invoker.js";
+import { runtimeAwareComplete } from "../llm/runtime-aware.js";
 import type { ModelRouter } from "../ingestion/model-router.js";
 import type { WikiSearch } from "../wiki/search.js";
 import { type SearchHit } from "../wiki/search.js";
@@ -22,6 +22,9 @@ import type { ProvenanceChain } from "../provenance/chain.js";
 import { sha256Hex } from "../provenance/hash.js";
 import { expandQuery } from "./query-expansion.js";
 import { recordQueryOutcome } from "./query-metrics.js";
+
+/** Maximum bytes of page body to inline per hit (clamps prompt size). */
+const MAX_PAGE_BODY_BYTES = 16 * 1024;
 
 export interface QueryEngineOptions {
   config: WotwConfig;
@@ -148,32 +151,56 @@ export class QueryEngine {
       };
     }
 
-    const systemPrompt = buildQuerySystemPrompt();
-    const userPrompt = buildQueryUserPrompt(question, hits);
+    // Pre-assemble full page bodies for each hit. This eliminates the
+    // need for the model to use the Read tool to fetch page contents
+    // mid-conversation — the single-pass completion sees everything it
+    // needs up front. Per-page body is clamped to MAX_PAGE_BODY_BYTES
+    // (16KB) to bound prompt size; pages exceeding the cap are truncated
+    // with a "[truncated]" marker.
+    const hitsWithBody = await Promise.all(
+      hits.map(async (h) => {
+        // SearchHit.path is the absolute path stored by toDoc() in
+        // wiki/search.ts (`id: page.path`). Pass it through to readPage.
+        let body = "";
+        let truncated = false;
+        try {
+          const page = await this.opts.store.readPage(h.path);
+          if (page) {
+            if (page.body.length > MAX_PAGE_BODY_BYTES) {
+              body = page.body.slice(0, MAX_PAGE_BODY_BYTES);
+              truncated = true;
+            } else {
+              body = page.body;
+            }
+          } else {
+            // readPage returned null — file deleted or unreadable. Fall
+            // back to the snippet so the LLM still has some grounding.
+            body = h.snippet;
+          }
+        } catch {
+          body = h.snippet;
+        }
+        return { hit: h, body, truncated };
+      }),
+    );
 
-    // Invoke agent (single-shot; we allow only Read/Glob/Grep so it can
-    // inspect files referenced in the context but never write).
+    const systemPrompt = buildQuerySystemPrompt();
+    const userPrompt = buildQueryUserPrompt(question, hitsWithBody);
+
+    // Single-pass completion: the prompt now contains full page bodies,
+    // so no in-call tool use is required. The wrapper dispatches API
+    // mode → AnthropicProvider.completeWithUsage, CLI mode → subprocess.
     let answer = "";
     let costUsd = 0;
     try {
-      const result = await invokeIngestionAgent({
-        cwd: this.opts.config.wiki_root,
+      const result = await runtimeAwareComplete(userPrompt, {
         systemPrompt,
-        userPrompt,
         model,
-        maxTurns: 5,
-        allowedTools: ["Read", "Glob", "Grep"],
+        config: this.opts.config,
         runtimeMode,
-        cliConfig:
-          runtimeMode === "cli"
-            ? {
-                cliPath: this.opts.config.execution.cli_path,
-                cliModel: this.opts.config.execution.cli_model,
-              }
-            : undefined,
       });
-      answer = result.finalText;
-      costUsd = result.totalCostUsd + expansionCost;
+      answer = result.text;
+      costUsd = result.costUsd + expansionCost;
     } catch (err) {
       log.error({ err, question }, "query agent failed");
       return {
@@ -247,7 +274,13 @@ If the wiki does not contain the answer, say so honestly — do not invent facts
 Keep answers grounded, concise, and citation-heavy.`;
 }
 
-function buildQueryUserPrompt(question: string, hits: SearchHit[]): string {
+interface HitWithBody {
+  hit: SearchHit;
+  body: string;
+  truncated: boolean;
+}
+
+function buildQueryUserPrompt(question: string, hits: HitWithBody[]): string {
   const lines: string[] = [];
   lines.push(`# Question`);
   lines.push("");
@@ -258,11 +291,15 @@ function buildQueryUserPrompt(question: string, hits: SearchHit[]): string {
   if (hits.length === 0) {
     lines.push("_No matching pages found._");
   } else {
-    for (const h of hits) {
+    for (const { hit: h, body, truncated } of hits) {
       lines.push(`## ${h.title}  (score ${h.score.toFixed(3)})`);
       lines.push(`path: ${h.path}`);
       lines.push("");
-      lines.push(h.snippet);
+      lines.push(body);
+      if (truncated) {
+        lines.push("");
+        lines.push("_[page body truncated]_");
+      }
       lines.push("");
     }
   }

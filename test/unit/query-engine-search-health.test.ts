@@ -14,8 +14,9 @@ import { CostTracker } from "../../src/ingestion/cost-tracker.js";
 import { ModelRouter } from "../../src/ingestion/model-router.js";
 
 // Mock external dependencies that the QueryEngine calls during answer().
-vi.mock("../../src/ingestion/llm-invoker.js", () => ({
-  invokeIngestionAgent: vi.fn(),
+// Post Phase 3, the engine dispatches through runtimeAwareComplete.
+vi.mock("../../src/llm/runtime-aware.js", () => ({
+  runtimeAwareComplete: vi.fn(),
 }));
 vi.mock("../../src/server/query-expansion.js", () => ({
   expandQuery: vi

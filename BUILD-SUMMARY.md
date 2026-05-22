@@ -1,5 +1,17 @@
 # BUILD-SUMMARY — watcher-on-the-wall v0.2.0
 
+> ### Multi-LLM Phase 3 — query-engine single-pass refactor — 2026-05-22
+>
+> `QueryEngine.answer()` migrates from multi-turn agent loop (maxTurns:5
+> with Read/Glob/Grep tools) to single-pass completion via
+> `runtimeAwareComplete`. Full page bodies are pre-assembled into the
+> prompt (16KB cap per hit, with `[truncated]` marker); the model no
+> longer needs to use Read mid-conversation. 4 new tests cover full-body
+> inclusion, truncation cap, no-Agent-SDK structural check, and error
+> propagation. **558 tests** across **60 files** — 554 prior baseline +
+> 4 new. All 5 gates green. Daemon-only phase; no wotw-cloud changes
+> beyond the pass doc.
+
 > ### Multi-LLM Phase 2 — query-expansion + vocabulary-enricher migration — 2026-05-22
 >
 > Two lowest-risk auxiliary call sites migrated to the LLMProvider
