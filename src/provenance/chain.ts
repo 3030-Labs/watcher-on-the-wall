@@ -23,6 +23,16 @@ import { ensureDir, fileExists } from "../utils/fs.js";
 import { getLogger } from "../utils/logger.js";
 import { GENESIS_HASH, canonicalJson, sha256Canonical, sha256Hex } from "./hash.js";
 
+/**
+ * Optional sink invoked fire-and-forget after a JSONL append succeeds.
+ * Used by the daemon to mirror records to wotw-cloud's Supabase replica.
+ * Sink failures MUST NOT throw — JSONL is canonical, the sink is a
+ * sync-replica for UI consumption. See cloud-sink.ts.
+ */
+export interface ProvenanceSink {
+  append(record: ProvenanceRecord): Promise<boolean>;
+}
+
 /** Fields a caller must supply when appending a new record. */
 export interface ProvenanceAppendInput {
   type: OperationType;
@@ -69,8 +79,10 @@ export class ProvenanceChain {
   private initialized: boolean;
   /** Promise that serializes all append operations. */
   private writeLock: Promise<void>;
+  /** Optional sync-replica sink (e.g., wotw-cloud Supabase). Fire-and-forget. */
+  private sink: ProvenanceSink | null;
 
-  constructor(opts: { path: string }) {
+  constructor(opts: { path: string; sink?: ProvenanceSink | null }) {
     this.path = opts.path;
     this.nextSeq = 1;
     this.lastChainHash = GENESIS_HASH;
@@ -78,6 +90,7 @@ export class ProvenanceChain {
     this.totalRecords = 0;
     this.initialized = false;
     this.writeLock = Promise.resolve();
+    this.sink = opts.sink ?? null;
   }
 
   /**
@@ -204,6 +217,22 @@ export class ProvenanceChain {
         { seq, type: input.type, id: id.slice(0, 12), sources: input.source_files.length },
         "provenance record appended",
       );
+
+      // Fire-and-forget cloud sync. JSONL is canonical; sink failures are
+      // logged but never throw. Run outside the writeLock release path so
+      // a slow sink doesn't serialize the daemon's append throughput.
+      if (this.sink) {
+        const sink = this.sink;
+        void sink
+          .append(record)
+          .catch((err) =>
+            log.warn(
+              { seq, err: err instanceof Error ? err.message : String(err) },
+              "provenance sink unexpected error",
+            ),
+          );
+      }
+
       return record;
     } finally {
       release();

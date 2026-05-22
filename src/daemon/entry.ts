@@ -77,7 +77,22 @@ async function main(): Promise<void> {
     // append to it so early queries/ingestions don't race the file creation.
     let provenance: ProvenanceChain | null = null;
     if (config.provenance.enabled) {
-      provenance = new ProvenanceChain({ path: config.provenance.chain_file });
+      // Hosted-mode cloud sink (SD-1 closure, Pass-pair with wotw-cloud
+      // /api/internal/append-provenance). Sink is null in local /
+      // interactive mode where WOTW_WIKI_ID + ADMIN_SERVICE_KEY aren't set;
+      // JSONL-only operation continues with no errors.
+      const { cloudSinkFromEnv } = await import("../provenance/cloud-sink.js");
+      const sink = cloudSinkFromEnv();
+      if (sink) {
+        log.info(
+          { wikiId: sink.wikiId, apiBaseUrl: sink.apiBaseUrl },
+          "provenance cloud sink active",
+        );
+      }
+      provenance = new ProvenanceChain({
+        path: config.provenance.chain_file,
+        sink,
+      });
       await provenance.init();
       log.info({ path: provenance.path, records: provenance.count() }, "provenance chain ready");
       if (config.provenance.verify_on_startup) {
