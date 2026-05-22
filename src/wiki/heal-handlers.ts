@@ -5,10 +5,11 @@
  * a targeted prompt, records a "heal" provenance entry, and commits the
  * result. Handlers are dispatched by finding kind from `wotw lint --fix`.
  */
-import { isAbsolute, relative, resolve } from "node:path";
+import { relative } from "node:path";
 import { commitWikiChanges } from "../ingestion/git-committer.js";
 import type { InvokeResult } from "../ingestion/llm-invoker.js";
 import { runtimeAwareComplete } from "../llm/runtime-aware.js";
+import { parseDaemonEditsResponse, resolveEditPath } from "../llm/edits.js";
 import type { ModelRouter } from "../ingestion/model-router.js";
 import type { CostTracker } from "../ingestion/cost-tracker.js";
 import type { ProvenanceChain } from "../provenance/chain.js";
@@ -415,21 +416,6 @@ export async function healFinding(
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-/**
- * JSON shape the model must emit for heal operations. The daemon parses
- * this and performs the file writes itself; no in-call Write/Edit tools.
- */
-interface HealEdit {
-  /** Wiki-relative or absolute path of the file to write. */
-  path: string;
-  /** Full new file content (including frontmatter). */
-  content: string;
-}
-
-interface HealResponse {
-  edits: HealEdit[];
-}
-
 async function invokeHeal(
   ctx: HealContext,
   userPrompt: string,
@@ -496,11 +482,11 @@ async function invokeHeal(
     outputTokens,
   });
 
-  const parsed = parseHealResponse(rawText);
+  const parsed = parseDaemonEditsResponse(rawText);
   const writtenPaths: string[] = [];
   if (parsed) {
     for (const edit of parsed.edits) {
-      const absPath = resolveHealEditPath(ctx.config.wiki_root, edit.path);
+      const absPath = resolveEditPath(ctx.config.wiki_root, edit.path);
       if (!absPath) {
         log.warn(
           { path: edit.path, label },
@@ -537,65 +523,6 @@ async function invokeHeal(
     stopReason: "end_turn",
     success: writtenPaths.length > 0,
   };
-}
-
-/**
- * Parse the heal response text into a HealResponse. The prompt asks for
- * JSON-only output, but defensively extracts the first `{...}` block and
- * tolerates surrounding whitespace, markdown fences, or stray text.
- * Returns null if no valid HealResponse shape can be extracted.
- */
-function parseHealResponse(text: string): HealResponse | null {
-  const trimmed = text.trim();
-  if (!trimmed) return null;
-  // Extract the first {...} block. Greedy match works since the response
-  // is supposed to be JSON-only; if the model wraps in a fence we still
-  // pick up the inner JSON.
-  const match = trimmed.match(/\{[\s\S]*\}/);
-  if (!match) return null;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(match[0]);
-  } catch {
-    return null;
-  }
-  if (
-    typeof parsed !== "object" ||
-    parsed === null ||
-    !Array.isArray((parsed as { edits?: unknown }).edits)
-  ) {
-    return null;
-  }
-  const editsRaw = (parsed as { edits: unknown[] }).edits;
-  const edits: HealEdit[] = [];
-  for (const e of editsRaw) {
-    if (
-      e &&
-      typeof e === "object" &&
-      typeof (e as HealEdit).path === "string" &&
-      typeof (e as HealEdit).content === "string"
-    ) {
-      edits.push({
-        path: (e as HealEdit).path,
-        content: (e as HealEdit).content,
-      });
-    }
-  }
-  return { edits };
-}
-
-/**
- * Resolve a heal-edit path (wiki-relative or absolute) to an absolute
- * path. Rejects paths that escape `wikiRoot` via `..` or absolute paths
- * outside the wiki tree. Returns null on rejection.
- */
-function resolveHealEditPath(wikiRoot: string, p: string): string | null {
-  const candidate = isAbsolute(p) ? resolve(p) : resolve(wikiRoot, p);
-  const root = resolve(wikiRoot);
-  if (candidate !== root && !candidate.startsWith(`${root}/`)) {
-    return null;
-  }
-  return candidate;
 }
 
 async function recordHealProvenance(

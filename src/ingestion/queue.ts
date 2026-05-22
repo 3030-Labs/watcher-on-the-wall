@@ -31,7 +31,11 @@ import { sha256File, sha256Files, sha256Hex } from "../provenance/hash.js";
 import type { CostTracker } from "./cost-tracker.js";
 import type { DeadLetterQueue } from "./dead-letter.js";
 import { commitWikiChanges } from "./git-committer.js";
-import { invokeIngestionAgent } from "./llm-invoker.js";
+import { runtimeAwareComplete } from "../llm/runtime-aware.js";
+import { parseDaemonEditsResponse, resolveEditPath } from "../llm/edits.js";
+import { atomicWrite } from "../utils/fs.js";
+import { mkdir } from "node:fs/promises";
+import { dirname } from "node:path";
 import type { ModelRouter } from "./model-router.js";
 import { buildIngestionPrompt } from "./prompt-builder.js";
 import { TenantScheduler } from "./tenant-scheduler.js";
@@ -76,7 +80,6 @@ export class IngestionQueue implements DaemonSubsystem {
   private readonly queue: PQueue;
   /** Tenant-aware scheduler used when `hosted.enabled: true`. */
   private readonly tenantScheduler: TenantScheduler | null;
-  private resumeSessionId: string | null = null;
   /** Last enqueued outcome — exposed for tests. */
   private lastOutcome: IngestionOutcome | null = null;
 
@@ -293,30 +296,90 @@ export class IngestionQueue implements DaemonSubsystem {
       return outcome;
     }
 
-    // 3. Invoke the agent. The agent writes wiki files directly via the SDK
-    // (API mode) or via the spawned `claude` CLI (CLI mode). The dispatcher
-    // is hidden behind invokeIngestionAgent.
-    let invokeResult;
+    // 3. Single-pass LLM call. Phase 6: the daemon dispatches via
+    // runtimeAwareComplete, parses the model's JSON edits response, and
+    // performs the file writes itself. The legacy multi-turn agent loop
+    // (Read/Write/Edit tools, maxTurns 50) is gone — the prompt-builder
+    // instructs the model to emit { edits: [{ path, content }] } and the
+    // daemon validates + writes each edit.
+    //
+    // Behavioral comparison vs the SDK baseline on 5+ representative
+    // fixtures is the Phase 6 hard gate (deferred until live model fixture
+    // run — see MULTI-LLM-PHASE-006.md).
+    let invokeResult: {
+      finalText: string;
+      totalCostUsd: number;
+      inputTokens: number;
+      outputTokens: number;
+      durationMs: number;
+      writtenPaths: string[];
+      sessionId: string | null;
+    };
     try {
-      invokeResult = await invokeIngestionAgent({
-        cwd: this.opts.config.wiki_root,
+      // maxTokens kept under the Anthropic SDK's 10-min request threshold
+      // (above which the SDK requires streaming mode). 8192 tokens ≈ 5-10
+      // typical wiki pages per batch. Future phase can add streaming for
+      // large multi-file outputs.
+      const completeResult = await runtimeAwareComplete(prompt.text, {
         systemPrompt: prompt.system,
-        userPrompt: prompt.text,
         model,
-        maxTurns: this.opts.config.ingestion.max_turns,
-        resumeSessionId:
-          this.opts.config.ingestion.resume_session && this.resumeSessionId
-            ? this.resumeSessionId
-            : undefined,
+        maxTokens: 8192,
+        config: this.opts.config,
         runtimeMode,
-        cliConfig:
-          runtimeMode === "cli"
-            ? {
-                cliPath: this.opts.config.execution.cli_path,
-                cliModel: this.opts.config.execution.cli_model,
-              }
-            : undefined,
       });
+
+      // Parse the model's JSON edits response. Defensive: parse failure
+      // results in zero writtenPaths and the downstream "agent produced
+      // zero pages" guard fires.
+      const parsed = parseDaemonEditsResponse(completeResult.text);
+      const writtenPaths: string[] = [];
+      const rawPath = resolve(this.opts.config.raw_path);
+      if (parsed) {
+        for (const edit of parsed.edits) {
+          const absPath = resolveEditPath(this.opts.config.wiki_root, edit.path);
+          if (!absPath) {
+            log.warn(
+              { path: edit.path, batchId: batch.id },
+              "ingestion edit rejected — path resolves outside wiki_root",
+            );
+            continue;
+          }
+          // Forbid writes to the raw/ directory; model must not modify
+          // source files.
+          if (absPath === rawPath || absPath.startsWith(`${rawPath}/`)) {
+            log.warn(
+              { path: edit.path, batchId: batch.id },
+              "ingestion edit rejected — model attempted to write inside raw/",
+            );
+            continue;
+          }
+          try {
+            await mkdir(dirname(absPath), { recursive: true });
+            await atomicWrite(absPath, edit.content);
+            writtenPaths.push(absPath);
+          } catch (writeErr) {
+            log.warn(
+              { err: writeErr, path: edit.path, batchId: batch.id },
+              "ingestion edit failed to write — skipping",
+            );
+          }
+        }
+      } else if (completeResult.text.trim().length > 0) {
+        log.warn(
+          { batchId: batch.id, sample: completeResult.text.slice(0, 200) },
+          "ingestion response was not valid JSON edits",
+        );
+      }
+
+      invokeResult = {
+        finalText: completeResult.text,
+        totalCostUsd: completeResult.costUsd,
+        inputTokens: completeResult.inputTokens,
+        outputTokens: completeResult.outputTokens,
+        durationMs: completeResult.durationMs,
+        writtenPaths,
+        sessionId: null,
+      };
     } catch (err) {
       log.error({ err, batchId: batch.id }, "ingestion agent invocation failed");
       if (this.opts.deadLetter) {
@@ -334,8 +397,6 @@ export class IngestionQueue implements DaemonSubsystem {
       this.lastOutcome = outcome;
       return outcome;
     }
-
-    if (invokeResult.sessionId) this.resumeSessionId = invokeResult.sessionId;
 
     // 4. Reconcile written pages
     const { pages: newPages, skipped: skippedWrites } = await reconcileWrittenPages(

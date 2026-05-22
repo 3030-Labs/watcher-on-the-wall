@@ -1,5 +1,21 @@
 # BUILD-SUMMARY — watcher-on-the-wall v0.2.0
 
+> ### Multi-LLM Phase 6 — queue.ts main ingestion single-pass refactor — 2026-05-22 (HIGHEST RISK)
+>
+> Main ingestion `IngestionQueue.processBatch()` migrates from multi-turn
+> agent loop (maxTurns:50 with all six tools) to single-pass via
+> `runtimeAwareComplete`. Prompt-builder instructs JSON edits envelope;
+> daemon parses, sanitizes paths (rejects out-of-tree AND inside-raw),
+> writes via `atomicWrite`, passes `writtenPaths` to existing
+> `reconcileWrittenPages`. Shared edits parser extracted to
+> `src/llm/edits.ts` (consumed by heal-handlers + queue.ts). `maxTokens`
+> capped at 8192 to stay under Anthropic SDK 10-min request threshold;
+> streaming support deferred. `resumeSessionId` field removed (single-pass
+> means each batch is independent). **580 tests** across **62 files** —
+> 563 prior baseline + 17 new edits-shared-module tests. All 5 gates
+> green. **Behavioral parity vs SDK baseline on 5+ fixtures is deferred
+> as irreducibly external — requires live API run.**
+
 > ### Multi-LLM Phase 5 — heal-handlers single-pass refactor — 2026-05-22
 >
 > `invokeHeal` migrates from multi-turn agent loop (maxTurns:10 with

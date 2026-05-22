@@ -185,9 +185,30 @@ function renderUserTurn(
 
   lines.push("## Expected output");
   lines.push("");
-  lines.push("Write wiki pages using the Write tool. Use `readPage` / `listPages` as you see fit.");
-  lines.push("Every new page must include full frontmatter. Keep body markdown concise,");
-  lines.push("use `[[wiki-links]]` when referring to other pages, and cite source files");
-  lines.push("in the `sources:` frontmatter list.");
+  lines.push("Return ONLY valid JSON with this shape, no other text:");
+  lines.push("");
+  lines.push("```json");
+  lines.push("{");
+  lines.push('  "edits": [');
+  lines.push("    {");
+  lines.push('      "path": "wiki/<category>/<slug>.md",');
+  lines.push('      "content": "---\\nfull YAML frontmatter and markdown body\\n---\\n..."');
+  lines.push("    }");
+  lines.push("  ]");
+  lines.push("}");
+  lines.push("```");
+  lines.push("");
+  lines.push("Rules:");
+  lines.push("- Emit one edit per wiki page you want to create or update.");
+  lines.push("- The `content` field is the COMPLETE file content including frontmatter.");
+  lines.push(
+    "- Every new page must include full YAML frontmatter (title, category, created, updated, sources, related, tags, confidence).",
+  );
+  lines.push("- Use `[[wiki-links]]` when referring to other pages.");
+  lines.push(
+    "- Cite source files in the `sources:` frontmatter list (relative paths under `raw/`).",
+  );
+  lines.push("- Always produce at least one source-category page per raw file.");
+  lines.push("- Do NOT include any text outside the JSON object.");
   return lines.join("\n");
 }

@@ -20,9 +20,11 @@ import type { WatcherBatch } from "../../src/watcher/index.js";
 import { defaultConfig } from "../../src/daemon/config.js";
 import type { WotwConfig } from "../../src/utils/types.js";
 
-// Mock the LLM invoker so we never call a real LLM
-vi.mock("../../src/ingestion/llm-invoker.js", () => ({
-  invokeIngestionAgent: vi.fn(),
+// Mock the runtime-aware complete wrapper so we never call a real LLM.
+// Post Phase 6, the ingestion queue dispatches through runtimeAwareComplete
+// instead of invokeIngestionAgent.
+vi.mock("../../src/llm/runtime-aware.js", () => ({
+  runtimeAwareComplete: vi.fn(),
 }));
 
 // Mock the prompt builder so we skip filesystem reads
@@ -140,19 +142,17 @@ describe("IngestionQueue empty batch guard (CRITICAL-8)", () => {
     const queue = new IngestionQueue(opts);
     await queue.start();
 
-    // Set up the LLM invoker mock to return zero written paths
-    const { invokeIngestionAgent } = await import("../../src/ingestion/llm-invoker.js");
-    (invokeIngestionAgent as ReturnType<typeof vi.fn>).mockResolvedValue({
-      finalText: "I didn't write anything",
-      totalCostUsd: 0.002,
+    // Set up the runtime-aware-complete mock to return non-JSON text.
+    // The daemon's parseDaemonEditsResponse will return null (no edits),
+    // and writtenPaths stays empty — same outcome as the old "agent
+    // produced no pages" path.
+    const { runtimeAwareComplete } = await import("../../src/llm/runtime-aware.js");
+    (runtimeAwareComplete as ReturnType<typeof vi.fn>).mockResolvedValue({
+      text: "I didn't write anything",
+      costUsd: 0.002,
       inputTokens: 500,
       outputTokens: 100,
       durationMs: 1000,
-      numTurns: 1,
-      sessionId: null,
-      writtenPaths: [], // No paths written by the agent
-      stopReason: "end_turn",
-      success: true,
     });
 
     // Create a dummy source file path
