@@ -25,7 +25,11 @@
  */
 import { invokeIngestionAgent } from "../ingestion/llm-invoker.js";
 import type { RuntimeMode, WotwConfig } from "../utils/types.js";
+import type { LLMProvider } from "./types-vendored.js";
 import { AnthropicProvider } from "./providers/anthropic.js";
+import { OpenAIProvider } from "./providers/openai.js";
+import { GeminiProvider } from "./providers/gemini.js";
+import { OllamaProvider } from "./providers/ollama.js";
 
 export interface RuntimeAwareCompleteOptions {
   /** Logical model identifier (provider-specific). */
@@ -101,10 +105,9 @@ export async function runtimeAwareComplete(
     };
   }
 
-  // API mode: hardcoded to AnthropicProvider for Phases 2-6. Phase 10
-  // wires per-tenant selection across Anthropic/OpenAI/Gemini/Ollama.
-  const apiKey = process.env[options.config.execution.api_key_env];
-  const provider = new AnthropicProvider({ apiKey });
+  // API mode: select provider based on config.llm.provider. Phase 10
+  // wires per-tenant selection across Anthropic / OpenAI / Gemini / Ollama.
+  const provider = selectProvider(options.config);
   const result = await provider.completeWithUsage(prompt, {
     model: options.model,
     systemPrompt: options.systemPrompt,
@@ -121,6 +124,37 @@ export async function runtimeAwareComplete(
     outputTokens: result.usage.outputTokens,
     durationMs: result.usage.durationMs,
   };
+}
+
+/**
+ * Construct the configured LLM provider. Reads `config.llm.provider`
+ * (default "anthropic") and instantiates the matching provider with
+ * its API key from `config.execution.api_key_env` (or for Ollama, the
+ * configured `config.llm.ollama_url` or default localhost:11434).
+ *
+ * Per Pass 008 BYOK invariant: the daemon reads the API key from its
+ * environment at provider-construction time; the cloud-side orchestrator
+ * injects the correct key under the correct env var at spawn time.
+ */
+function selectProvider(config: WotwConfig): LLMProvider {
+  const providerName = config.llm.provider;
+  if (providerName === "anthropic") {
+    return new AnthropicProvider({
+      apiKey: process.env[config.execution.api_key_env],
+    });
+  }
+  if (providerName === "openai") {
+    return new OpenAIProvider({
+      apiKey: process.env[config.execution.api_key_env],
+    });
+  }
+  if (providerName === "gemini") {
+    return new GeminiProvider({
+      apiKey: process.env[config.execution.api_key_env],
+    });
+  }
+  // ollama
+  return new OllamaProvider({ baseURL: config.llm.ollama_url });
 }
 
 /**

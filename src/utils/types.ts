@@ -29,10 +29,30 @@ export type ConfidenceLevel = "high" | "medium" | "low";
 /** Category of a wiki page. */
 export type WikiCategory = "concept" | "entity" | "source" | "comparison" | "synthesis" | "query";
 
+/** LLM provider identifier. Must match LLMProviderName in llm/types-vendored.ts. */
+export type LlmProviderName = "anthropic" | "openai" | "gemini" | "ollama";
+
 /** Resolved configuration values with all defaults applied. */
 export interface WotwConfig {
   wiki_root: string;
   raw_path: string;
+  /**
+   * LLM provider selection. Multi-LLM (Phase 10) lets the daemon dispatch
+   * to AnthropicProvider / OpenAIProvider / GeminiProvider / OllamaProvider
+   * based on `provider`. The `api_key_env` field in `execution` still names
+   * the env var the daemon reads for the API key (varies per provider):
+   *   - anthropic → ANTHROPIC_API_KEY (default)
+   *   - openai    → OPENAI_API_KEY
+   *   - gemini    → GOOGLE_API_KEY
+   *   - ollama    → no key (local inference)
+   */
+  llm: {
+    provider: LlmProviderName;
+    /** Model identifier (provider-specific). */
+    model: string;
+    /** Ollama-only: base URL of the local Ollama instance. */
+    ollama_url?: string;
+  };
   execution: {
     /** How to choose the LLM runtime. See {@link ExecutionMode}. */
     mode: ExecutionMode;

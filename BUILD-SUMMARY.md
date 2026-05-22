@@ -1,5 +1,18 @@
 # BUILD-SUMMARY — watcher-on-the-wall v0.2.0
 
+> ### Multi-LLM Phase 10 — Per-tenant provider config + dispatch — 2026-05-22
+>
+> Daemon-side complete: `WotwConfig.llm.{provider, model, ollama_url}` added
+> with defaults; hosted-mode env overrides `WOTW_LLM_PROVIDER` /
+> `WOTW_LLM_MODEL` / `WOTW_OLLAMA_URL` wired (provider selection also
+> remaps `execution.api_key_env` to canonical key var); `runtimeAwareComplete`
+> dispatches to AnthropicProvider / OpenAIProvider / GeminiProvider /
+> OllamaProvider based on config via new `selectProvider` switch.
+> **609 tests** across **63 files** — 608 prior baseline + 1 new dispatch
+> test. All 5 gates green.
+> **Phase 10b (cloud-side BYOK extension in tenant-orchestrator) is
+> deferred — concrete scope documented in MULTI-LLM-PHASE-010.md.**
+
 > ### Multi-LLM Phases 7-9 — OpenAI / Gemini / Ollama Providers — 2026-05-22
 >
 > Three non-Anthropic providers all conforming to LLMProvider:

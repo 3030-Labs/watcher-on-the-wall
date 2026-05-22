@@ -32,6 +32,10 @@ function minimalConfig(): WotwConfig {
   return {
     wiki_root: "/tmp/wiki",
     raw_path: "/tmp/wiki/raw",
+    llm: {
+      provider: "anthropic",
+      model: "claude-sonnet-4-5",
+    },
     execution: {
       mode: "auto",
       cli_path: "/usr/local/bin/claude",
@@ -257,6 +261,41 @@ describe("runtimeAwareComplete", () => {
       });
 
       expect(result.costUsd).toBe(0);
+    });
+
+    it("dispatches to OpenAIProvider when config.llm.provider=openai", async () => {
+      // Note: this test verifies the selectProvider switch is wired. The
+      // mock for AnthropicProvider doesn't fire because selectProvider
+      // returns a fresh OpenAIProvider. The OpenAI SDK constructor with no
+      // api key will be reached, but the actual API call is never made
+      // because we set up the mock... actually we can't mock OpenAIProvider
+      // the same way here. Verify the structural property: when provider
+      // is "openai", the AnthropicProvider mock does NOT fire.
+      completeWithUsageMock.mockResolvedValue({
+        text: "anthropic-only",
+        usage: {
+          inputTokens: 1,
+          outputTokens: 1,
+          totalCostUsd: 0,
+          durationMs: 10,
+          finishReason: "end_turn",
+        },
+      });
+
+      const config = minimalConfig();
+      config.llm.provider = "openai";
+      // Suppress the actual SDK call by not having a key — the OpenAI SDK
+      // throws synchronously on no key. We catch the expected error.
+      await expect(
+        runtimeAwareComplete("p", {
+          model: "gpt-4o",
+          config,
+          runtimeMode: "api",
+        }),
+      ).rejects.toBeDefined();
+
+      // AnthropicProvider's mocked method must NOT have been called.
+      expect(completeWithUsageMock).not.toHaveBeenCalled();
     });
 
     it("forwards abortSignal to the provider", async () => {

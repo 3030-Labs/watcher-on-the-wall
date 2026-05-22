@@ -37,6 +37,10 @@ export function defaultConfig(): WotwConfig {
   return {
     wiki_root: "./wiki-store",
     raw_path: "./wiki-store/raw",
+    llm: {
+      provider: "anthropic",
+      model: "claude-sonnet-4-5",
+    },
     execution: {
       mode: "auto",
       cli_path: "claude",
@@ -280,6 +284,42 @@ export function applyEnvOverrides(config: WotwConfig): WotwConfig {
     env.WOTW_RUNTIME_MODE === "api"
   ) {
     out.execution.mode = env.WOTW_RUNTIME_MODE;
+  }
+  // Multi-LLM Phase 10: per-tenant provider selection via hosted-mode
+  // env vars. The wotw-cloud orchestrator sets these at spawn time
+  // based on `wiki.llm_provider`. Defaults to anthropic when unset.
+  if (
+    env.WOTW_LLM_PROVIDER === "anthropic" ||
+    env.WOTW_LLM_PROVIDER === "openai" ||
+    env.WOTW_LLM_PROVIDER === "gemini" ||
+    env.WOTW_LLM_PROVIDER === "ollama"
+  ) {
+    out.llm.provider = env.WOTW_LLM_PROVIDER;
+    // Update execution.api_key_env to match the chosen provider's
+    // canonical key var. Each provider's SDK reads from its own env var;
+    // the daemon's runtime-aware dispatch consults this field when
+    // selecting which key to inject.
+    switch (env.WOTW_LLM_PROVIDER) {
+      case "anthropic":
+        out.execution.api_key_env = "ANTHROPIC_API_KEY";
+        break;
+      case "openai":
+        out.execution.api_key_env = "OPENAI_API_KEY";
+        break;
+      case "gemini":
+        out.execution.api_key_env = "GOOGLE_API_KEY";
+        break;
+      case "ollama":
+        // Ollama uses no API key. Leave api_key_env at whatever default
+        // the config has; the dispatcher ignores it for Ollama.
+        break;
+    }
+  }
+  if (env.WOTW_LLM_MODEL && env.WOTW_LLM_MODEL.length > 0) {
+    out.llm.model = env.WOTW_LLM_MODEL;
+  }
+  if (env.WOTW_OLLAMA_URL && env.WOTW_OLLAMA_URL.length > 0) {
+    out.llm.ollama_url = env.WOTW_OLLAMA_URL;
   }
   if (env.ADMIN_SERVICE_KEY && env.ADMIN_SERVICE_KEY.length > 0) {
     out.server.auth_token = env.ADMIN_SERVICE_KEY;
