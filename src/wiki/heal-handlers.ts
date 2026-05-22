@@ -5,19 +5,17 @@
  * a targeted prompt, records a "heal" provenance entry, and commits the
  * result. Handlers are dispatched by finding kind from `wotw lint --fix`.
  */
-import { relative } from "node:path";
+import { isAbsolute, relative, resolve } from "node:path";
 import { commitWikiChanges } from "../ingestion/git-committer.js";
-import {
-  invokeIngestionAgent,
-  type InvokeOptions,
-  type InvokeResult,
-} from "../ingestion/llm-invoker.js";
+import type { InvokeResult } from "../ingestion/llm-invoker.js";
+import { runtimeAwareComplete } from "../llm/runtime-aware.js";
 import type { ModelRouter } from "../ingestion/model-router.js";
 import type { CostTracker } from "../ingestion/cost-tracker.js";
 import type { ProvenanceChain } from "../provenance/chain.js";
 import { sha256Files, sha256Hex } from "../provenance/hash.js";
 import { getLogger } from "../utils/logger.js";
 import type { RuntimeMode, WotwConfig } from "../utils/types.js";
+import { atomicWrite } from "../utils/fs.js";
 import { repairBidirectionalLinks } from "./cross-reference.js";
 import type { HealthFinding } from "./health.js";
 import type { WikiSearch } from "./search.js";
@@ -417,6 +415,21 @@ export async function healFinding(
 // Internal helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * JSON shape the model must emit for heal operations. The daemon parses
+ * this and performs the file writes itself; no in-call Write/Edit tools.
+ */
+interface HealEdit {
+  /** Wiki-relative or absolute path of the file to write. */
+  path: string;
+  /** Full new file content (including frontmatter). */
+  content: string;
+}
+
+interface HealResponse {
+  edits: HealEdit[];
+}
+
 async function invokeHeal(
   ctx: HealContext,
   userPrompt: string,
@@ -435,39 +448,154 @@ async function invokeHeal(
     }
   }
 
-  const invokeOpts: InvokeOptions = {
-    cwd: ctx.config.wiki_root,
-    systemPrompt:
-      "You are a wiki maintenance agent. Fix the issue described below. Only modify the specific files mentioned. Do not create new files unless explicitly asked.",
-    userPrompt,
-    model,
-    maxTurns: 10,
-    runtimeMode: ctx.runtimeMode,
-    cliConfig:
-      ctx.runtimeMode === "cli"
-        ? {
-            cliPath: ctx.config.execution.cli_path,
-            cliModel: ctx.config.execution.cli_model,
-          }
-        : undefined,
-    allowedTools: ["Read", "Glob", "Grep", "Write", "Edit"],
-  };
+  const systemPrompt = [
+    "You are a wiki maintenance agent. Apply the fix described in the user message.",
+    "",
+    "Return ONLY valid JSON with this shape, no other text:",
+    `{ "edits": [ { "path": "wiki-relative-path-or-absolute.md", "content": "full new file content with frontmatter" } ] }`,
+    "",
+    'If no changes are needed, return: { "edits": [] }',
+    "",
+    "Rules:",
+    "- The `content` field is the COMPLETE new file content, including YAML frontmatter.",
+    "- Only emit edits for files the user prompt mentions or references.",
+    "- Do NOT create new files unless explicitly asked.",
+    "- Do NOT include any text outside the JSON object.",
+  ].join("\n");
+
+  const started = Date.now();
+  let rawText = "";
+  let costUsd = 0;
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let durationMs = 0;
 
   try {
-    const result = await invokeIngestionAgent(invokeOpts);
-    // Log cost.
-    ctx.costTracker.logUsage({
-      operation: "heal",
+    const result = await runtimeAwareComplete(userPrompt, {
+      systemPrompt,
       model,
-      costUsd: result.totalCostUsd,
-      inputTokens: result.inputTokens,
-      outputTokens: result.outputTokens,
+      maxTokens: 16_384,
+      config: ctx.config,
+      runtimeMode: ctx.runtimeMode,
     });
-    return result;
+    rawText = result.text;
+    costUsd = result.costUsd;
+    inputTokens = result.inputTokens;
+    outputTokens = result.outputTokens;
+    durationMs = result.durationMs;
   } catch (err) {
     log.error({ err, label }, "heal LLM invocation failed");
     return null;
   }
+
+  ctx.costTracker.logUsage({
+    operation: "heal",
+    model,
+    costUsd,
+    inputTokens,
+    outputTokens,
+  });
+
+  const parsed = parseHealResponse(rawText);
+  const writtenPaths: string[] = [];
+  if (parsed) {
+    for (const edit of parsed.edits) {
+      const absPath = resolveHealEditPath(ctx.config.wiki_root, edit.path);
+      if (!absPath) {
+        log.warn(
+          { path: edit.path, label },
+          "heal edit rejected — path resolves outside wiki_root",
+        );
+        continue;
+      }
+      try {
+        await atomicWrite(absPath, edit.content);
+        writtenPaths.push(absPath);
+      } catch (err) {
+        log.warn({ err, path: edit.path, label }, "heal edit failed to write — skipping");
+      }
+    }
+  } else if (rawText.trim().length > 0) {
+    log.warn({ label, sample: rawText.slice(0, 200) }, "heal response was not valid JSON edits");
+  }
+
+  // Compose an InvokeResult-shaped object for the existing per-handler
+  // contract. Phase 5 preserves the handler-facing shape; future phases
+  // can simplify if/when invokeHeal's callers migrate.
+  const _started = started; // appease eslint unused-var when durationMs path used
+  void _started;
+
+  return {
+    finalText: rawText,
+    totalCostUsd: costUsd,
+    inputTokens,
+    outputTokens,
+    durationMs,
+    numTurns: 1,
+    sessionId: null,
+    writtenPaths,
+    stopReason: "end_turn",
+    success: writtenPaths.length > 0,
+  };
+}
+
+/**
+ * Parse the heal response text into a HealResponse. The prompt asks for
+ * JSON-only output, but defensively extracts the first `{...}` block and
+ * tolerates surrounding whitespace, markdown fences, or stray text.
+ * Returns null if no valid HealResponse shape can be extracted.
+ */
+function parseHealResponse(text: string): HealResponse | null {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  // Extract the first {...} block. Greedy match works since the response
+  // is supposed to be JSON-only; if the model wraps in a fence we still
+  // pick up the inner JSON.
+  const match = trimmed.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(match[0]);
+  } catch {
+    return null;
+  }
+  if (
+    typeof parsed !== "object" ||
+    parsed === null ||
+    !Array.isArray((parsed as { edits?: unknown }).edits)
+  ) {
+    return null;
+  }
+  const editsRaw = (parsed as { edits: unknown[] }).edits;
+  const edits: HealEdit[] = [];
+  for (const e of editsRaw) {
+    if (
+      e &&
+      typeof e === "object" &&
+      typeof (e as HealEdit).path === "string" &&
+      typeof (e as HealEdit).content === "string"
+    ) {
+      edits.push({
+        path: (e as HealEdit).path,
+        content: (e as HealEdit).content,
+      });
+    }
+  }
+  return { edits };
+}
+
+/**
+ * Resolve a heal-edit path (wiki-relative or absolute) to an absolute
+ * path. Rejects paths that escape `wikiRoot` via `..` or absolute paths
+ * outside the wiki tree. Returns null on rejection.
+ */
+function resolveHealEditPath(wikiRoot: string, p: string): string | null {
+  const candidate = isAbsolute(p) ? resolve(p) : resolve(wikiRoot, p);
+  const root = resolve(wikiRoot);
+  if (candidate !== root && !candidate.startsWith(`${root}/`)) {
+    return null;
+  }
+  return candidate;
 }
 
 async function recordHealProvenance(

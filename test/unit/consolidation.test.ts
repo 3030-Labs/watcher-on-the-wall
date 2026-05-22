@@ -154,18 +154,13 @@ describe("healConsolidation", () => {
   });
 
   it("marks originals as status: consolidated (mock LLM)", async () => {
-    vi.doMock("../../src/ingestion/llm-invoker.js", () => ({
-      invokeIngestionAgent: vi.fn().mockResolvedValue({
-        finalText: "Consolidated page content",
-        totalCostUsd: 0.002,
+    vi.doMock("../../src/llm/runtime-aware.js", () => ({
+      runtimeAwareComplete: vi.fn().mockResolvedValue({
+        text: "Consolidated page content",
+        costUsd: 0.002,
         inputTokens: 500,
         outputTokens: 200,
         durationMs: 1000,
-        numTurns: 1,
-        sessionId: "test",
-        writtenPaths: [],
-        stopReason: "end_turn",
-        success: true,
       }),
     }));
     vi.doMock("../../src/ingestion/git-committer.js", () => ({

@@ -1,5 +1,20 @@
 # BUILD-SUMMARY — watcher-on-the-wall v0.2.0
 
+> ### Multi-LLM Phase 5 — heal-handlers single-pass refactor — 2026-05-22
+>
+> `invokeHeal` migrates from multi-turn agent loop (maxTurns:10 with
+> Read/Glob/Grep/Write/Edit tools) to single-pass via `runtimeAwareComplete`.
+> Model now returns structured JSON `{ edits: [{ path, content }] }`;
+> daemon parses, sanitizes paths (rejects out-of-tree), and writes files
+> via `atomicWrite`. Six heal kinds (stale / duplicate / broken-link /
+> contradiction / consolidation / missing-backlink) keep their existing
+> handler-facing contracts. New helpers: `parseHealResponse` (defensive
+> JSON extraction), `resolveHealEditPath` (path sanitization). 10 existing
+> tests updated to mock at the new boundary (`runtimeAwareComplete`
+> instead of `invokeIngestionAgent`); test count unchanged at 563. Real
+> model JSON-edits behavior is deferred to Phase 6 fixture comparison.
+> All 5 gates green.
+
 > ### Multi-LLM Phase 4 — compounding/engine single-pass refactor — 2026-05-22
 >
 > `CompoundingEngine.synthesizeCluster()` migrates from multi-turn agent

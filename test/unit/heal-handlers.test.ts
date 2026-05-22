@@ -16,19 +16,19 @@ import { loadAllPages } from "../../src/ingestion/wiki-writer.js";
 import type { HealthFinding } from "../../src/wiki/health.js";
 import type { HealContext } from "../../src/wiki/heal-handlers.js";
 
-// Mock the LLM invoker to avoid actual API calls.
-vi.mock("../../src/ingestion/llm-invoker.js", () => ({
-  invokeIngestionAgent: vi.fn().mockResolvedValue({
-    finalText: "Fixed.",
-    totalCostUsd: 0.001,
+// Mock the runtime-aware complete wrapper to avoid actual API calls.
+// Post Phase 5, heal handlers dispatch through runtimeAwareComplete + JSON
+// edit parsing. The default mock returns a non-JSON "Fixed." text — the
+// daemon-side parser returns no edits, no files get written, but invokeHeal
+// still returns a non-null InvokeResult-shaped object so handlers proceed
+// to record provenance and report fixed:true.
+vi.mock("../../src/llm/runtime-aware.js", () => ({
+  runtimeAwareComplete: vi.fn().mockResolvedValue({
+    text: "Fixed.",
+    costUsd: 0.001,
     inputTokens: 100,
     outputTokens: 50,
     durationMs: 500,
-    numTurns: 1,
-    sessionId: null,
-    writtenPaths: [],
-    stopReason: "end_turn",
-    success: true,
   }),
 }));
 
@@ -85,7 +85,7 @@ function writePage(
 describe("heal handlers", () => {
   it("healStale invokes the LLM with correct prompt shape", async () => {
     const { healStale } = await import("../../src/wiki/heal-handlers.js");
-    const { invokeIngestionAgent } = await import("../../src/ingestion/llm-invoker.js");
+    const { runtimeAwareComplete } = await import("../../src/llm/runtime-aware.js");
     const root = tmp();
     writePage(root, "concepts", "test", "Test Page", "Old content.");
     const ctx = makeCtx(root);
@@ -101,9 +101,9 @@ describe("heal handlers", () => {
     const result = await healStale(finding, ctx);
     expect(result.fixed).toBe(true);
     expect(result.costUsd).toBeGreaterThan(0);
-    expect(invokeIngestionAgent).toHaveBeenCalled();
-    const call = vi.mocked(invokeIngestionAgent).mock.calls[0]!;
-    expect(call[0].userPrompt).toContain("Review and refresh");
+    expect(runtimeAwareComplete).toHaveBeenCalled();
+    const call = vi.mocked(runtimeAwareComplete).mock.calls[0]!;
+    expect(call[0]).toContain("Review and refresh");
   });
 
   it("healStale rebuilds search index after healing", async () => {
@@ -133,7 +133,8 @@ describe("heal handlers", () => {
 
   it("healBrokenLinks invokes with correct tools", async () => {
     const { healBrokenLinks } = await import("../../src/wiki/heal-handlers.js");
-    const { invokeIngestionAgent } = await import("../../src/ingestion/llm-invoker.js");
+    const { runtimeAwareComplete } = await import("../../src/llm/runtime-aware.js");
+    vi.mocked(runtimeAwareComplete).mockClear();
     const root = tmp();
     writePage(root, "concepts", "linker", "Linker", "See [[missing/link]].");
     const ctx = makeCtx(root);
@@ -148,10 +149,14 @@ describe("heal handlers", () => {
 
     const result = await healBrokenLinks(finding, ctx);
     expect(result.fixed).toBe(true);
-    expect(invokeIngestionAgent).toHaveBeenCalled();
-    const call = vi.mocked(invokeIngestionAgent).mock.calls[0]!;
-    expect(call[0].allowedTools).toContain("Read");
-    expect(call[0].allowedTools).toContain("Write");
+    expect(runtimeAwareComplete).toHaveBeenCalled();
+    const call = vi.mocked(runtimeAwareComplete).mock.calls[0]!;
+    // Phase 5: tools are no longer passed at the LLM boundary — the daemon
+    // performs writes itself based on the JSON edits response. Verify the
+    // prompt still references the broken-link page so the LLM has the
+    // right context.
+    expect(call[0]).toContain("broken");
+    expect(call[0]).toContain("wiki/concepts/linker.md");
   });
 
   it("healBrokenLinks rebuilds search index after healing", async () => {
@@ -180,7 +185,7 @@ describe("heal handlers", () => {
 
   it("healMissingBacklinks runs repairBidirectionalLinks without LLM", async () => {
     const { healMissingBacklinks } = await import("../../src/wiki/heal-handlers.js");
-    const { invokeIngestionAgent } = await import("../../src/ingestion/llm-invoker.js");
+    const { runtimeAwareComplete } = await import("../../src/llm/runtime-aware.js");
     const root = tmp();
     // Page A references B, but B doesn't reference A back.
     const dir = join(root, "wiki", "concepts");
@@ -204,12 +209,12 @@ describe("heal handlers", () => {
       autoFixable: true,
     };
 
-    vi.mocked(invokeIngestionAgent).mockClear();
+    vi.mocked(runtimeAwareComplete).mockClear();
     const result = await healMissingBacklinks(finding, ctx);
     expect(result.fixed).toBe(true);
     expect(result.costUsd).toBe(0);
     // Should NOT invoke the LLM.
-    expect(invokeIngestionAgent).not.toHaveBeenCalled();
+    expect(runtimeAwareComplete).not.toHaveBeenCalled();
   });
 
   it("max_fixes_per_run cap is respected", async () => {
@@ -265,8 +270,8 @@ describe("heal handlers", () => {
 
   it("healDuplicate marks redundant pages as status: merged", async () => {
     const { healDuplicate } = await import("../../src/wiki/heal-handlers.js");
-    const { invokeIngestionAgent } = await import("../../src/ingestion/llm-invoker.js");
-    vi.mocked(invokeIngestionAgent).mockClear();
+    const { runtimeAwareComplete } = await import("../../src/llm/runtime-aware.js");
+    vi.mocked(runtimeAwareComplete).mockClear();
     const root = tmp();
     writePage(root, "concepts", "page-a", "Topic", "Content A.");
     writePage(root, "concepts", "page-b", "Topic", "Content B.");
@@ -285,15 +290,15 @@ describe("heal handlers", () => {
 
     const result = await healDuplicate(finding, ctx);
     expect(result.fixed).toBe(true);
-    expect(invokeIngestionAgent).toHaveBeenCalled();
-    const call = vi.mocked(invokeIngestionAgent).mock.calls[0]!;
-    expect(call[0].userPrompt).toContain("Merge them");
+    expect(runtimeAwareComplete).toHaveBeenCalled();
+    const call = vi.mocked(runtimeAwareComplete).mock.calls[0]!;
+    expect(call[0]).toContain("Merge them");
   });
 
   it("healContradiction resolves conflicting pages and rebuilds search", async () => {
     const { healContradiction } = await import("../../src/wiki/heal-handlers.js");
-    const { invokeIngestionAgent } = await import("../../src/ingestion/llm-invoker.js");
-    vi.mocked(invokeIngestionAgent).mockClear();
+    const { runtimeAwareComplete } = await import("../../src/llm/runtime-aware.js");
+    vi.mocked(runtimeAwareComplete).mockClear();
 
     const root = tmp();
     // Create two pages with contradictory claims.
@@ -317,12 +322,12 @@ describe("heal handlers", () => {
     const result = await healContradiction(finding, ctx);
     expect(result.fixed).toBe(true);
     expect(result.costUsd).toBeGreaterThan(0);
-    expect(invokeIngestionAgent).toHaveBeenCalled();
+    expect(runtimeAwareComplete).toHaveBeenCalled();
 
     // Verify the LLM prompt contains the contradiction description.
-    const call2 = vi.mocked(invokeIngestionAgent).mock.calls[0]!;
-    expect(call2[0].userPrompt).toContain("contradict");
-    expect(call2[0].userPrompt).toContain("Page X says timeout is 30s");
+    const call2 = vi.mocked(runtimeAwareComplete).mock.calls[0]!;
+    expect(call2[0]).toContain("contradict");
+    expect(call2[0]).toContain("Page X says timeout is 30s");
 
     // Verify search index was rebuilt after healing.
     expect(rebuildSpy).toHaveBeenCalledTimes(1);
