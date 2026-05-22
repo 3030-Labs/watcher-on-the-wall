@@ -19,9 +19,10 @@ import { errMsg } from "../utils/errors.js";
 import { getLogger } from "../utils/logger.js";
 import type { RuntimeMode, WotwConfig, WikiPage } from "../utils/types.js";
 import type { CostTracker } from "../ingestion/cost-tracker.js";
-import { invokeIngestionAgent } from "../ingestion/llm-invoker.js";
+import { runtimeAwareComplete } from "../llm/runtime-aware.js";
 import type { ModelRouter } from "../ingestion/model-router.js";
 import { loadAllPages } from "../ingestion/wiki-writer.js";
+import { newPage } from "../wiki/page.js";
 import type { WikiStore } from "../wiki/store.js";
 import type { IndexManager } from "../wiki/index-manager.js";
 import type { WikiSearch } from "../wiki/search.js";
@@ -29,6 +30,11 @@ import { repairBidirectionalLinks } from "../wiki/cross-reference.js";
 import { commitWikiChanges } from "../ingestion/git-committer.js";
 import type { ProvenanceChain } from "../provenance/chain.js";
 import { sha256File, sha256Files, sha256Hex } from "../provenance/hash.js";
+
+/** Per-source body cap in bytes (clamps prompt size). */
+const MAX_SOURCE_BODY_BYTES = 16 * 1024;
+/** Max tokens for the synthesis body response. */
+const SYNTHESIS_MAX_TOKENS = 8192;
 
 export interface CompoundingEngineOptions {
   config: WotwConfig;
@@ -320,10 +326,22 @@ export class CompoundingEngine {
   }
 
   /**
-   * Invoke the agent for a single cluster. The agent is told the cluster's
-   * tag and the list of pages and asked to write a single synthesis page
-   * under wiki/syntheses/. We use a narrow tool whitelist (Read, Glob, Write).
-   * Dispatches to the CLI binary or the SDK depending on `runtimeMode`.
+   * Single-pass synthesis for a cluster. Pre-assembles full source page
+   * bodies into the prompt; the model returns markdown body content only;
+   * the daemon assembles frontmatter from the cluster metadata and writes
+   * the synthesis page atomically via WikiStore.
+   *
+   * Frontmatter shape (daemon-assembled, not model-chosen):
+   *   - title       = cluster.tag (verbatim)
+   *   - category    = "synthesis"
+   *   - sources     = wiki-relative paths of every clustered page
+   *   - tags        = [cluster.tag]
+   *   - confidence  = "medium"
+   *   - created/updated = today
+   *
+   * Source page bodies are clamped to MAX_SOURCE_BODY_BYTES (16KB) each.
+   * Pages exceeding the cap get a `_[truncated]_` marker. With min-cluster
+   * size 3 and typical pages 2-5KB, prompts stay well within model context.
    */
   private async synthesizeCluster(
     cluster: Cluster,
@@ -334,36 +352,47 @@ export class CompoundingEngine {
     const slug = slugifyTag(cluster.tag);
     const outAbs = join(this.opts.store.categoryDir("synthesis"), `${slug}.md`);
     const outRel = relative(this.opts.config.wiki_root, outAbs);
+    const sourceRelPaths = cluster.pages.map((p) => relative(this.opts.config.wiki_root, p.path));
 
     const systemPrompt = [
       "You are the watcher-on-the-wall compounding agent.",
       "You write synthesis pages that connect related wiki pages into higher-level insights.",
       "Rules:",
-      "  1. Read every source page listed before writing.",
-      "  2. Write EXACTLY ONE file — the synthesis page — using the Write tool.",
-      "  3. The synthesis must include valid frontmatter (title, category: synthesis, created, updated, sources, related, tags, confidence).",
-      "  4. The `sources` array must contain the wiki-relative paths of every page in the cluster.",
-      "  5. Use [[wiki-link]] syntax or markdown links to reference source pages inline.",
-      "  6. Do not invent facts. If the sources don't support a claim, omit it.",
-      "  7. Do not edit or overwrite any existing wiki page.",
+      "  1. Use ONLY the source page contents provided in the user message. Do not invent facts.",
+      "  2. Return markdown body content ONLY. Do NOT include YAML frontmatter — the daemon writes it.",
+      "  3. Cite each source inline using [[wiki-link]] syntax or [Title](path) markdown links.",
+      "  4. If the sources don't support a claim, omit it.",
+      "  5. Aim for a clear synthesis that identifies connections and higher-level themes, not a summary of each source in turn.",
     ].join("\n");
 
-    const sourceList = cluster.pages
-      .map((p) => `- ${relative(this.opts.config.wiki_root, p.path)} — "${p.frontmatter.title}"`)
-      .join("\n");
+    // Pre-assemble source page bodies. The model sees the complete content
+    // it needs to synthesize from; no in-call Read tool required.
+    const sourceSections = cluster.pages.map((p) => {
+      const relPath = relative(this.opts.config.wiki_root, p.path);
+      const truncated = p.body.length > MAX_SOURCE_BODY_BYTES;
+      const body = truncated
+        ? `${p.body.slice(0, MAX_SOURCE_BODY_BYTES)}\n\n_[truncated]_`
+        : p.body;
+      return [
+        `## ${p.frontmatter.title}`,
+        `path: ${relPath}`,
+        `category: ${p.frontmatter.category}`,
+        "",
+        body,
+      ].join("\n");
+    });
 
     const userPrompt = [
       `# Synthesis request: tag "${cluster.tag}"`,
       "",
-      `Write a synthesis page at: \`${outRel}\``,
-      "",
       `## Source pages (${cluster.pages.length})`,
       "",
-      sourceList,
+      sourceSections.join("\n\n---\n\n"),
       "",
-      "Read each source page, identify the connections and higher-level themes across them,",
-      "and write a single synthesis page that weaves them together. Use inline citations to",
-      "every source.",
+      "---",
+      "Write a synthesis that connects these sources into higher-level insights.",
+      "Output markdown body content ONLY — no YAML frontmatter, no surrounding code fences.",
+      "Cite every source inline.",
     ].join("\n");
 
     log.info(
@@ -371,40 +400,34 @@ export class CompoundingEngine {
       "synthesizing cluster",
     );
 
-    const result = await invokeIngestionAgent({
-      cwd: this.opts.config.wiki_root,
+    const result = await runtimeAwareComplete(userPrompt, {
       systemPrompt,
-      userPrompt,
       model,
-      maxTurns: 20,
-      allowedTools: ["Read", "Glob", "Grep", "Write"],
+      maxTokens: SYNTHESIS_MAX_TOKENS,
+      config: this.opts.config,
       runtimeMode,
-      cliConfig:
-        runtimeMode === "cli"
-          ? {
-              cliPath: this.opts.config.execution.cli_path,
-              cliModel: this.opts.config.execution.cli_model,
-            }
-          : undefined,
     });
 
-    // The agent should have produced outAbs. If it wrote a different path
-    // instead, we still accept it but log a warning.
-    let writtenPath: string | null = null;
-    for (const p of result.writtenPaths) {
-      if (p === outAbs || p.endsWith(`${slug}.md`)) {
-        writtenPath = p;
-        break;
-      }
+    const bodyText = stripFrontmatterIfPresent(result.text).trim();
+    if (!bodyText) {
+      log.warn({ tag: cluster.tag }, "model returned empty synthesis body");
+      return { costUsd: result.costUsd, writtenPath: null };
     }
-    if (writtenPath === null && result.writtenPaths.length > 0) {
-      writtenPath = result.writtenPaths[0] ?? null;
-      log.warn({ wrote: result.writtenPaths, expected: outAbs }, "agent wrote unexpected path");
+
+    // Daemon assembles frontmatter from cluster metadata and writes the
+    // synthesis page atomically. Title uses the cluster tag verbatim.
+    const synthesisPage = newPage(outAbs, cluster.tag, "synthesis", bodyText, {
+      sources: sourceRelPaths,
+      tags: [cluster.tag],
+      confidence: "medium",
+    });
+    try {
+      await this.opts.store.writePage(synthesisPage);
+    } catch (err) {
+      log.error({ err, tag: cluster.tag, outAbs }, "failed to write synthesis page");
+      return { costUsd: result.costUsd, writtenPath: null };
     }
-    if (writtenPath === null) {
-      log.warn({ tag: cluster.tag }, "agent did not write a synthesis file");
-    }
-    return { costUsd: result.totalCostUsd, writtenPath };
+    return { costUsd: result.costUsd, writtenPath: outAbs };
   }
 
   /** Append a provenance record describing this synthesis pass. */
@@ -458,6 +481,23 @@ export class CompoundingEngine {
       },
     });
   }
+}
+
+/**
+ * Defensive frontmatter stripper. The prompt instructs the model NOT to
+ * emit YAML frontmatter, but models sometimes ignore that. If the response
+ * starts with `---\n...\n---` we strip it so the daemon-assembled
+ * frontmatter is the only one present. Returns the body without
+ * frontmatter; returns the input unchanged if no frontmatter detected.
+ */
+function stripFrontmatterIfPresent(text: string): string {
+  const trimmed = text.trimStart();
+  if (!trimmed.startsWith("---")) return text;
+  const afterFirst = trimmed.slice(3);
+  // Frontmatter must end with a newline before closing ---
+  const closingMatch = afterFirst.match(/\n---\s*\n/);
+  if (!closingMatch || closingMatch.index === undefined) return text;
+  return afterFirst.slice(closingMatch.index + closingMatch[0].length);
 }
 
 /** Convert a free-form tag into a safe filename slug. */

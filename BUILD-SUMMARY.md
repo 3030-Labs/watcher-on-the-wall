@@ -1,5 +1,19 @@
 # BUILD-SUMMARY — watcher-on-the-wall v0.2.0
 
+> ### Multi-LLM Phase 4 — compounding/engine single-pass refactor — 2026-05-22
+>
+> `CompoundingEngine.synthesizeCluster()` migrates from multi-turn agent
+> loop (maxTurns:20 with Read/Glob/Grep/Write) to single-pass via
+> `runtimeAwareComplete`. Daemon pre-assembles full source bodies into
+> the prompt (16KB cap per source with `_[truncated]_` marker), model
+> returns markdown body only, daemon assembles frontmatter from cluster
+> metadata and writes via WikiStore. First phase establishing the
+> "model returns text, daemon writes files" pattern that Phases 5+6
+> scale to edits and multi-file ingestion. Defensive
+> `stripFrontmatterIfPresent` guards against model emitting frontmatter
+> despite instructions. **563 tests** across **61 files** — 558 prior
+> baseline + 5 new. All 5 gates green. Daemon-only phase.
+
 > ### Multi-LLM Phase 3 — query-engine single-pass refactor — 2026-05-22
 >
 > `QueryEngine.answer()` migrates from multi-turn agent loop (maxTurns:5
