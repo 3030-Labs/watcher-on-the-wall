@@ -1,5 +1,25 @@
 # BUILD-SUMMARY — watcher-on-the-wall v0.2.0
 
+> ### Multi-LLM Phase 1 — LLMProvider interface + AnthropicProvider — 2026-05-22
+>
+> Establishes the architectural target abstraction in parallel with the
+> existing Agent SDK call surface. Canonical `LLMProvider` interface lives
+> in `wotw-cloud/packages/shared/src/llm/types.ts`; daemon carries a
+> byte-identical vendored copy at `src/llm/types-vendored.ts` enforced by
+> CI script `check-llm-types-sync.mjs` (sibling to chain-hash sync).
+> `AnthropicProvider` at `src/llm/providers/anthropic.ts` uses
+> `@anthropic-ai/sdk` Messages API directly — **no Agent SDK dependency in
+> new code paths**. 20 unit tests cover the interface contract, cost
+> computation, finish reason normalization, content block filtering, and
+> a structural check that the provider does not import the Agent SDK.
+> **549 tests** across **58 files** — 529 baseline preserved + 20 new
+> AnthropicProvider tests. All 5 gates green (typecheck, lint,
+> format:check, test, build). No call site migration in this phase;
+> Phases 2–6 migrate query-expansion / vocabulary-enricher / query-engine /
+> compounding / heal-handlers / queue.ts (highest risk).
+
+
+
 **Project:** `watcher-on-the-wall` (`wotw`) — a self-bootstrapping persistent
 AI knowledge daemon.
 **Repo path:** `/home/jgoodman/watcher-on-the-wall`
