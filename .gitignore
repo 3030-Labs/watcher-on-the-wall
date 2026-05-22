@@ -20,3 +20,4 @@ wotw-*.md
 
 # Windows mark-of-the-web sidecar files
 *:Zone.Identifier
+.fly-registry.toml

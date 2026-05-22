@@ -18,6 +18,8 @@ import {
   type IncomingMessage,
   type ServerResponse,
 } from "node:http";
+import { writeFile, mkdir } from "node:fs/promises";
+import { dirname, join, resolve, sep } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { errMsg } from "../utils/errors.js";
@@ -424,6 +426,107 @@ export class McpHttpServer implements DaemonSubsystem {
             backup_path: body.backup_path,
             timestamp: new Date().toISOString(),
           });
+          break;
+        }
+
+        case "/internal/ingest": {
+          // Pass 012 — file-upload → daemon-ingestion sync.
+          //
+          // wotw-cloud's /api/sources/trigger-ingest POSTs here after a user
+          // uploads a file to Supabase Storage. We download the file from
+          // the signed URL into the configured raw_path; chokidar then
+          // picks it up via the existing FileWatcher → IngestionQueue
+          // pipeline, which writes provenance records that cloud-sink
+          // mirrors back to Supabase (Pass 010 work). Cloud-side maps
+          // source_files → raw_source_id via the filename prefix.
+          //
+          // Fire-and-forget shape: this endpoint returns 202 once the file
+          // is on disk and chokidar can see it. Ingestion completion is
+          // signaled asynchronously via the provenance sink.
+          const rawSourceId = body.raw_source_id;
+          const signedUrl = body.signed_url;
+          const filename = body.filename;
+          if (typeof rawSourceId !== "string" || !rawSourceId) {
+            json(400, { error: "raw_source_id required" });
+            break;
+          }
+          if (typeof signedUrl !== "string" || !signedUrl.startsWith("https://")) {
+            json(400, { error: "signed_url required (must be https://...)" });
+            break;
+          }
+          if (typeof filename !== "string" || !filename) {
+            json(400, { error: "filename required" });
+            break;
+          }
+          // Disallow path separators / traversal in filename.
+          if (
+            filename.includes("/") ||
+            filename.includes("\\") ||
+            filename.includes("..") ||
+            filename.startsWith(".")
+          ) {
+            json(400, { error: "filename must be a clean basename" });
+            break;
+          }
+
+          const rawPath = this.opts.config.raw_path;
+          // Prefix the raw_source_id so the cloud-sink can map provenance
+          // records' source_files back to the originating raw_sources row.
+          const targetName = `${rawSourceId}-${filename}`;
+          const resolvedRawPath = resolve(rawPath);
+          const targetPath = resolve(join(resolvedRawPath, targetName));
+          // Defense-in-depth: ensure the resolved target lives inside raw_path.
+          if (targetPath !== resolvedRawPath && !targetPath.startsWith(resolvedRawPath + sep)) {
+            json(400, { error: "target path escapes raw_path" });
+            break;
+          }
+
+          try {
+            const fetchRes = await fetch(signedUrl);
+            if (!fetchRes.ok) {
+              log.warn(
+                {
+                  rawSourceId,
+                  status: fetchRes.status,
+                  filename,
+                },
+                "ingest: signed URL returned non-2xx",
+              );
+              json(502, {
+                error: `signed_url fetch returned ${fetchRes.status}`,
+              });
+              break;
+            }
+            const buffer = Buffer.from(await fetchRes.arrayBuffer());
+            await mkdir(dirname(targetPath), { recursive: true });
+            await writeFile(targetPath, buffer);
+            log.info(
+              {
+                rawSourceId,
+                filename,
+                bytes: buffer.length,
+                targetName,
+              },
+              "ingest: file landed in raw_path",
+            );
+            json(202, {
+              status: "accepted",
+              raw_source_id: rawSourceId,
+              target_name: targetName,
+              bytes: buffer.length,
+            });
+          } catch (err) {
+            log.error(
+              {
+                err: err instanceof Error ? err.message : String(err),
+                rawSourceId,
+              },
+              "ingest: write failed",
+            );
+            json(500, {
+              error: err instanceof Error ? err.message : "write failed",
+            });
+          }
           break;
         }
 
