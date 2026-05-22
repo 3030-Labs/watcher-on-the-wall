@@ -366,7 +366,12 @@ export class IngestionQueue implements DaemonSubsystem {
         }
       } else if (completeResult.text.trim().length > 0) {
         log.warn(
-          { batchId: batch.id, sample: completeResult.text.slice(0, 200) },
+          {
+            batchId: batch.id,
+            textLen: completeResult.text.length,
+            sample: completeResult.text.slice(0, 200),
+            tailSample: completeResult.text.slice(-200),
+          },
           "ingestion response was not valid JSON edits",
         );
       }

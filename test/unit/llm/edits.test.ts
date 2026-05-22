@@ -33,6 +33,34 @@ describe("parseDaemonEditsResponse", () => {
     expect(r!.edits[0].path).toBe("a.md");
   });
 
+  it("extracts JSON from a fence with trailing newline (Gemini shape)", () => {
+    // Phase B regression — Gemini 2.5-flash emits ```json + JSON + trailing
+    // newline despite the prompt instruction. Parser must strip the fence
+    // and parse the inner JSON cleanly. Was returning null pre-fix.
+    const text = '```json\n{\n  "edits": [\n    {"path":"a.md","content":"x"}\n  ]\n}\n```\n';
+    const r = parseDaemonEditsResponse(text);
+    expect(r).not.toBeNull();
+    expect(r!.edits).toHaveLength(1);
+    expect(r!.edits[0].path).toBe("a.md");
+  });
+
+  it("extracts JSON from a fence with no closing backticks", () => {
+    // Defensive: if the model emits an opening fence but no closing one
+    // (truncation or model quirk), the fallback balanced-brace regex
+    // should still find the JSON object.
+    const text = '```json\n{"edits":[{"path":"a.md","content":"x"}]}';
+    const r = parseDaemonEditsResponse(text);
+    expect(r).not.toBeNull();
+    expect(r!.edits[0].path).toBe("a.md");
+  });
+
+  it("extracts JSON from an unlabeled fence (```, not ```json)", () => {
+    const text = '```\n{"edits":[]}\n```';
+    const r = parseDaemonEditsResponse(text);
+    expect(r).not.toBeNull();
+    expect(r!.edits).toEqual([]);
+  });
+
   it("returns null on empty string", () => {
     expect(parseDaemonEditsResponse("")).toBeNull();
     expect(parseDaemonEditsResponse("   \n  ")).toBeNull();

@@ -109,6 +109,20 @@ describe("validateConfig", () => {
     expect(() => validateConfig(cfg)).toThrow(/execution\.mode/);
   });
 
+  it("preserves llm block through validation (regression: Zod stripped it pre-fix)", () => {
+    const cfg = defaultConfig();
+    const validated = validateConfig(cfg);
+    expect(validated.llm).toBeDefined();
+    expect(validated.llm.provider).toBe("anthropic");
+    expect(validated.llm.model).toBe("claude-sonnet-4-5");
+  });
+
+  it("rejects an invalid llm provider", () => {
+    const cfg = defaultConfig();
+    (cfg.llm as Record<string, unknown>).provider = "bogus-provider";
+    expect(() => validateConfig(cfg)).toThrow(/llm\.provider/);
+  });
+
   it("rejects an invalid log level", () => {
     const cfg = defaultConfig();
     (cfg.daemon as Record<string, unknown>).log_level = "verbose";

@@ -33,8 +33,11 @@ export interface DaemonEditsResponse {
  * Parse the raw model response into a DaemonEditsResponse. The prompt
  * instructs the model to emit JSON-only; this parser is defensive:
  *
- *   - Extracts the first `{...}` block via regex, tolerating markdown
- *     code fences or stray surrounding text.
+ *   - Strips a leading/trailing markdown code fence (```json ... ```)
+ *     emitted by some providers (Gemini, Ollama) despite the prompt
+ *     instruction.
+ *   - Falls back to extracting the first balanced `{...}` block when
+ *     the candidate has stray surrounding text.
  *   - Returns null if no JSON block found or JSON.parse throws.
  *   - Validates `edits` is an array; per-edit validates `path` and
  *     `content` are non-empty strings.
@@ -44,13 +47,26 @@ export interface DaemonEditsResponse {
 export function parseDaemonEditsResponse(text: string): DaemonEditsResponse | null {
   const trimmed = text.trim();
   if (!trimmed) return null;
-  const match = trimmed.match(/\{[\s\S]*\}/);
-  if (!match) return null;
+  // Strip a wrapping markdown code fence. Gemini frequently emits
+  // ```json\n{...}\n``` despite the prompt's JSON-only instruction.
+  let candidate = trimmed;
+  const fenceMatch = candidate.match(/^```(?:json)?\s*([\s\S]*?)\s*```\s*$/);
+  if (fenceMatch && fenceMatch[1]) {
+    candidate = fenceMatch[1].trim();
+  }
+  // Try direct parse first.
   let parsed: unknown;
   try {
-    parsed = JSON.parse(match[0]);
+    parsed = JSON.parse(candidate);
   } catch {
-    return null;
+    // Fall back to balanced-brace extraction for stray text.
+    const match = candidate.match(/\{[\s\S]*\}/);
+    if (!match) return null;
+    try {
+      parsed = JSON.parse(match[0]);
+    } catch {
+      return null;
+    }
   }
   if (
     typeof parsed !== "object" ||

@@ -405,6 +405,7 @@ export function mergeConfig(base: WotwConfig, override: Partial<WotwConfig>): Wo
 
   if (override.wiki_root !== undefined) out.wiki_root = override.wiki_root;
   if (override.raw_path !== undefined) out.raw_path = override.raw_path;
+  if (override.llm) assign("llm", override.llm);
   if (override.execution) assign("execution", override.execution);
   if (override.models) assign("models", override.models);
   if (override.watcher) assign("watcher", override.watcher);
@@ -437,6 +438,7 @@ export function mergeConfig(base: WotwConfig, override: Partial<WotwConfig>): Wo
 const positiveNumber = z.number().positive();
 const nonNegativeNumber = z.number().min(0);
 const logLevelSchema = z.enum(["trace", "debug", "info", "warn", "error", "fatal"]);
+const llmProviderSchema = z.enum(["anthropic", "openai", "gemini", "ollama"]);
 
 /**
  * Zod schema that validates a fully-merged WotwConfig object. Every field
@@ -445,6 +447,11 @@ const logLevelSchema = z.enum(["trace", "debug", "info", "warn", "error", "fatal
 const WotwConfigSchema = z.object({
   wiki_root: z.string().min(1),
   raw_path: z.string().min(1),
+  llm: z.object({
+    provider: llmProviderSchema,
+    model: z.string().min(1),
+    ollama_url: z.string().min(1).optional(),
+  }),
   execution: z.object({
     mode: z.enum(["auto", "cli", "api"]),
     cli_path: z.string().min(1),
