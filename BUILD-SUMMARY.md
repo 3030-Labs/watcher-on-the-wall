@@ -1,5 +1,19 @@
 # BUILD-SUMMARY — watcher-on-the-wall v0.2.0
 
+> ### Multi-LLM Phases 7-9 — OpenAI / Gemini / Ollama Providers — 2026-05-22
+>
+> Three non-Anthropic providers all conforming to LLMProvider:
+> - `OpenAIProvider` — `openai` SDK Chat Completions (gpt-4o/mini/o1/o1-mini/turbo)
+> - `GeminiProvider` — `@google/generative-ai` SDK (gemini-2.0-pro/flash + 1.5)
+>   with BLOCK_ONLY_HIGH safety defaults (strictSafety opt-in)
+> - `OllamaProvider` — direct HTTP against localhost:11434, no SDK, no API
+>   key, totalCostUsd always null; listModels() extension
+> 28 new tests (10 OpenAI + 9 Gemini + 11 Ollama). All 3 providers
+> register through src/llm/index.ts barrel. **608 tests** across **63
+> files** — 580 prior + 28 new. All 5 gates green. **Live
+> cross-provider regression (95% schema conformance) is deferred as
+> irreducibly external — requires live API keys + Ollama instance.**
+
 > ### Multi-LLM Phase 6 — queue.ts main ingestion single-pass refactor — 2026-05-22 (HIGHEST RISK)
 >
 > Main ingestion `IngestionQueue.processBatch()` migrates from multi-turn

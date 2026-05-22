@@ -23,5 +23,17 @@ export type {
 export { AnthropicProvider } from "./providers/anthropic.js";
 export type { AnthropicProviderConfig } from "./providers/anthropic.js";
 
+export { OpenAIProvider } from "./providers/openai.js";
+export type { OpenAIProviderConfig } from "./providers/openai.js";
+
+export { GeminiProvider } from "./providers/gemini.js";
+export type { GeminiProviderConfig } from "./providers/gemini.js";
+
+export { OllamaProvider } from "./providers/ollama.js";
+export type { OllamaProviderConfig } from "./providers/ollama.js";
+
+export { parseDaemonEditsResponse, resolveEditPath } from "./edits.js";
+export type { DaemonEdit, DaemonEditsResponse } from "./edits.js";
+
 export { runtimeAwareComplete } from "./runtime-aware.js";
 export type { RuntimeAwareCompleteOptions, RuntimeAwareCompleteResult } from "./runtime-aware.js";
