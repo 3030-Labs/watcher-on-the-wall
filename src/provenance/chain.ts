@@ -18,6 +18,7 @@
  */
 import { open, readFile, stat } from "node:fs/promises";
 import { dirname } from "node:path";
+import { createHmac } from "node:crypto";
 import type { ProvenanceRecord, OperationType, ModelId } from "../utils/types.js";
 import { ensureDir, fileExists } from "../utils/fs.js";
 import { getLogger } from "../utils/logger.js";
@@ -44,6 +45,12 @@ export interface ProvenanceAppendInput {
   wiki_files_written: string[];
   wiki_file_hashes_after: Record<string, string>;
   metadata?: Record<string, string | number | boolean>;
+  /**
+   * Review item 43: tenant_id when running in hosted mode. Folded into
+   * the canonical payload so a record from tenant A cannot be replayed
+   * as a record of tenant B without recomputing id + chain_hash + hmac.
+   */
+  tenant_id?: string;
 }
 
 export interface VerificationError {
@@ -81,8 +88,31 @@ export class ProvenanceChain {
   private writeLock: Promise<void>;
   /** Optional sync-replica sink (e.g., wotw-cloud Supabase). Fire-and-forget. */
   private sink: ProvenanceSink | null;
+  /**
+   * Review item 43: tenant_id folded into the canonical payload when set.
+   * In hosted mode the daemon passes config.hosted.tenant_id; in interactive
+   * mode this stays undefined and tenant_id is omitted from the payload
+   * (backwards-compat — chains predating this change verify identically).
+   */
+  private readonly tenantId: string | undefined;
+  /**
+   * Review item 42: HMAC key for record signing. Resolved at construction:
+   *   1. Explicit opts.hmacKey
+   *   2. process.env.WOTW_PROVENANCE_HMAC_KEY
+   *   3. Derived from tenant_id when in hosted mode (sha256("wotw-provenance-v1:" + tenant_id))
+   *   4. undefined → no HMAC field on records (backwards-compat)
+   * Per X2 recommendation, HMAC complements the existing chain-hash by
+   * making forge / delete attacks detectable when an attacker has read
+   * access to the chain file but not the key.
+   */
+  private readonly hmacKey: string | undefined;
 
-  constructor(opts: { path: string; sink?: ProvenanceSink | null }) {
+  constructor(opts: {
+    path: string;
+    sink?: ProvenanceSink | null;
+    tenantId?: string;
+    hmacKey?: string;
+  }) {
     this.path = opts.path;
     this.nextSeq = 1;
     this.lastChainHash = GENESIS_HASH;
@@ -91,6 +121,19 @@ export class ProvenanceChain {
     this.initialized = false;
     this.writeLock = Promise.resolve();
     this.sink = opts.sink ?? null;
+    this.tenantId = opts.tenantId;
+    // Resolve HMAC key per the documented preference order.
+    if (opts.hmacKey) {
+      this.hmacKey = opts.hmacKey;
+    } else if (process.env.WOTW_PROVENANCE_HMAC_KEY) {
+      this.hmacKey = process.env.WOTW_PROVENANCE_HMAC_KEY;
+    } else if (opts.tenantId) {
+      // Derive a stable per-tenant key from tenant_id. Not as strong as
+      // a Fly-secret-managed key, but does prevent cross-tenant forge.
+      this.hmacKey = createHmac("sha256", "wotw-provenance-v1").update(opts.tenantId).digest("hex");
+    } else {
+      this.hmacKey = undefined;
+    }
   }
 
   /**
@@ -128,6 +171,39 @@ export class ProvenanceChain {
     this.totalRecords = records.length;
     if (records.length > 0) {
       const last = records[records.length - 1]!;
+      // Review item 38: verify the tail record's own id + chain_hash
+      // before adopting it. Pre-fix, init() read seq/chain_hash/id
+      // without verifying — a tampered tail would propagate forward.
+      // Always-on minimum-bar verify of just the tail; full chain
+      // verify is gated by config.provenance.verify_on_startup (item 37).
+      const tailPayload: Record<string, unknown> = {
+        seq: last.seq,
+        timestamp: last.timestamp,
+        type: last.type,
+        source_files: last.source_files,
+        source_hashes: last.source_hashes,
+        prompt_hash: last.prompt_hash,
+        model_id: last.model_id,
+        response_hash: last.response_hash,
+        wiki_files_written: last.wiki_files_written,
+        wiki_file_hashes_after: last.wiki_file_hashes_after,
+        previous_id: last.previous_id,
+        previous_chain_hash: last.previous_chain_hash,
+      };
+      if (last.metadata !== undefined) tailPayload.metadata = last.metadata;
+      if (last.tenant_id !== undefined) tailPayload.tenant_id = last.tenant_id;
+      const recomputedId = sha256Canonical(tailPayload);
+      if (recomputedId !== last.id) {
+        throw new Error(
+          `provenance tail self-inconsistent: stored id=${last.id} but recomputed id=${recomputedId}. Refuse to continue.`,
+        );
+      }
+      const recomputedChainHash = sha256Hex(`${last.previous_chain_hash}${last.id}`);
+      if (recomputedChainHash !== last.chain_hash) {
+        throw new Error(
+          `provenance tail chain_hash inconsistent: stored=${last.chain_hash} recomputed=${recomputedChainHash}. Refuse to continue.`,
+        );
+      }
       this.nextSeq = last.seq + 1;
       this.lastChainHash = last.chain_hash;
       this.lastId = last.id;
@@ -155,7 +231,11 @@ export class ProvenanceChain {
       const timestamp = new Date().toISOString();
 
       // Build the payload whose hash becomes both `id` and part of `chain_hash`.
-      const payload = {
+      // Review item 43: include tenant_id when present so cross-tenant
+      // record confusion is detectable (record from tenant A cannot
+      // match a verifier expecting tenant B without recomputing id).
+      const effectiveTenantId = input.tenant_id ?? this.tenantId;
+      const payload: Record<string, unknown> = {
         seq,
         timestamp,
         type: input.type,
@@ -169,14 +249,23 @@ export class ProvenanceChain {
         previous_id: previousId,
         previous_chain_hash: previousChainHash,
         ...(input.metadata ? { metadata: input.metadata } : {}),
+        ...(effectiveTenantId ? { tenant_id: effectiveTenantId } : {}),
       };
-      // The record id is the SHA-256 of the canonical payload. That makes it
-      // deterministic and content-addressable: two identical operations get
-      // the same id regardless of who wrote them.
+      // The record id is the SHA-256 of the canonical payload. Deterministic
+      // and content-addressable: identical operations get the same id.
       const id = sha256Canonical(payload);
       // The chain hash is SHA-256 of `previous_chain_hash + id`. Hashing the
       // id (rather than the whole payload twice) keeps verification cheap.
       const chainHash = sha256Hex(previousChainHash + id);
+      // Review item 42: HMAC over `id || chain_hash` using a daemon-
+      // derived key. Detects forge / delete attacks even with read
+      // access to the chain file — attackers cannot mint records the
+      // verifier accepts without the key. Key resolved at init time
+      // from HMAC_PROVENANCE_KEY env (or derived from tenant_id when
+      // hosted) — see this.hmacKey.
+      const hmac = this.hmacKey
+        ? createHmac("sha256", this.hmacKey).update(`${id}|${chainHash}`).digest("hex")
+        : undefined;
 
       const record: ProvenanceRecord = {
         id,
@@ -194,6 +283,8 @@ export class ProvenanceChain {
         previous_chain_hash: previousChainHash,
         chain_hash: chainHash,
         ...(input.metadata ? { metadata: input.metadata } : {}),
+        ...(effectiveTenantId ? { tenant_id: effectiveTenantId } : {}),
+        ...(hmac ? { hmac } : {}),
       };
 
       // Append a single line. We open in append mode so multiple processes

@@ -307,9 +307,27 @@ export interface ProvenanceRecord {
   wiki_files_written: string[];
   wiki_file_hashes_after: Record<string, string>;
   merkle_root?: string;
+  /**
+   * Review item 43 (X2-C): tenant_id is the *security* boundary (per-
+   * tenant Fly Machine + Fly secret), while wiki_id is the data boundary.
+   * Adding tenant_id to the canonical payload makes cross-tenant chain
+   * confusion detectable: if a record from tenant A ever lands in tenant
+   * B's chain file, the canonical id diverges from what tenant B would
+   * compute. Optional for backwards compat — daemons outside hosted
+   * mode have no tenant_id.
+   */
+  tenant_id?: string;
   previous_id: string | null;
   previous_chain_hash: string;
   chain_hash: string;
+  /**
+   * Review item 42: HMAC signature over `id || chain_hash` using a
+   * daemon-derived secret (HMAC_PROVENANCE_KEY in env, falling back to
+   * a per-tenant-id-derived key when in hosted mode). Detects forge /
+   * delete attacks even when an attacker can read the chain file —
+   * they cannot mint records the daemon's verifier would accept.
+   */
+  hmac?: string;
   metadata?: Record<string, string | number | boolean>;
 }
 

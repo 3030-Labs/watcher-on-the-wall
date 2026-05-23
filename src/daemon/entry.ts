@@ -99,6 +99,12 @@ async function main(): Promise<void> {
       provenance = new ProvenanceChain({
         path: config.provenance.chain_file,
         sink,
+        // Review items 42 + 43: tenant_id folds into canonical payload;
+        // HMAC key falls back to a per-tenant derivation when no explicit
+        // env override is set. Together these make forge / delete /
+        // cross-tenant-replay detectable.
+        tenantId:
+          config.hosted.enabled && config.hosted.tenant_id ? config.hosted.tenant_id : undefined,
       });
       await provenance.init();
       log.info({ path: provenance.path, records: provenance.count() }, "provenance chain ready");

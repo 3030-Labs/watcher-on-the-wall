@@ -77,6 +77,47 @@ const REDACT_PATHS = [
   "*.secret",
 ];
 
+/**
+ * Review item 6: Pino's default err serializer dumps arbitrary error
+ * properties via `pino.stdSerializers.err`. Empirically verified that
+ * SDK errors carry `err.headers.authorization` / `err.response.headers.*`
+ * verbatim. The redact-paths layer (item 1) catches the common shapes,
+ * but a custom serializer makes the safety guarantee load-bearing:
+ * only the small allowlist of fields below is ever emitted; everything
+ * else is dropped, regardless of where it sits on the error object.
+ */
+function safeErrSerializer(err: unknown): Record<string, unknown> {
+  if (!(err instanceof Error)) {
+    return { message: String(err) };
+  }
+  const out: Record<string, unknown> = {
+    type: err.constructor.name,
+    message: err.message,
+  };
+  if (err.stack) out.stack = err.stack;
+  // Some custom errors (SafeFetchError, OrchestratorError) carry a
+  // `code` field that's safe to surface — it's an enum, never user
+  // content.
+  const maybeCode = (err as unknown as { code?: unknown }).code;
+  if (typeof maybeCode === "string") out.code = maybeCode;
+  // `cause` is usually another Error — recurse one level (cap depth
+  // to avoid stack overflow on circular chains).
+  const maybeCause = (err as unknown as { cause?: unknown }).cause;
+  if (maybeCause && typeof maybeCause === "object" && "message" in maybeCause) {
+    out.cause = {
+      type: (maybeCause as { constructor?: { name: string } }).constructor?.name ?? "Error",
+      message: (maybeCause as { message: unknown }).message,
+    };
+  }
+  // INTENTIONALLY DROPPED (item 6 fix surface):
+  //   err.headers          — Axios-shape; carries authorization
+  //   err.config           — Axios-shape; carries authorization header
+  //   err.request          — Axios-shape; carries headers
+  //   err.response         — Axios-shape; carries headers + body
+  //   any other property   — unknown SDK shapes default to "drop"
+  return out;
+}
+
 export function initLogger(level: LogLevel = "info", logFile?: string): Logger {
   const options: LoggerOptions = {
     level,
@@ -86,6 +127,10 @@ export function initLogger(level: LogLevel = "info", logFile?: string): Logger {
       paths: REDACT_PATHS,
       censor: "[Redacted]",
       remove: false,
+    },
+    serializers: {
+      err: safeErrSerializer,
+      error: safeErrSerializer,
     },
   };
 

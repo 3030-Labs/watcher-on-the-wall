@@ -95,7 +95,10 @@ export function defaultConfig(): WotwConfig {
     provenance: {
       enabled: true,
       chain_file: "provenance-chain.jsonl",
-      verify_on_startup: false,
+      // Review item 37: default ON so partial-corruption is detected at
+      // boot. Pre-fix default false let a chain with one bad line boot
+      // silently and advance on top of a verifiably-broken tail forever.
+      verify_on_startup: true,
     },
     multi_user: {
       enabled: false,

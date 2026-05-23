@@ -7,7 +7,7 @@
  * search index is rebuilt and a provenance record is appended.
  */
 import type { Command } from "commander";
-import { existsSync, renameSync } from "node:fs";
+import { existsSync, readFileSync, renameSync } from "node:fs";
 import { basename, join } from "node:path";
 import { loadConfig, resolveConfigPaths } from "../../daemon/config.js";
 import { loadAllPages } from "../../ingestion/wiki-writer.js";
@@ -131,8 +131,29 @@ export async function approveOne(
   // Provenance record.
   if (config.provenance.enabled) {
     try {
-      const chain = new ProvenanceChain({ path: config.provenance.chain_file });
+      // Review item 44: ad-hoc chain construction would race the daemon
+      // for seq numbers if both are writing concurrently. The approve
+      // CLI is for the daemon-not-running case (interactive review);
+      // when the daemon is up, prefer the MCP `approve_candidate` tool.
+      // We still construct a chain here for the CLI-only codepath, but
+      // (1) thread tenant_id through (item 43) so the record's canonical
+      // hash matches what the daemon's verifier expects, (2) compute
+      // real hashes for wiki_file_hashes_after, (3) surface errors via
+      // a console.warn rather than the pre-fix silent swallow.
+      const chain = new ProvenanceChain({
+        path: config.provenance.chain_file,
+        tenantId:
+          config.hosted.enabled && config.hosted.tenant_id ? config.hosted.tenant_id : undefined,
+      });
       await chain.init();
+      const wikiFileHashesAfter: Record<string, string> = {};
+      try {
+        const writtenRaw = readFileSync(destPath, "utf8");
+        wikiFileHashesAfter[store.relativePath(destPath)] = sha256Hex(writtenRaw);
+      } catch {
+        // File-read failure here is real but non-fatal for the record;
+        // the hash will simply be absent for this entry.
+      }
       await chain.append({
         type: "ingest",
         source_files: page.frontmatter.sources,
@@ -141,11 +162,13 @@ export async function approveOne(
         model_id: "user",
         response_hash: sha256Hex(raw),
         wiki_files_written: [store.relativePath(destPath)],
-        wiki_file_hashes_after: {},
+        wiki_file_hashes_after: wikiFileHashesAfter,
         metadata: { approved_from: "candidates" },
       });
-    } catch {
-      // Provenance failure is non-fatal.
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      // eslint-disable-next-line no-console
+      console.warn(`[approve] provenance append failed: ${msg}`);
     }
   }
 
