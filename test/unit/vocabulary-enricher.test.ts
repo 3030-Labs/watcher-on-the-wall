@@ -429,4 +429,53 @@ describe("HIGH-7: vocabulary enricher real hashes", () => {
     // "brand_new_term" should be added.
     expect(terms).toContain("brand_new_term");
   });
+
+  it("review item 35: rejects LLM-emitted `page` that escapes wiki_root", async () => {
+    const { runtimeAwareComplete } = await import("../../src/llm/runtime-aware.js");
+    const root = tmp();
+    const { config, store, search, costTracker, modelRouter } = makeOpts(root);
+    await store.ensureLayout();
+
+    writePage(root, "concepts", "real-page", "Real Page", "real content");
+    const { loadAllPages } = await import("../../src/ingestion/wiki-writer.js");
+    const allPages = await loadAllPages(store);
+    search.rebuild(allPages);
+
+    writeQueryLog(config.health.query_log_file, [{ query: "zero-hit term", zero_hit: true }]);
+
+    const sentinelPath = join(root, "..", "vocab-attack-sentinel.md");
+
+    vi.mocked(runtimeAwareComplete).mockResolvedValue({
+      text: JSON.stringify({
+        matches: [
+          { page: "../vocab-attack-sentinel.md", add_terms: ["pwned"] },
+          { page: "/etc/passwd", add_terms: ["pwned"] },
+          { page: "wiki/../vocab-attack-sentinel.md", add_terms: ["pwned"] },
+        ],
+      }),
+      costUsd: 0.001,
+      inputTokens: 100,
+      outputTokens: 50,
+      durationMs: 500,
+    });
+
+    const { runVocabularyEnrichment } = await import("../../src/wiki/vocabulary-enricher.js");
+    const result = await runVocabularyEnrichment({
+      config,
+      store,
+      search,
+      provenance: null,
+      costTracker,
+      modelRouter,
+      runtimeMode: "api",
+    });
+
+    // Run completes but no pages enriched (all paths rejected).
+    expect(result.pagesEnriched).toBe(0);
+    expect(result.termsAdded).toBe(0);
+
+    // Sentinel must not exist — proves no write happened outside wiki_root.
+    const { existsSync } = await import("node:fs");
+    expect(existsSync(sentinelPath)).toBe(false);
+  });
 });

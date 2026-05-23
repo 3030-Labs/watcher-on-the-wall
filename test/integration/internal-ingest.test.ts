@@ -248,9 +248,11 @@ describe("POST /internal/ingest", () => {
     expect(res.status).toBe(400);
   });
 
-  it("returns 502/500 on unreachable signed_url (network failure)", async () => {
-    // Hit a high port we know is closed. fetch should reject the connection
-    // and the handler should map that to 5xx, not throw.
+  it("rejects loopback signed_url (review item 49 SSRF defense)", async () => {
+    // Post-item-49 fix: loopback signed URLs are rejected at the SSRF
+    // defense layer before any connection attempt. The error is 400 with
+    // a structured `code` field (PRIVATE_IP_BLOCKED or HOSTNAME_NOT_ALLOWED
+    // depending on which check fires first — both are correct rejections).
     const res = await fetch(`http://127.0.0.1:${port}/internal/ingest`, {
       method: "POST",
       headers: {
@@ -259,13 +261,13 @@ describe("POST /internal/ingest", () => {
       },
       body: JSON.stringify({
         raw_source_id: "rsid-net",
-        // 127.0.0.1:1 should refuse connection on any sane machine
         signed_url: "https://127.0.0.1:1/file",
         filename: "test.pdf",
       }),
     });
-    // Network failure → caught in catch block → 500.
-    expect([500, 502]).toContain(res.status);
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { code?: string };
+    expect(["PRIVATE_IP_BLOCKED", "HOSTNAME_NOT_ALLOWED"]).toContain(body.code ?? "");
   });
 
   it("rejects GET method (404)", async () => {

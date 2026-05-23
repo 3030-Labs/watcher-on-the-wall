@@ -153,7 +153,10 @@ export class CloudProvenanceSink {
  */
 export function cloudSinkFromEnv(env: NodeJS.ProcessEnv = process.env): CloudProvenanceSink | null {
   const wikiId = env.WOTW_WIKI_ID;
-  const adminServiceKey = env.ADMIN_SERVICE_KEY;
+  // Review item 50: prefer the dedicated cloud-sink secret; fall back to
+  // ADMIN_SERVICE_KEY only while wotw-cloud is being migrated to the
+  // split-secret scheme.
+  const adminServiceKey = env.WOTW_CLOUD_SINK_SECRET ?? env.ADMIN_SERVICE_KEY;
   if (!wikiId || !adminServiceKey) {
     return null;
   }

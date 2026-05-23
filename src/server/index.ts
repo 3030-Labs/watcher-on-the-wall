@@ -18,8 +18,29 @@ import {
   type IncomingMessage,
   type ServerResponse,
 } from "node:http";
-import { writeFile, mkdir } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { dirname, join, resolve, sep } from "node:path";
+import { timingSafeEqual } from "node:crypto";
+import { safeFetchToFile, SafeFetchError } from "./safe-fetch.js";
+
+/**
+ * Constant-time string comparison. Throws-on-length-mismatch in
+ * timingSafeEqual is itself a timing oracle; we normalize lengths
+ * to a fixed buffer first.
+ */
+function constantTimeEqual(a: string, b: string): boolean {
+  if (typeof a !== "string" || typeof b !== "string") return false;
+  if (a.length !== b.length) {
+    // Burn fixed time regardless to avoid length-oracle.
+    try {
+      timingSafeEqual(Buffer.from(a.padEnd(64, "\0")), Buffer.from(b.padEnd(64, "\0")));
+    } catch {
+      /* ignore */
+    }
+    return false;
+  }
+  return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+}
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { errMsg } from "../utils/errors.js";
@@ -340,10 +361,15 @@ export class McpHttpServer implements DaemonSubsystem {
     res: ServerResponse,
   ): Promise<void> {
     const log = getLogger("internal-api");
-    const adminKey = process.env.ADMIN_SERVICE_KEY;
-    const providedKey = req.headers["x-admin-key"];
-
-    if (!adminKey || providedKey !== adminKey) {
+    // Review items 50 + 59: prefer the dedicated internal-admin secret
+    // (rip-and-replace per G4 with tenant_count=0); fall back to
+    // ADMIN_SERVICE_KEY only while wotw-cloud is being migrated to the
+    // split-secret scheme. Compare in constant time to close the timing
+    // oracle the original `!==` opened (item 59).
+    const adminKey = process.env.WOTW_INTERNAL_ADMIN_KEY ?? process.env.ADMIN_SERVICE_KEY;
+    const providedRaw = req.headers["x-admin-key"];
+    const providedKey = typeof providedRaw === "string" ? providedRaw : "";
+    if (!adminKey || !constantTimeEqual(providedKey, adminKey)) {
       res.writeHead(401, { "content-type": "application/json" });
       res.end(JSON.stringify({ error: "unauthorized" }));
       return;
@@ -481,30 +507,41 @@ export class McpHttpServer implements DaemonSubsystem {
             break;
           }
 
+          // Pre-create the parent directory so safeFetchToFile can stream
+          // straight into it.
           try {
-            const fetchRes = await fetch(signedUrl);
-            if (!fetchRes.ok) {
-              log.warn(
-                {
-                  rawSourceId,
-                  status: fetchRes.status,
-                  filename,
-                },
-                "ingest: signed URL returned non-2xx",
-              );
-              json(502, {
-                error: `signed_url fetch returned ${fetchRes.status}`,
-              });
-              break;
-            }
-            const buffer = Buffer.from(await fetchRes.arrayBuffer());
             await mkdir(dirname(targetPath), { recursive: true });
-            await writeFile(targetPath, buffer);
+          } catch (err) {
+            log.error(
+              { err: err instanceof Error ? err.message : String(err), rawSourceId },
+              "ingest: mkdir failed",
+            );
+            json(500, { error: "internal" });
+            break;
+          }
+
+          try {
+            // SSRF-hardened fetch (review items 49 + 52 + 53 + 58).
+            // Layered defenses per X4-C-1: hostname allowlist + DNS
+            // private-IP rejection + content-length cap + streaming with
+            // byte-count cap + redirect:"error" + AbortSignal timeout.
+            const result = await safeFetchToFile(signedUrl, {
+              targetPath,
+              timeoutMs: 30_000,
+              maxBytes: 32 * 1024 * 1024,
+              // Supabase Storage and S3 presigned URLs are the only
+              // upstream sources the daemon trusts. The allowlist is
+              // substring-matched to cover storage.<project>.supabase.co,
+              // <bucket>.s3.<region>.amazonaws.com, and the
+              // amazonaws.com host shape S3 presigned URLs use.
+              hostnameAllowlist: [".supabase.co", ".s3.amazonaws.com", ".amazonaws.com"],
+            });
             log.info(
               {
                 rawSourceId,
                 filename,
-                bytes: buffer.length,
+                bytes: result.bytes,
+                contentType: result.contentType,
                 targetName,
               },
               "ingest: file landed in raw_path",
@@ -513,19 +550,39 @@ export class McpHttpServer implements DaemonSubsystem {
               status: "accepted",
               raw_source_id: rawSourceId,
               target_name: targetName,
-              bytes: buffer.length,
+              bytes: result.bytes,
             });
           } catch (err) {
-            log.error(
+            // Never echo internal hostnames / paths / upstream errors
+            // back to the caller — they're a path/host enumeration
+            // oracle (review item 53). Log the structured detail; return
+            // a code-only error to the caller.
+            const code = err instanceof SafeFetchError ? err.code : "WRITE_FAILED";
+            log.warn(
               {
-                err: err instanceof Error ? err.message : String(err),
                 rawSourceId,
+                filename,
+                code,
+                err: err instanceof Error ? err.message : String(err),
               },
-              "ingest: write failed",
+              "ingest: download rejected",
             );
-            json(500, {
-              error: err instanceof Error ? err.message : "write failed",
-            });
+            const status =
+              code === "UPSTREAM_NON_2XX"
+                ? 502
+                : code === "FETCH_TIMEOUT"
+                  ? 504
+                  : code === "PRIVATE_IP_BLOCKED" ||
+                      code === "HOSTNAME_NOT_ALLOWED" ||
+                      code === "INVALID_URL" ||
+                      code === "INVALID_SCHEME"
+                    ? 400
+                    : code === "CONTENT_LENGTH_TOO_LARGE" || code === "CONTENT_LENGTH_DURING_STREAM"
+                      ? 413
+                      : code === "CONTENT_TYPE_NOT_ALLOWED"
+                        ? 415
+                        : 500;
+            json(status, { error: "ingest_rejected", code });
           }
           break;
         }

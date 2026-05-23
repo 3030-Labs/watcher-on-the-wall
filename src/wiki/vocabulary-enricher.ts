@@ -19,6 +19,7 @@ import type { WikiSearch } from "./search.js";
 import type { WikiStore } from "./store.js";
 import { loadAllPages } from "../ingestion/wiki-writer.js";
 import { parsePage, serializePage } from "./page.js";
+import { resolveEditPath } from "../llm/edits.js";
 import { readFileSync } from "node:fs";
 import { atomicWriteSync } from "../utils/fs.js";
 
@@ -158,7 +159,19 @@ export async function runVocabularyEnrichment(
         if (!match.page || !Array.isArray(match.add_terms) || match.add_terms.length === 0)
           continue;
 
-        const absPath = `${config.wiki_root}/${match.page}`;
+        // Review item 35: prompt-injection surface — the LLM emits the
+        // `match.page` field, and vocabulary-enricher loads every page
+        // title into the prompt, so an attacker can plant a value here
+        // via a malicious source. Reject any path that doesn't resolve
+        // inside the wiki root via the same helper used by JSON-edits.
+        const absPath = resolveEditPath(config.wiki_root, match.page);
+        if (!absPath) {
+          log.warn(
+            { page: match.page, query },
+            "vocabulary: skipping LLM-emitted path that escapes wiki_root",
+          );
+          continue;
+        }
         try {
           const raw = readFileSync(absPath, "utf8");
           const page = parsePage(absPath, raw);

@@ -58,6 +58,12 @@ jobs:
       - name: Format check
         run: pnpm format:check
 
+      - name: Check LLM types sync (review item 8)
+        # Verifies src/llm/types-vendored.ts is byte-identical with the
+        # canonical wotw-cloud sibling. WARN-and-skip if the sibling
+        # checkout is missing; wotw-cloud CI runs the parallel check.
+        run: node scripts/check-llm-types-sync.mjs
+
       - name: Build
         run: pnpm build
 

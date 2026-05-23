@@ -32,13 +32,35 @@ export interface IngestionPrompt {
 const MAX_EXCERPT_BYTES = 32 * 1024; // 32KB per file in the prompt
 const CLAUDE_MD_MAX_BYTES = 64 * 1024;
 
+export interface ExistingPageManifestEntry {
+  path: string;
+  title: string;
+  category: string;
+  tags?: string[];
+  status?: string | null;
+}
+
 export interface BuildIngestionPromptOptions {
   config: WotwConfig;
   files: string[];
   claudeMdOverride?: string;
   /** Optional override for testing — otherwise read from disk. */
   readFile?: (path: string) => string;
+  /**
+   * Review item 17: slim manifest of existing wiki pages so the model
+   * can dedupe / merge / supersede / match conventions. Caller loads
+   * via WikiStore.listAll() and projects to the shape above. When the
+   * manifest exceeds {@link EXISTING_PAGES_FULL_LIST_LIMIT}, the top
+   * {@link EXISTING_PAGES_PROMPT_CAP} by token-overlap with incoming
+   * sources are kept (X1-C1 scope-bound).
+   */
+  existingPages?: ExistingPageManifestEntry[];
 }
+
+/** Cap for the manifest section in the prompt (per X1-C1). */
+export const EXISTING_PAGES_PROMPT_CAP = 50;
+/** Wiki size above which we pick the most-relevant pages instead of full list. */
+export const EXISTING_PAGES_FULL_LIST_LIMIT = 200;
 
 /**
  * Build the ingestion prompt for a batch of files.
@@ -70,10 +92,52 @@ export async function buildIngestionPrompt(
   // Gather rejection feedback from previously rejected candidates.
   const rejections = loadRejectionFeedback(opts.config);
 
+  // Review item 17: select existing-page manifest to surface to the model.
+  const manifest = selectRelevantPages(opts.existingPages ?? [], excerpts);
+
   const system = opts.claudeMdOverride ?? (await loadClaudeMd(opts.config));
-  const text = renderUserTurn(opts.config, excerpts, rejections);
+  const text = renderUserTurn(opts.config, excerpts, rejections, manifest);
 
   return { text, excerpts, system };
+}
+
+/**
+ * Pick the slice of the wiki's existing pages to surface to the model.
+ * If the wiki is small enough, dump the whole list. Otherwise rank by
+ * token-overlap with incoming source excerpts (cheap word-set jaccard)
+ * and keep the top {@link EXISTING_PAGES_PROMPT_CAP}.
+ */
+function selectRelevantPages(
+  manifest: ExistingPageManifestEntry[],
+  excerpts: IngestionPrompt["excerpts"],
+): ExistingPageManifestEntry[] {
+  if (manifest.length === 0) return [];
+  if (manifest.length <= EXISTING_PAGES_FULL_LIST_LIMIT) return manifest;
+
+  const sourceTokens = new Set<string>();
+  for (const e of excerpts) {
+    for (const tok of tokenize(e.excerpt)) sourceTokens.add(tok);
+  }
+  const scored = manifest.map((p) => {
+    const pageTokens = new Set([
+      ...tokenize(p.title),
+      ...(p.tags ?? []).flatMap((t) => tokenize(t)),
+    ]);
+    let overlap = 0;
+    for (const t of pageTokens) {
+      if (sourceTokens.has(t)) overlap += 1;
+    }
+    return { p, score: overlap };
+  });
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, EXISTING_PAGES_PROMPT_CAP).map((s) => s.p);
+}
+
+function tokenize(s: string): string[] {
+  return s
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length >= 3);
 }
 
 async function loadClaudeMd(cfg: WotwConfig): Promise<string> {
@@ -149,6 +213,7 @@ function renderUserTurn(
   cfg: WotwConfig,
   excerpts: IngestionPrompt["excerpts"],
   rejections: RejectionFeedback[] = [],
+  existingPages: ExistingPageManifestEntry[] = [],
 ): string {
   const lines: string[] = [];
   lines.push("# Ingestion batch");
@@ -171,6 +236,28 @@ function renderUserTurn(
     lines.push("```");
   }
   lines.push("");
+  // Review item 17: surface existing wiki pages so the model can dedupe,
+  // merge, supersede, and match category conventions.
+  if (existingPages.length > 0) {
+    lines.push("## Existing wiki pages");
+    lines.push("");
+    lines.push(
+      `The wiki already contains the following pages (${existingPages.length} shown). ` +
+        "Prefer updating an existing page over creating a new one with overlapping " +
+        "content; cross-link via `related:` rather than duplicating; use " +
+        "`status: superseded_by:` to chain successors.",
+    );
+    lines.push("");
+    for (const p of existingPages) {
+      const tagSuffix =
+        p.tags && p.tags.length > 0 ? ` — tags: ${p.tags.slice(0, 6).join(", ")}` : "";
+      const statusSuffix =
+        p.status && p.status !== "active" && p.status !== null ? ` [${p.status}]` : "";
+      lines.push(`- \`${p.path}\` (${p.category}) — ${p.title}${tagSuffix}${statusSuffix}`);
+    }
+    lines.push("");
+  }
+
   // Rejection feedback from previously rejected candidates.
   if (rejections.length > 0) {
     lines.push("## Previous rejections");

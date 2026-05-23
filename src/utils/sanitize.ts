@@ -27,18 +27,41 @@ export const DEFAULT_REDACTIONS: readonly RedactionRule[] = [
   },
   {
     name: "github-token",
-    pattern: /\bgh[pousr]_[A-Za-z0-9]{36,255}\b/g,
+    // Review item 2: also catch GitHub fine-grained personal access
+    // tokens (`github_pat_*`, 82+ chars per docs).
+    pattern: /\bgh[pousr]_[A-Za-z0-9]{36,255}\b|\bgithub_pat_[A-Za-z0-9_]{50,}\b/g,
     replacement: "[REDACTED:GITHUB_TOKEN]",
   },
   {
     name: "anthropic-api-key",
+    // Anthropic keys span ~95-115 chars after `sk-ant-`. The 80,120
+    // window stays generous enough to catch both legacy and current
+    // formats including api03- prefix.
     pattern: /\bsk-ant-[A-Za-z0-9-_]{80,120}\b/g,
     replacement: "[REDACTED:ANTHROPIC_API_KEY]",
   },
   {
     name: "openai-api-key",
-    pattern: /\bsk-[A-Za-z0-9]{20,}\b/g,
+    // Review item 2: original `\bsk-[A-Za-z0-9]{20,}\b` missed modern
+    // formats with `-` and `_` in the body — `sk-proj-*`,
+    // `sk-svcacct-*`, `sk-admin-*` all use `-` separators after the
+    // prefix and longer character set. Updated character class.
+    pattern: /\bsk-(?:proj|svcacct|admin)-[A-Za-z0-9_-]{20,200}\b|\bsk-[A-Za-z0-9]{20,200}\b/g,
     replacement: "[REDACTED:OPENAI_API_KEY]",
+  },
+  {
+    name: "gemini-api-key",
+    // Review item 2: Google AI Studio API keys are `AIza` + 35 chars.
+    // No rule existed pre-fix.
+    pattern: /\bAIza[A-Za-z0-9_-]{35}\b/g,
+    replacement: "[REDACTED:GEMINI_API_KEY]",
+  },
+  {
+    name: "wotw-daemon-token",
+    // Review item 2: daemon tokens emitted by `wotw user add` are
+    // `wotw_` + base64url chars. Pre-fix these went unredacted.
+    pattern: /\bwotw_[A-Za-z0-9_-]{30,200}\b/g,
+    replacement: "[REDACTED:WOTW_TOKEN]",
   },
   {
     name: "private-key-block",

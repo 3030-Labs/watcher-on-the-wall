@@ -5,7 +5,7 @@
  * a targeted prompt, records a "heal" provenance entry, and commits the
  * result. Handlers are dispatched by finding kind from `wotw lint --fix`.
  */
-import { relative } from "node:path";
+import { relative, resolve, sep } from "node:path";
 import { commitWikiChanges } from "../ingestion/git-committer.js";
 import type { InvokeResult } from "../ingestion/llm-invoker.js";
 import { runtimeAwareComplete } from "../llm/runtime-aware.js";
@@ -72,6 +72,17 @@ export async function healStale(finding: HealthFinding, ctx: HealContext): Promi
 
   const result = await invokeHeal(ctx, prompt, "heal-refresh");
   if (!result) return { finding, fixed: false, reason: "LLM invocation failed", costUsd: 0 };
+  // Review item 27: do not claim fixed:true when LLM emitted zero edits.
+  // Without this gate, the lint loop refinds + regenerates + re-heals the
+  // same finding next interval, burning cost indefinitely (item 30).
+  if (!result.success || result.writtenPaths.length === 0) {
+    return {
+      finding,
+      fixed: false,
+      reason: "LLM emitted no edits",
+      costUsd: result.totalCostUsd,
+    };
+  }
 
   // Rebuild search index after page mutation.
   ctx.search.rebuild(await loadAllPages(ctx.store));
@@ -126,6 +137,14 @@ export async function healDuplicate(finding: HealthFinding, ctx: HealContext): P
 
   const result = await invokeHeal(ctx, prompt, "heal-dedup");
   if (!result) return { finding, fixed: false, reason: "LLM invocation failed", costUsd: 0 };
+  if (!result.success || result.writtenPaths.length === 0) {
+    return {
+      finding,
+      fixed: false,
+      reason: "LLM emitted no edits",
+      costUsd: result.totalCostUsd,
+    };
+  }
 
   // Repair bidirectional links after merge.
   const allPages = await loadAllPages(ctx.store);
@@ -180,6 +199,14 @@ export async function healBrokenLinks(
 
   const result = await invokeHeal(ctx, prompt, "heal-links");
   if (!result) return { finding, fixed: false, reason: "LLM invocation failed", costUsd: 0 };
+  if (!result.success || result.writtenPaths.length === 0) {
+    return {
+      finding,
+      fixed: false,
+      reason: "LLM emitted no edits",
+      costUsd: result.totalCostUsd,
+    };
+  }
 
   // Rebuild search index after page mutation.
   ctx.search.rebuild(await loadAllPages(ctx.store));
@@ -292,6 +319,14 @@ export async function healContradiction(
 
   const result = await invokeHeal(ctx, prompt, "heal-contradiction");
   if (!result) return { finding, fixed: false, reason: "LLM invocation failed", costUsd: 0 };
+  if (!result.success || result.writtenPaths.length === 0) {
+    return {
+      finding,
+      fixed: false,
+      reason: "LLM emitted no edits",
+      costUsd: result.totalCostUsd,
+    };
+  }
 
   // Rebuild search index after page mutation.
   ctx.search.rebuild(await loadAllPages(ctx.store));
@@ -359,6 +394,14 @@ export async function healConsolidation(
 
   const result = await invokeHeal(ctx, prompt, "heal-consolidation");
   if (!result) return { finding, fixed: false, reason: "LLM invocation failed", costUsd: 0 };
+  if (!result.success || result.writtenPaths.length === 0) {
+    return {
+      finding,
+      fixed: false,
+      reason: "LLM emitted no edits",
+      costUsd: result.totalCostUsd,
+    };
+  }
 
   // Repair bidirectional links after consolidation.
   const allPages = await loadAllPages(ctx.store);
@@ -484,6 +527,12 @@ async function invokeHeal(
 
   const parsed = parseDaemonEditsResponse(rawText);
   const writtenPaths: string[] = [];
+  // Review item 28: heal writes used to call atomicWrite directly, bypassing
+  // reconcileWrittenPages (which adds frontmatter normalization + provenance
+  // footer + raw/ write-block). Now we (a) reject edits that target raw/, and
+  // (b) reconcile through wiki-writer after writing so heal pages end up
+  // shaped identically to ingestion pages.
+  const rawPath = resolve(ctx.config.raw_path);
   if (parsed) {
     for (const edit of parsed.edits) {
       const absPath = resolveEditPath(ctx.config.wiki_root, edit.path);
@@ -491,6 +540,13 @@ async function invokeHeal(
         log.warn(
           { path: edit.path, label },
           "heal edit rejected — path resolves outside wiki_root",
+        );
+        continue;
+      }
+      if (absPath === rawPath || absPath.startsWith(`${rawPath}${sep}`)) {
+        log.warn(
+          { path: edit.path, label },
+          "heal edit rejected — model attempted to write inside raw/",
         );
         continue;
       }
@@ -503,6 +559,27 @@ async function invokeHeal(
     }
   } else if (rawText.trim().length > 0) {
     log.warn({ label, sample: rawText.slice(0, 200) }, "heal response was not valid JSON edits");
+  }
+
+  // Reconcile written pages through the same pipeline ingestion uses so
+  // heal outputs get last_compiled, source_count, last_confirmed,
+  // superseded_by normalization + provenance footer applied uniformly.
+  // Staging is disabled for heal — heal is fix-in-place semantics.
+  if (writtenPaths.length > 0) {
+    try {
+      const { reconcileWrittenPages } = await import("../ingestion/wiki-writer.js");
+      const { pages, skipped } = await reconcileWrittenPages(ctx.store, writtenPaths, {
+        staging: false,
+      });
+      if (skipped.length > 0) {
+        log.warn({ label, skipped }, "heal: some written paths skipped during reconcile");
+      }
+      // Replace writtenPaths with paths that actually survived reconcile.
+      writtenPaths.length = 0;
+      for (const p of pages) writtenPaths.push(p.path);
+    } catch (err) {
+      log.warn({ err, label }, "heal: reconcile failed");
+    }
   }
 
   // Compose an InvokeResult-shaped object for the existing per-handler

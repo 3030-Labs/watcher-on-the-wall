@@ -137,3 +137,44 @@ describe("sanitize — DEFAULT_REDACTIONS shape", () => {
     expect(names).toContain("password-in-url");
   });
 });
+
+describe("review item 2 — modern key formats", () => {
+  it("redacts sk-proj-* (OpenAI project key)", () => {
+    const input = "key: sk-proj-PKyb6DKLd7aJUa0eKCo0ru4C4MNQTfNZDWTALgXFy3ejKc44OD0LtBmFU";
+    const out = sanitize(input);
+    expect(out).toContain("[REDACTED:OPENAI_API_KEY]");
+    expect(out).not.toContain("PKyb6DKLd7aJUa0eKCo0");
+  });
+
+  it("redacts sk-svcacct-* (OpenAI service account)", () => {
+    const input = "key: sk-svcacct-AbCdEfGhIjKlMnOpQrStUvWxYz0123456789ABCDEF";
+    const out = sanitize(input);
+    expect(out).toContain("[REDACTED:OPENAI_API_KEY]");
+  });
+
+  it("redacts sk-admin-* (OpenAI admin)", () => {
+    const input = "key: sk-admin-AbCdEfGhIjKlMnOpQrStUvWxYz0123456789ABCDEF";
+    const out = sanitize(input);
+    expect(out).toContain("[REDACTED:OPENAI_API_KEY]");
+  });
+
+  it("redacts AIza* (Google AI Studio / Gemini)", () => {
+    const input = "key: AIzaSyCmjWiwXnlqAv3JEZRxxJlX3P1y1MbGB_o";
+    const out = sanitize(input);
+    expect(out).toContain("[REDACTED:GEMINI_API_KEY]");
+    expect(out).not.toContain("AIzaSyCmjWiwXnlqAv3JEZRxxJlX3P1y1MbGB_o");
+  });
+
+  it("redacts github_pat_* (GitHub fine-grained PAT)", () => {
+    const input =
+      "token: github_pat_11ABCDEFG0AbCdEfGhIjKlMnOpQrStUvWxYz0123456789ABCDEFGHIJKLMNOPQRSTUVWXY";
+    const out = sanitize(input);
+    expect(out).toContain("[REDACTED:GITHUB_TOKEN]");
+  });
+
+  it("redacts wotw_* daemon tokens", () => {
+    const input = "auth: wotw_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_";
+    const out = sanitize(input);
+    expect(out).toContain("[REDACTED:WOTW_TOKEN]");
+  });
+});

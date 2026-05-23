@@ -23,6 +23,15 @@ eslint.config.js
 .github
 .husky
 
+# Review item 5: secrets must never bake into image layers via COPY . .
+# Local dev .env files (and their sibling drop-ins) are explicitly ignored
+# so a developer's loose ANTHROPIC_API_KEY / OPENAI_API_KEY can't escape
+# into the published daemon image.
+.env
+.env.*
+*.env
+*.env.*
+
 # Audit / planning markdown — not part of the runtime
 AUDIT-*.md
 DEEP-VERIFICATION-*.md

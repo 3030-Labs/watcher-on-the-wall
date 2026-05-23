@@ -37,7 +37,7 @@ import { atomicWrite } from "../utils/fs.js";
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { ModelRouter } from "./model-router.js";
-import { buildIngestionPrompt } from "./prompt-builder.js";
+import { buildIngestionPrompt, type ExistingPageManifestEntry } from "./prompt-builder.js";
 import { TenantScheduler } from "./tenant-scheduler.js";
 import { loadAllPages, reconcileWrittenPages } from "./wiki-writer.js";
 
@@ -258,9 +258,24 @@ export class IngestionQueue implements DaemonSubsystem {
     }
 
     // 1. Build prompt
+    // Review item 17: surface the existing-wiki manifest so the model
+    // can dedupe, merge, supersede, and match conventions. We project
+    // existing pages down to a slim shape (path + title + category +
+    // tags + status) — the prompt-builder ranks + caps when the wiki
+    // grows past 200 pages.
+    const existingPages: ExistingPageManifestEntry[] = (await loadAllPages(this.opts.store)).map(
+      (p) => ({
+        path: relative(this.opts.config.wiki_root, p.path) || p.path,
+        title: p.frontmatter.title,
+        category: p.frontmatter.category,
+        tags: p.frontmatter.tags,
+        status: p.frontmatter.status ?? null,
+      }),
+    );
     const prompt = await buildIngestionPrompt({
       config: this.opts.config,
       files: batch.paths,
+      existingPages,
     });
 
     // 1a. Hash source files NOW (M-PIPE-1). Computing source_hashes at

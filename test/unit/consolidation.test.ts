@@ -154,9 +154,20 @@ describe("healConsolidation", () => {
   });
 
   it("marks originals as status: consolidated (mock LLM)", async () => {
+    // Review item 27: heal handlers now require valid JSON edits to
+    // report fixed:true. Pre-fix mock returned non-JSON "Consolidated
+    // page content" which silently passed under the broken behavior.
     vi.doMock("../../src/llm/runtime-aware.js", () => ({
       runtimeAwareComplete: vi.fn().mockResolvedValue({
-        text: "Consolidated page content",
+        text: JSON.stringify({
+          edits: [
+            {
+              path: "wiki/concepts/topic-a.md",
+              content:
+                "---\ntitle: 'Topic A'\ncategory: concept\nsources: []\nrelated: []\nstatus: consolidated\nconsolidated_into: 'wiki/concepts/topic-a.md'\nlast_compiled: '2026-01-01'\nsource_count: 0\nlast_confirmed: '2026-01-01'\nsuperseded_by: null\n---\nConsolidated body.",
+            },
+          ],
+        }),
         costUsd: 0.002,
         inputTokens: 500,
         outputTokens: 200,

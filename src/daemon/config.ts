@@ -321,7 +321,12 @@ export function applyEnvOverrides(config: WotwConfig): WotwConfig {
   if (env.WOTW_OLLAMA_URL && env.WOTW_OLLAMA_URL.length > 0) {
     out.llm.ollama_url = env.WOTW_OLLAMA_URL;
   }
-  if (env.ADMIN_SERVICE_KEY && env.ADMIN_SERVICE_KEY.length > 0) {
+  // Review item 50: prefer the dedicated MCP bearer secret; fall back to
+  // ADMIN_SERVICE_KEY only while wotw-cloud is being migrated to the
+  // split-secret scheme (G4 — viable rip-and-replace with tenant_count=0).
+  if (env.WOTW_MCP_BEARER && env.WOTW_MCP_BEARER.length > 0) {
+    out.server.auth_token = env.WOTW_MCP_BEARER;
+  } else if (env.ADMIN_SERVICE_KEY && env.ADMIN_SERVICE_KEY.length > 0) {
     out.server.auth_token = env.ADMIN_SERVICE_KEY;
   }
   // In hosted mode, default to stdout logging so container log streams
