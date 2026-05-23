@@ -74,12 +74,29 @@ export async function buildIngestionPrompt(
   for (const file of opts.files) {
     try {
       const raw = read(file);
-      const truncated = raw.length > MAX_EXCERPT_BYTES;
-      const body = truncated ? `${raw.slice(0, MAX_EXCERPT_BYTES)}\n\n...[truncated]` : raw;
+      // Review item 18: byte-correct truncation. Pre-fix used string
+      // length (UTF-16 code units), which mis-measured multilingual
+      // content (CJK = 1 code unit but 3-4 bytes; emoji = surrogate pair).
+      // Slice on a UTF-8 byte boundary by buffering first.
+      const rawBytes = Buffer.byteLength(raw, "utf8");
+      const truncated = rawBytes > MAX_EXCERPT_BYTES;
+      let body: string;
+      if (truncated) {
+        const buf = Buffer.from(raw, "utf8").subarray(0, MAX_EXCERPT_BYTES);
+        body = `${buf.toString("utf8")}\n\n...[truncated]`;
+        // Review item 18: emit a structured log when truncation fires so
+        // the operator can see context loss instead of silently losing it.
+        getLogger("prompt-builder").warn(
+          { path: file, rawBytes, capBytes: MAX_EXCERPT_BYTES },
+          "source file truncated for prompt — model sees only the first MAX_EXCERPT_BYTES",
+        );
+      } else {
+        body = raw;
+      }
       excerpts.push({
         path: file,
         excerpt: sanitize(body),
-        bytes: Buffer.byteLength(raw, "utf8"),
+        bytes: rawBytes,
         truncated,
       });
     } catch (err) {
@@ -144,7 +161,16 @@ async function loadClaudeMd(cfg: WotwConfig): Promise<string> {
   const path = join(cfg.wiki_root, "CLAUDE.md");
   const contents = await readTextOrNullAsync(path);
   if (!contents) return DEFAULT_SYSTEM;
-  return contents.slice(0, CLAUDE_MD_MAX_BYTES);
+  // Review item 19: byte-correct truncation + structured log when the
+  // operator's main lever against context-loss is silently capped.
+  const rawBytes = Buffer.byteLength(contents, "utf8");
+  if (rawBytes <= CLAUDE_MD_MAX_BYTES) return contents;
+  const buf = Buffer.from(contents, "utf8").subarray(0, CLAUDE_MD_MAX_BYTES);
+  getLogger("prompt-builder").warn(
+    { path, rawBytes, capBytes: CLAUDE_MD_MAX_BYTES },
+    "CLAUDE.md truncated for prompt — model sees only the first CLAUDE_MD_MAX_BYTES",
+  );
+  return buf.toString("utf8");
 }
 
 const DEFAULT_SYSTEM = `You are the watcher-on-the-wall ingestion agent.

@@ -67,6 +67,16 @@ export class CloudProvenanceSink {
   constructor(opts: CloudSinkOptions) {
     this.wikiId = opts.wikiId;
     this.apiBaseUrl = opts.apiBaseUrl ?? DEFAULT_API_BASE_URL;
+    // Review item 41: WOTW_API_BASE_URL must be https:// — otherwise the
+    // admin key gets sent as plaintext `x-admin-key` over HTTP. Fail
+    // closed at construction time rather than letting a misconfigured
+    // tenant happily exfil the key on first append().
+    if (!this.apiBaseUrl.startsWith("https://")) {
+      throw new Error(
+        `cloud-sink: apiBaseUrl must be https:// (got "${this.apiBaseUrl}"); ` +
+          `WOTW_API_BASE_URL is misconfigured. Refusing to send admin key over plaintext.`,
+      );
+    }
     this.adminServiceKey = opts.adminServiceKey;
     this.fetchImpl = opts.fetchImpl ?? fetch;
   }

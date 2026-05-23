@@ -78,19 +78,27 @@ export class QueryEngine {
         : this.opts.modelRouter.modelFor("query");
 
     // Budget pre-flight — skipped in CLI mode (subscription-covered).
+    // Review item 36: pre-fix estimate was 8K input + 2K output; the
+    // actual single-pass prompt assembles 8 full pages at 16KB each
+    // (= 128KB input, ~32K tokens) — 4× the old estimate. Update to
+    // the realistic upper bound + invoke checkOperationBudget so the
+    // per-query cap fires too, not just daily-exceeds.
     const estimated =
-      runtimeMode === "cli" ? 0 : this.opts.modelRouter.computeCost(model, 8_000, 2_000);
-    if (runtimeMode !== "cli" && this.opts.costTracker.wouldExceedDaily(estimated)) {
-      return {
-        question,
-        answer: "",
-        sources: [],
-        costUsd: 0,
-        durationMs: Date.now() - started,
-        model,
-        skipped: true,
-        skipReason: "daily budget exceeded",
-      };
+      runtimeMode === "cli" ? 0 : this.opts.modelRouter.computeCost(model, 32_000, 4_000);
+    if (runtimeMode !== "cli") {
+      const budgetErr = this.opts.costTracker.checkOperationBudget("query", estimated);
+      if (budgetErr) {
+        return {
+          question,
+          answer: "",
+          sources: [],
+          costUsd: 0,
+          durationMs: Date.now() - started,
+          model,
+          skipped: true,
+          skipReason: budgetErr,
+        };
+      }
     }
 
     // Query expansion — expand the query into keyword variants via LLM.
@@ -201,6 +209,22 @@ export class QueryEngine {
       });
       answer = result.text;
       costUsd = result.costUsd + expansionCost;
+      // Review item 34: empty / whitespace LLM response must NOT be
+      // returned as a successful answer. Treat as skip with explicit
+      // reason so the caller surfaces "I don't know" instead of "".
+      if (answer.trim().length === 0) {
+        this.opts.costTracker.logUsage({ operation: "query", model, costUsd });
+        return {
+          question,
+          answer: "",
+          sources: hits.map(mapSourceMeta),
+          costUsd,
+          durationMs: Date.now() - started,
+          model,
+          skipped: true,
+          skipReason: "LLM returned empty response",
+        };
+      }
     } catch (err) {
       log.error({ err, question }, "query agent failed");
       return {

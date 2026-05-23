@@ -26,9 +26,22 @@ const VALID_CONFIDENCE: readonly ConfidenceLevel[] = ["high", "medium", "low"];
 /**
  * Parse a raw markdown file with frontmatter into a {@link WikiPage}.
  * Fills in missing fields with sensible defaults rather than throwing.
+ *
+ * Review item 45: a single malformed YAML page must not crash the whole
+ * health / lint / heal / candidate pass. When `matter()` throws (invalid
+ * YAML, BOM-prefix junk, indentation collision) we fall back to a body-
+ * only parse: treat the entire raw content as body, derive a title from
+ * the filename, and let the caller continue. The page is recoverable
+ * via heal/manual edit.
  */
 export function parsePage(filePath: string, raw: string): WikiPage {
-  const parsed = matter(raw);
+  let parsed: ReturnType<typeof matter>;
+  try {
+    parsed = matter(raw);
+  } catch {
+    // Body-only fallback. Treat the entire raw content as body.
+    parsed = { data: {}, content: raw } as ReturnType<typeof matter>;
+  }
   const data = parsed.data as Record<string, unknown>;
 
   const now = new Date().toISOString().slice(0, 10);
@@ -195,6 +208,16 @@ function normalizeStatus(v: unknown): WikiPageStatus | null {
   if (v === "merged") return "merged";
   if (v === "stale") return "stale";
   if (v === "consolidated") return "consolidated";
+  // Review item 46: prior implementation silently dropped unknown
+  // values. Lifecycle gates (orphaned/merged/consolidated/stale)
+  // depend on this field; an unknown value being coerced to null
+  // means the gate fails open. Log so operators see schema drift.
+  if (v !== undefined && v !== null) {
+    getLogger("page").warn(
+      { field: "status", value: v },
+      "page frontmatter has unknown status value — coerced to null",
+    );
+  }
   return null;
 }
 

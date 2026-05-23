@@ -16,7 +16,7 @@
  */
 import { createHash } from "node:crypto";
 import { readdirSync, statSync } from "node:fs";
-import { basename, join, relative, resolve } from "node:path";
+import { basename, join, relative, resolve, sep } from "node:path";
 import { atomicWrite, dirExists, ensureDir, readTextOrNullAsync } from "../utils/fs.js";
 import type { WikiCategory, WikiPage } from "../utils/types.js";
 import { parsePage, serializePage } from "./page.js";
@@ -101,10 +101,24 @@ export class WikiStore {
     return parsePage(absPath, raw);
   }
 
-  /** Write a page atomically. Creates parent dirs if needed. */
+  /**
+   * Write a page atomically. Creates parent dirs if needed.
+   *
+   * Review item 48: rejects writes that resolve outside the wiki root.
+   * Pre-fix, the only guard was each caller getting the path right; one
+   * forgotten check would land arbitrary content via a crafted
+   * `page.path`. Now the store enforces containment itself.
+   */
   async writePage(page: WikiPage): Promise<void> {
+    const abs = resolve(page.path);
+    const root = resolve(this.wikiRoot);
+    if (abs !== root && !abs.startsWith(`${root}${sep}`)) {
+      throw new Error(
+        `WikiStore.writePage: page.path ${page.path} resolves outside wikiRoot ${this.wikiRoot}`,
+      );
+    }
     const serialized = serializePage(page);
-    await atomicWrite(page.path, serialized);
+    await atomicWrite(abs, serialized);
   }
 
   /**

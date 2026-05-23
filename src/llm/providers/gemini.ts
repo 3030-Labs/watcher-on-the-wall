@@ -42,7 +42,11 @@ const PRICING: Readonly<Record<string, ModelPricing>> = {
   "gemini-1.5-flash": { input: 0.075, output: 0.3 },
 };
 
-const DEFAULT_PRICING: ModelPricing = { input: 1.25, output: 5 };
+// Review item 14: pre-fix `{ input: 1.25, output: 5 }` matches gemini-1.5-pro
+// at low context, but newer Gemini families (2.5-pro at >200K context,
+// 3.0-pro thinking mode) charge $5-12 / $25-60 per 1M. Default to a
+// conservative ceiling so cost guardrails fire before the real bill does.
+const DEFAULT_PRICING: ModelPricing = { input: 12, output: 60 };
 
 function normalizeFinishReason(reason: string | undefined): FinishReason {
   switch (reason) {
@@ -68,11 +72,16 @@ export class GeminiProvider implements LLMProvider {
 
   private readonly client: GoogleGenerativeAI;
   private readonly strictSafety: boolean;
+  // Retained for review item 12's free-tier validateConnection (REST
+  // `models?key=...` call). The constructor still hands the key to the
+  // SDK client, but the validate path needs it again.
+  private readonly apiKey: string;
 
   constructor(config: GeminiProviderConfig = {}) {
     const apiKey = config.apiKey ?? process.env.GOOGLE_API_KEY ?? "";
     this.client = config.client ?? new GoogleGenerativeAI(apiKey);
     this.strictSafety = config.strictSafety ?? false;
+    this.apiKey = apiKey;
   }
 
   async complete(prompt: string, options: CompletionOptions): Promise<string> {
@@ -119,9 +128,18 @@ export class GeminiProvider implements LLMProvider {
       ...(safetySettings ? { safetySettings } : {}),
     });
 
-    const result = await model.generateContent({
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-    });
+    // Review item 13: forward abortSignal so aborted requests stop
+    // accruing billable tokens client-side. Per SDK 0.24.1 docs, signal
+    // is plumbed via SingleRequestOptions. Note: Google charges for
+    // server-side work even after abort — the signal cancels the
+    // client read, not the upstream generation. Documented honesty.
+    const requestOptions = options.abortSignal ? { signal: options.abortSignal } : undefined;
+    const result = await model.generateContent(
+      {
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+      },
+      requestOptions,
+    );
 
     const durationMs = Date.now() - started;
     const candidate = result.response.candidates?.[0];
@@ -144,13 +162,19 @@ export class GeminiProvider implements LLMProvider {
   }
 
   async validateConnection(): Promise<ValidateConnectionResult> {
+    // Review item 12: pre-fix called a paid `generateContent` for every
+    // "validate" press. Switch to the free models listing endpoint
+    // (`/v1beta/models?key=...`) per X5-corrected recommendation —
+    // GoogleGenerativeAI.listModels() doesn't exist in SDK 0.24.1, so
+    // we use raw fetch. Costs nothing; still proves key + network are good.
     try {
-      // Cheap validation: a tiny completion against gemini-2.0-flash (cheapest).
-      const model = this.client.getGenerativeModel({ model: "gemini-2.0-flash" });
-      await model.generateContent({
-        contents: [{ role: "user", parts: [{ text: "ping" }] }],
-        generationConfig: { maxOutputTokens: 1 },
-      });
+      const apiKey = this.apiKey;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`;
+      const res = await fetch(url);
+      if (!res.ok) {
+        const body = await res.text();
+        return { valid: false, error: `HTTP ${res.status}: ${body.slice(0, 200)}` };
+      }
       return { valid: true };
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);

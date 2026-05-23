@@ -29,10 +29,17 @@ function setupStore(wikiRoot: string): WikiStore {
 
 // Minimal mock objects sufficient for testing the zero-hit path
 // (which never calls the LLM).
-function mockCostTracker(): { wouldExceedDaily: () => boolean; logUsage: () => void } {
+function mockCostTracker(): {
+  wouldExceedDaily: () => boolean;
+  logUsage: () => void;
+  checkOperationBudget: () => string | null;
+} {
   return {
     wouldExceedDaily: () => false,
     logUsage: () => {},
+    // Review item 22 + 36: query-engine + queue now invoke
+    // checkOperationBudget; mock returns null = "no budget block".
+    checkOperationBudget: () => null,
   };
 }
 

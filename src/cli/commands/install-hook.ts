@@ -5,7 +5,8 @@
  */
 import type { Command } from "commander";
 import { errMsg } from "../../utils/errors.js";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { atomicWriteSync } from "../../utils/fs.js";
 import { dirname, join } from "node:path";
 import { homedir, platform } from "node:os";
 import { fail, info, success } from "../output.js";
@@ -89,7 +90,10 @@ export async function runInstallHook(opts: InstallHookOptions): Promise<void> {
   }
 
   mkdirSync(dirname(settingsPath), { recursive: true });
-  writeFileSync(settingsPath, JSON.stringify(existing, null, 2));
+  // Review item 63: atomicWriteSync stages a tmp file then renames so a
+  // Ctrl-C between the truncate and the body-write can't leave the
+  // user's global Claude Code settings.json half-written.
+  atomicWriteSync(settingsPath, JSON.stringify(existing, null, 2));
   success(`Installed SessionStart hook at ${settingsPath}`);
   info(`Hook command: ${hookCommand}`);
 }

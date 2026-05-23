@@ -47,10 +47,29 @@ export class LintScheduler implements DaemonSubsystem {
     }
     const intervalMs = Math.max(1, Math.round(intervalHours * MS_PER_HOUR));
     log.info({ intervalHours, intervalMs }, "lint scheduler starting");
-    // Fire once on start so operators immediately see the current state.
-    void this.runOnce();
+    // Review item 31: pre-fix runOnce was fire-and-forget; if one tick's
+    // runOnce was still in flight when the next interval fired, two
+    // concurrent runs would race on writes, search-rebuild, provenance,
+    // git-commit, and cost-tracker. Gate interval ticks with an
+    // in-flight flag so a tardy run skips one cycle instead of racing.
+    // The startup tick is not gated (it's the first run and has nothing
+    // to race with) so observers can see the initial state immediately.
+    let inFlight = false;
+    const startupPromise = this.runOnce()
+      .catch(() => undefined)
+      .finally(() => {
+        // Mark the startup run as no-longer-blocking — it took its turn.
+      });
+    void startupPromise;
     const timer = setInterval(() => {
-      void this.runOnce();
+      if (inFlight) {
+        log.warn({}, "lint scheduler skipping tick — previous runOnce still in flight");
+        return;
+      }
+      inFlight = true;
+      void this.runOnce().finally(() => {
+        inFlight = false;
+      });
     }, intervalMs);
     // Do NOT keep the event loop alive for the scheduler — the daemon's
     // own check-interval is the keep-alive. Without unref() a stopped

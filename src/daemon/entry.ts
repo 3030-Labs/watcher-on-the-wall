@@ -21,7 +21,14 @@ import { CompoundingEngine } from "../compounding/engine.js";
 
 async function main(): Promise<void> {
   // Early fallback logger so daemon.init() failures are captured to disk.
-  const fallbackLogDir = `${process.cwd()}/.wotw`;
+  // Review item 7: in hosted mode the docker entrypoint cd's into
+  // WIKI_ROOT before calling main(), so process.cwd() points at the
+  // persistent Fly volume. A boot-failure log written there bloats
+  // tenant storage with noise the user cannot inspect. Use /tmp in
+  // hosted mode (ephemeral, only relevant if the real logger can't
+  // come up anyway). Outside hosted mode, keep cwd to stay portable.
+  const isHosted = process.env.WOTW_HOSTED === "true" || process.env.WOTW_HOSTED === "1";
+  const fallbackLogDir = isHosted ? "/tmp/wotw" : `${process.cwd()}/.wotw`;
   const fallbackLogPath = `${fallbackLogDir}/daemon.log`;
   try {
     mkdirSync(fallbackLogDir, { recursive: true });
@@ -184,6 +191,15 @@ async function main(): Promise<void> {
     daemon.attachSubsystem(watcher);
     daemon.attachSubsystem(mcp);
     daemon.attachSubsystem(lintScheduler);
+
+    // Review item 23: startReconciliation was defined + tested but
+    // never called. The watcher relies on it to catch files dropped
+    // into raw/ during daemon downtime (chokidar's initial-add events
+    // fire on startup, but only once). Without a periodic reconcile
+    // pass, any file the watcher's `processedPaths` Set already saw
+    // and that gets re-touched, deleted, or replaced during a brief
+    // hiccup is silently lost. 5-minute interval matches review intent.
+    watcher.startReconciliation(5 * 60 * 1000);
 
     // Startup banner (Feature 3). Printed AFTER all subsystems are
     // wired but BEFORE run() blocks, so the operator always sees a

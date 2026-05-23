@@ -294,21 +294,28 @@ export class IngestionQueue implements DaemonSubsystem {
     // 2. Pre-flight budget check. CLI mode is subscription-covered — skip
     // the budget check entirely. API mode estimates 12k input + 4k output
     // worst-case until we know the real cost.
+    // Review item 22: use checkOperationBudget() so the per-ingest USD
+    // cap fires too (not just daily-exceeds). Pre-fix only daily was
+    // checked; checkOperationBudget had zero callers anywhere in the
+    // codebase. Now both per-ingest and daily caps are enforced here.
     const preflight =
       runtimeMode === "cli" ? 0 : this.opts.modelRouter.computeCost(model, 12_000, 4_000);
-    if (runtimeMode !== "cli" && this.opts.costTracker.wouldExceedDaily(preflight)) {
-      const outcome: IngestionOutcome = {
-        batchId: batch.id,
-        skipped: true,
-        skipReason: "daily budget exceeded",
-        pagesWritten: 0,
-        costUsd: 0,
-        gitSha: null,
-        durationMs: Date.now() - started,
-      };
-      log.warn({ batchId: batch.id }, "skipping batch — daily budget exceeded");
-      this.lastOutcome = outcome;
-      return outcome;
+    if (runtimeMode !== "cli") {
+      const budgetErr = this.opts.costTracker.checkOperationBudget("ingest", preflight);
+      if (budgetErr) {
+        const outcome: IngestionOutcome = {
+          batchId: batch.id,
+          skipped: true,
+          skipReason: budgetErr,
+          pagesWritten: 0,
+          costUsd: 0,
+          gitSha: null,
+          durationMs: Date.now() - started,
+        };
+        log.warn({ batchId: batch.id, budgetErr }, "skipping batch — budget cap");
+        this.lastOutcome = outcome;
+        return outcome;
+      }
     }
 
     // 3. Single-pass LLM call. Phase 6: the daemon dispatches via
@@ -431,6 +438,20 @@ export class IngestionQueue implements DaemonSubsystem {
     // Guard: if the agent produced zero pages, skip all downstream work.
     if (newPages.length === 0 && skippedWrites.length === 0) {
       log.warn({ batchId: batch.id }, "agent produced zero pages — marking batch as skipped");
+      // Review item 24: empty-pages skip used to bypass costTracker.logUsage
+      // entirely. The LLM was invoked, real dollars were spent, but the
+      // daily cap never saw it — so subsequent batches could blow past
+      // the daily budget without warning. Log the actual cost here too.
+      if (runtimeMode !== "cli" && invokeResult.totalCostUsd > 0) {
+        this.opts.costTracker.logUsage({
+          operation: "ingest",
+          model,
+          costUsd: invokeResult.totalCostUsd,
+          inputTokens: invokeResult.inputTokens,
+          outputTokens: invokeResult.outputTokens,
+          batchId: batch.id,
+        });
+      }
       const outcome: IngestionOutcome = {
         batchId: batch.id,
         skipped: true,

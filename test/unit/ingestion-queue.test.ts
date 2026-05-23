@@ -114,6 +114,9 @@ function buildOpts(wikiRoot: string): IngestionQueueOptions {
     costTracker: {
       wouldExceedDaily: vi.fn().mockReturnValue(false),
       logUsage: vi.fn(),
+      // Review item 22: queue.ts now invokes checkOperationBudget;
+      // mock returns null = "no budget block".
+      checkOperationBudget: vi.fn().mockReturnValue(null),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any,
     modelRouter: {

@@ -61,6 +61,14 @@ export interface RuntimeAwareCompleteResult {
   inputTokens: number;
   outputTokens: number;
   durationMs: number;
+  /**
+   * Review item 16: provider stop reason — propagated up so callers can
+   * detect max-tokens truncation. `"length"` / `"max_tokens"` (provider-
+   * specific) means the response was cut off mid-output; downstream
+   * JSON-edits parsers should treat that as a hard parse-error not a
+   * model-said-no-edits. CLI mode doesn't expose this — null.
+   */
+  finishReason: string | null;
 }
 
 /**
@@ -102,6 +110,8 @@ export async function runtimeAwareComplete(
       inputTokens: result.inputTokens,
       outputTokens: result.outputTokens,
       durationMs: result.durationMs,
+      // Review item 16: CLI subprocess shape doesn't expose finish reason.
+      finishReason: null,
     };
   }
 
@@ -123,6 +133,11 @@ export async function runtimeAwareComplete(
     inputTokens: result.usage.inputTokens,
     outputTokens: result.usage.outputTokens,
     durationMs: result.usage.durationMs,
+    // Review item 16: surface provider finish reason so consumers can
+    // detect max-tokens truncation. Without this, partial-JSON responses
+    // are silently parsed as "model emitted no edits" — looks like a
+    // successful no-op when it's actually a hard truncation.
+    finishReason: result.usage.finishReason ?? null,
   };
 }
 

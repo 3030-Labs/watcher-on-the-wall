@@ -86,7 +86,11 @@ export class OllamaProvider implements LLMProvider {
     messages.push({ role: "user", content: prompt });
 
     const ollamaOptions: Record<string, unknown> = {};
-    if (options.maxTokens !== undefined) ollamaOptions.num_predict = options.maxTokens;
+    // Review item 11: Ollama's default num_predict is 128 — far below
+    // what vocabulary-enricher / query-expansion / ingestion need.
+    // Callers that don't set maxTokens get silent 128-token truncation.
+    // Match the daemon's other providers' default of 4096.
+    ollamaOptions.num_predict = options.maxTokens ?? 4096;
     if (options.temperature !== undefined) ollamaOptions.temperature = options.temperature;
     if (options.stopSequences && options.stopSequences.length > 0) {
       ollamaOptions.stop = options.stopSequences;

@@ -164,17 +164,13 @@ export function registerTools(server: McpServer, ctx: ToolRegistrationContext): 
       inputSchema: {
         question: z.string().min(1),
         k: z.number().int().min(1).max(20).default(8).optional(),
-        domain: z
-          .string()
-          .optional()
-          .describe("Filter search context to pages matching this knowledge domain."),
-        scope: z
-          .string()
-          .optional()
-          .describe("Filter search context to pages matching this project/context scope."),
+        // Review item 15: `domain` and `scope` were advertised in the
+        // tool schema but destructured into `_domain` / `_scope` and
+        // ignored. The schema now reflects only what's implemented;
+        // re-add once wiki search supports filter-by-frontmatter.
       },
     },
-    async ({ question, k, domain: _domain, scope: _scope }) => {
+    async ({ question, k }) => {
       log.info({ question }, "mcp query");
       const result = await ctx.queryEngine.answer(question, k ?? 8);
       if (result.skipped) {

@@ -235,7 +235,12 @@ export function applyEnvOverrides(config: WotwConfig): WotwConfig {
   const env = process.env;
 
   if (env.WOTW_HOSTED !== undefined) {
-    out.hosted.enabled = env.WOTW_HOSTED === "true";
+    // Review item 61: accept the conventional truthy spellings rather
+    // than only "true". Pre-fix, "1" / "True" / "yes" / "on" all
+    // silently set hosted.enabled = false; container operators expect
+    // any of these to enable hosted-mode defaults.
+    const v = env.WOTW_HOSTED.trim().toLowerCase();
+    out.hosted.enabled = v === "true" || v === "1" || v === "yes" || v === "on";
   }
   if (env.TENANT_ID && env.TENANT_ID.length > 0) {
     out.hosted.tenant_id = env.TENANT_ID;
@@ -395,6 +400,17 @@ export function validateHostedConfig(config: WotwConfig): void {
   }
   if (!config.wiki_root || config.wiki_root.length === 0) {
     throw new Error("Config error: hosted.enabled is true but wiki_root / WIKI_ROOT is unset.");
+  }
+  // Review item 60: a relative wiki_root in hosted mode resolves against
+  // process.cwd(), which is the ephemeral container filesystem on Fly
+  // Machines. Tenant data would be wiped on every restart. Require
+  // absolute path in hosted mode.
+  if (!config.wiki_root.startsWith("/")) {
+    throw new Error(
+      `Config error: hosted.enabled is true but wiki_root "${config.wiki_root}" is not absolute. ` +
+        `In hosted mode the daemon must persist tenant data on a mounted volume; ` +
+        `a relative path resolves against process.cwd() which is the ephemeral container fs.`,
+    );
   }
 }
 

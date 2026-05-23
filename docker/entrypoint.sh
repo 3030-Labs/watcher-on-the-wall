@@ -66,10 +66,37 @@ if [ "${WOTW_HOSTED}" = "true" ]; then
     echo "FATAL: TENANT_ID env var is required when WOTW_HOSTED=true" >&2
     exit 78
   fi
-  if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
-    echo "FATAL: ANTHROPIC_API_KEY env var is required when WOTW_HOSTED=true" >&2
-    exit 78
-  fi
+  # Review item 4: require the key that matches WOTW_LLM_PROVIDER, not
+  # ANTHROPIC_API_KEY unconditionally. Pre-fix forced multi-key env
+  # state per machine and conflated provider selection with key presence.
+  PROVIDER="${WOTW_LLM_PROVIDER:-anthropic}"
+  case "$PROVIDER" in
+    anthropic)
+      if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+        echo "FATAL: ANTHROPIC_API_KEY env var is required when WOTW_LLM_PROVIDER=anthropic" >&2
+        exit 78
+      fi
+      ;;
+    openai)
+      if [ -z "${OPENAI_API_KEY:-}" ]; then
+        echo "FATAL: OPENAI_API_KEY env var is required when WOTW_LLM_PROVIDER=openai" >&2
+        exit 78
+      fi
+      ;;
+    gemini)
+      if [ -z "${GOOGLE_API_KEY:-}" ]; then
+        echo "FATAL: GOOGLE_API_KEY env var is required when WOTW_LLM_PROVIDER=gemini" >&2
+        exit 78
+      fi
+      ;;
+    ollama)
+      # No API key needed; daemon dials WOTW_OLLAMA_URL.
+      ;;
+    *)
+      echo "FATAL: WOTW_LLM_PROVIDER='$PROVIDER' is not a known provider" >&2
+      exit 78
+      ;;
+  esac
   if [ -z "${WIKI_ROOT:-}" ]; then
     echo "FATAL: WIKI_ROOT env var is required when WOTW_HOSTED=true" >&2
     exit 78

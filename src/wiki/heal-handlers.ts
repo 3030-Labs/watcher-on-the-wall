@@ -153,6 +153,13 @@ export async function healDuplicate(finding: HealthFinding, ctx: HealContext): P
     await ctx.store.writePage(p);
   }
   ctx.search.rebuild(await loadAllPages(ctx.store));
+  // Review item 32: backlink-repair writes were missing from
+  // wiki_files_written. Splice them into result.writtenPaths so the
+  // chain records the full set of files this heal touched, not just
+  // the LLM-emitted edits.
+  for (const p of mutated) {
+    if (!result.writtenPaths.includes(p.path)) result.writtenPaths.push(p.path);
+  }
 
   await recordHealProvenance(ctx, result, {
     heal_kind: "dedup-merge",
@@ -410,6 +417,10 @@ export async function healConsolidation(
     await ctx.store.writePage(p);
   }
   ctx.search.rebuild(await loadAllPages(ctx.store));
+  // Review item 32: include backlink-repair writes in wiki_files_written.
+  for (const p of mutated) {
+    if (!result.writtenPaths.includes(p.path)) result.writtenPaths.push(p.path);
+  }
 
   await recordHealProvenance(ctx, result, {
     heal_kind: "consolidation",

@@ -2,7 +2,7 @@
  * Unit tests for daemon/config.ts: defaults, deep-merge, path resolution,
  * and cosmiconfig-based loadConfig() composition.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, afterAll } from "vitest";
 import { isAbsolute, join } from "node:path";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -226,6 +226,9 @@ describe("loadConfig", () => {
 describe("applyEnvOverrides", () => {
   // Each test snapshots and restores the env vars it touches so the suite
   // remains deterministic regardless of run order.
+  // Review item 66: env vars touched by applyEnvOverrides that weren't
+  // in the snapshot/restore list — tests touching these would leak
+  // state between runs.
   const ENV_KEYS = [
     "WOTW_HOSTED",
     "TENANT_ID",
@@ -237,6 +240,14 @@ describe("applyEnvOverrides", () => {
     "WOTW_LOG_LEVEL",
     "WOTW_RUNTIME_MODE",
     "ADMIN_SERVICE_KEY",
+    "WOTW_MCP_BEARER",
+    "WOTW_INTERNAL_ADMIN_KEY",
+    "WOTW_CLOUD_SINK_SECRET",
+    "WOTW_LLM_PROVIDER",
+    "WOTW_LLM_MODEL",
+    "WOTW_OLLAMA_URL",
+    "WOTW_LOG_FILE",
+    "WOTW_API_BASE_URL",
   ] as const;
 
   function withEnv<T>(
@@ -373,5 +384,74 @@ describe("validateHostedConfig", () => {
     cfg.hosted.tenant_id = "11111111-2222-3333-4444-555555555555";
     cfg.wiki_root = "";
     expect(() => validateHostedConfig(cfg)).toThrowError(/wiki_root.*WIKI_ROOT is unset/);
+  });
+
+  it("review item 60: rejects relative wiki_root in hosted mode", () => {
+    const cfg = defaultConfig();
+    cfg.hosted.enabled = true;
+    cfg.hosted.tenant_id = "11111111-2222-3333-4444-555555555555";
+    cfg.wiki_root = "./relative-path";
+    expect(() => validateHostedConfig(cfg)).toThrowError(/not absolute/);
+  });
+
+  it("review item 60: accepts absolute wiki_root in hosted mode", () => {
+    const cfg = defaultConfig();
+    cfg.hosted.enabled = true;
+    cfg.hosted.tenant_id = "11111111-2222-3333-4444-555555555555";
+    cfg.wiki_root = "/data/tenant-uuid";
+    expect(() => validateHostedConfig(cfg)).not.toThrow();
+  });
+});
+
+describe("hosted-mode default overrides (review item 65)", () => {
+  // Validation-gap-instance #12 (2026-05-12) introduced 3 hosted-mode
+  // overrides in applyEnvOverrides; the regression had no guard. These
+  // tests pin the inverted-default contract so a future refactor can't
+  // re-introduce the bug.
+  const SAVED_HOSTED = process.env.WOTW_HOSTED;
+  afterAll(() => {
+    if (SAVED_HOSTED === undefined) delete process.env.WOTW_HOSTED;
+    else process.env.WOTW_HOSTED = SAVED_HOSTED;
+  });
+
+  it("hosted mode inverts ingestion.staging from true → false", async () => {
+    process.env.WOTW_HOSTED = "true";
+    process.env.TENANT_ID = "11111111-2222-3333-4444-555555555555";
+    process.env.WIKI_ROOT = "/data/test";
+    try {
+      const cfg = applyEnvOverrides(defaultConfig());
+      expect(cfg.hosted.enabled).toBe(true);
+      expect(cfg.ingestion.staging).toBe(false);
+    } finally {
+      delete process.env.WOTW_HOSTED;
+      delete process.env.TENANT_ID;
+      delete process.env.WIKI_ROOT;
+    }
+  });
+
+  it("hosted mode enables lint.schedule_enabled by default", async () => {
+    process.env.WOTW_HOSTED = "true";
+    process.env.TENANT_ID = "11111111-2222-3333-4444-555555555555";
+    process.env.WIKI_ROOT = "/data/test";
+    try {
+      const cfg = applyEnvOverrides(defaultConfig());
+      expect(cfg.lint.schedule_enabled).toBe(true);
+    } finally {
+      delete process.env.WOTW_HOSTED;
+      delete process.env.TENANT_ID;
+      delete process.env.WIKI_ROOT;
+    }
+  });
+
+  it("WOTW_HOSTED truthy alternates accept 1 / yes / on (review item 61)", async () => {
+    for (const v of ["1", "yes", "on", "True", "TRUE"]) {
+      process.env.WOTW_HOSTED = v;
+      try {
+        const cfg = applyEnvOverrides(defaultConfig());
+        expect(cfg.hosted.enabled).toBe(true);
+      } finally {
+        delete process.env.WOTW_HOSTED;
+      }
+    }
   });
 });

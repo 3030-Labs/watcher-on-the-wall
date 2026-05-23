@@ -3,10 +3,11 @@
  * `wotw install-hook`.
  */
 import type { Command } from "commander";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { info, success } from "../output.js";
+import { info, success, fail } from "../output.js";
+import { atomicWriteSync } from "../../utils/fs.js";
 
 interface UninstallHookOptions {
   scope?: "user" | "project";
@@ -46,7 +47,19 @@ export async function runUninstallHook(opts: UninstallHookOptions): Promise<void
     [key: string]: unknown;
   }
 
-  const parsed = JSON.parse(readFileSync(settingsPath, "utf8")) as Settings;
+  // Review item 64: malformed settings.json must not throw unhandled —
+  // give the user a clear "file is corrupt, fix it manually" message
+  // instead of a stack trace.
+  let parsed: Settings;
+  try {
+    parsed = JSON.parse(readFileSync(settingsPath, "utf8")) as Settings;
+  } catch (err) {
+    fail(
+      `Failed to parse ${settingsPath}: ${err instanceof Error ? err.message : String(err)}. ` +
+        `Fix or remove the file by hand, then re-run \`wotw uninstall-hook\`.`,
+    );
+    return;
+  }
   if (!parsed.hooks?.SessionStart || parsed.hooks.SessionStart.length === 0) {
     info("No SessionStart hooks to remove.");
     return;
@@ -60,7 +73,9 @@ export async function runUninstallHook(opts: UninstallHookOptions): Promise<void
   });
   const after = parsed.hooks.SessionStart.length;
 
-  writeFileSync(settingsPath, JSON.stringify(parsed, null, 2));
+  // Review item 63: atomic write so Ctrl-C between truncate + body-write
+  // can't corrupt the user's global Claude Code settings.json.
+  atomicWriteSync(settingsPath, JSON.stringify(parsed, null, 2));
   success(`Removed ${before - after} wotw SessionStart hook entries from ${settingsPath}`);
 }
 

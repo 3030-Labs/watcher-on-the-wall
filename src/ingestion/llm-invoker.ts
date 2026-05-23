@@ -137,7 +137,12 @@ export async function invokeIngestionAgent(opts: InvokeOptions): Promise<InvokeR
       maxTurns: opts.maxTurns,
       allowedTools: tools,
       tools,
-      permissionMode: "bypassPermissions",
+      // Review item 26: when allowedTools is empty (single-pass mode
+      // post-Phase 6), "bypassPermissions" is a meaningless attack-
+      // surface widener — there are no tools to grant. Default to
+      // the SDK's "default" mode for the empty-tools path; keep the
+      // bypass for the legacy multi-turn / tools-allowed shape.
+      permissionMode: tools.length === 0 ? "default" : "bypassPermissions",
       abortController: abort,
       // Point SDK at the user-installed @anthropic-ai/claude-code launcher.
       // SDK default resolution looks for a platform-specific sibling package

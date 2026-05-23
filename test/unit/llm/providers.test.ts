@@ -134,10 +134,14 @@ describe("OpenAIProvider", () => {
     expect(result.error).toMatch(/401/);
   });
 
-  it("computeCost falls back to gpt-4o pricing for unknown models", () => {
+  it("computeCost falls back to a conservative ceiling for unknown models (review item 14)", () => {
+    // Review item 14 raised DEFAULT_PRICING to a conservative ceiling
+    // ($15 input / $60 output per 1M tokens) so cost guardrails fire
+    // before the real bill blows past the cap on unknown reasoning
+    // models (o1-pro, o3-family).
     const provider = new OpenAIProvider({ apiKey: "test" });
-    expect(provider.computeCost("unknown-model", 1_000_000, 0)).toBeCloseTo(2.5, 4);
-    expect(provider.computeCost("unknown-model", 0, 1_000_000)).toBe(10);
+    expect(provider.computeCost("unknown-model", 1_000_000, 0)).toBe(15);
+    expect(provider.computeCost("unknown-model", 0, 1_000_000)).toBe(60);
   });
 
   it("computeCost: gpt-4o-mini is much cheaper", () => {
@@ -219,9 +223,13 @@ describe("GeminiProvider", () => {
     expect(provider.computeCost("gemini-2.0-pro", 1_000_000, 0)).toBeCloseTo(1.25, 4);
   });
 
-  it("computeCost falls back to gemini-2.0-pro pricing for unknown models", () => {
+  it("computeCost falls back to a conservative ceiling for unknown models (review item 14)", () => {
+    // Review item 14 raised Gemini's DEFAULT_PRICING to a conservative
+    // ceiling ($12 input / $60 output per 1M tokens) covering future
+    // 2.5-pro and 3.0-pro families.
     const provider = new GeminiProvider({ apiKey: "test" });
-    expect(provider.computeCost("unknown-gemini", 1_000_000, 0)).toBeCloseTo(1.25, 4);
+    expect(provider.computeCost("unknown-gemini", 1_000_000, 0)).toBe(12);
+    expect(provider.computeCost("unknown-gemini", 0, 1_000_000)).toBe(60);
   });
 
   it("does NOT use strict safety by default (relaxed for technical content)", async () => {

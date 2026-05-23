@@ -43,7 +43,6 @@ function constantTimeEqual(a: string, b: string): boolean {
 }
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { errMsg } from "../utils/errors.js";
 import { getLogger } from "../utils/logger.js";
 import type { DaemonSubsystem } from "../daemon/index.js";
 import type { RuntimeMode, WotwConfig } from "../utils/types.js";
@@ -336,11 +335,16 @@ export class McpHttpServer implements DaemonSubsystem {
     } catch (err) {
       log.error({ err, method: req.method, url: req.url }, "mcp request failed");
       if (!res.headersSent) {
+        // Review item 54: don't embed errMsg(err) in the JSON-RPC error
+        // message. SDK error shapes can carry headers / paths / tokens
+        // that leak via the response body. Log the structured detail;
+        // return a generic message.
+        log.error({ err }, "MCP request failed");
         res.writeHead(500, { "content-type": "application/json" });
         res.end(
           JSON.stringify({
             jsonrpc: "2.0",
-            error: { code: -32603, message: `Internal error: ${errMsg(err)}` },
+            error: { code: -32603, message: "Internal error" },
             id: null,
           }),
         );
@@ -392,6 +396,22 @@ export class McpHttpServer implements DaemonSubsystem {
       res.end(JSON.stringify(data));
     };
 
+    // Review item 55: every /internal/* endpoint accepted body.tenant_id
+    // and trusted it for logging/routing without verifying it matches
+    // the daemon's own config.hosted.tenant_id. A misrouted control-
+    // plane call would execute against the wrong tenant. Verify once
+    // here so downstream handlers can trust body.tenant_id.
+    const expectedTenant = this.opts.config.hosted.tenant_id;
+    const providedTenant = typeof body.tenant_id === "string" ? body.tenant_id : null;
+    if (providedTenant !== null && expectedTenant !== null && providedTenant !== expectedTenant) {
+      log.warn(
+        { providedTenant, expectedTenant, pathname },
+        "internal: rejected tenant_id mismatch",
+      );
+      json(403, { error: "tenant_id mismatch" });
+      return;
+    }
+
     try {
       switch (pathname) {
         case "/internal/queue-status": {
@@ -427,30 +447,28 @@ export class McpHttpServer implements DaemonSubsystem {
         }
 
         case "/internal/export": {
-          log.info({ tenantId: body.tenant_id }, "exporting tenant data");
-          // Export is handled at the cloud layer using Supabase Storage.
-          // The daemon acknowledges the request; actual tar.gz creation
-          // would be implemented with a child_process tar call on the
-          // tenant's wiki root directory.
-          json(200, {
-            status: "acknowledged",
-            tenant_id: body.tenant_id,
-            wiki_root: this.opts.config.wiki_root,
-            timestamp: new Date().toISOString(),
+          // Review item 56: pre-fix returned 200 "acknowledged" but did
+          // NO work. A control plane that trusts the response would mark
+          // the tenant exported when no export happened. Return 501 so
+          // callers cannot mistake a stub for a completed export.
+          log.warn({ tenantId: body.tenant_id }, "export requested — not implemented");
+          json(501, {
+            error: "not_implemented",
+            note: "tenant export is performed by the wotw-cloud layer, not the daemon",
           });
           break;
         }
 
         case "/internal/import": {
-          log.info({ tenantId: body.tenant_id, backup: body.backup_path }, "import requested");
-          // Import is a dangerous operation. The actual restore logic
-          // (download tar.gz, wipe, extract, rebuild index, verify chain)
-          // would be implemented here. For now, acknowledge the request.
-          json(200, {
-            status: "acknowledged",
-            tenant_id: body.tenant_id,
-            backup_path: body.backup_path,
-            timestamp: new Date().toISOString(),
+          // Review item 56: same shape as /internal/export — pre-fix
+          // returned 200 with no work. 501 so callers cannot mistake a
+          // stub for a completed restore. Body fields (backup_path)
+          // are explicitly NOT echoed in the response (X4 footnote on
+          // S8-F-006).
+          log.warn({ tenantId: body.tenant_id }, "import requested — not implemented");
+          json(501, {
+            error: "not_implemented",
+            note: "tenant import is performed by the wotw-cloud layer, not the daemon",
           });
           break;
         }
@@ -476,12 +494,32 @@ export class McpHttpServer implements DaemonSubsystem {
             json(400, { error: "raw_source_id required" });
             break;
           }
+          // Review item 57: length + charset bounds on raw_source_id +
+          // filename so filesystem NAME_MAX truncation can't collide
+          // distinct uploads onto the same on-disk name, and Unicode
+          // normalization can't smuggle a `../` past the basename check.
+          if (rawSourceId.length > 64 || !/^[a-zA-Z0-9_-]+$/.test(rawSourceId)) {
+            json(400, { error: "raw_source_id must be ≤64 chars [A-Za-z0-9_-]" });
+            break;
+          }
           if (typeof signedUrl !== "string" || !signedUrl.startsWith("https://")) {
             json(400, { error: "signed_url required (must be https://...)" });
             break;
           }
           if (typeof filename !== "string" || !filename) {
             json(400, { error: "filename required" });
+            break;
+          }
+          // Review item 57: bound filename to avoid NAME_MAX truncation
+          // collision (most Linux fs's truncate at 255 bytes). Allow
+          // common printable ASCII but reject control chars + slashes.
+          if (filename.length > 200) {
+            json(400, { error: "filename must be ≤200 chars" });
+            break;
+          }
+          // eslint-disable-next-line no-control-regex
+          if (/[\x00-\x1f\x7f]/.test(filename)) {
+            json(400, { error: "filename must not contain control characters" });
             break;
           }
           // Disallow path separators / traversal in filename.

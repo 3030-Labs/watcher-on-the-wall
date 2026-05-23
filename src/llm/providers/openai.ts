@@ -37,7 +37,12 @@ const PRICING: Readonly<Record<string, ModelPricing>> = {
   "gpt-4-turbo": { input: 10, output: 30 },
 };
 
-const DEFAULT_PRICING: ModelPricing = { input: 2.5, output: 10 };
+// Review item 14: pre-fix `{ input: 2.5, output: 10 }` matches gpt-4o, but
+// unknown reasoning models (o1-preview, o1-pro, o3-* family) price ~$15/$60
+// per 1M tokens. Costed under DEFAULT_PRICING the daemon under-estimates
+// by 6×. Make the default a conservative ceiling so the daily-budget gate
+// fires before the real bill blows past the cap.
+const DEFAULT_PRICING: ModelPricing = { input: 15, output: 60 };
 
 function normalizeFinishReason(reason: string | null | undefined): FinishReason {
   switch (reason) {
@@ -87,12 +92,23 @@ export class OpenAIProvider implements LLMProvider {
     }
     messages.push({ role: "user", content: prompt });
 
+    // Review items 9 + 10: o-series reasoning models (o1, o1-mini,
+    // o3, o3-mini) reject `max_tokens` (use `max_completion_tokens`)
+    // and reject `temperature` ≠ 1.0. The Chat Completions endpoint
+    // returns 400 "Unsupported parameter" before doing any work — so
+    // we shape the request per family.
+    const isOSeries = /^o[1-9]/.test(options.model);
+    const tokenField: Record<string, number> = isOSeries
+      ? { max_completion_tokens: options.maxTokens ?? 4096 }
+      : { max_tokens: options.maxTokens ?? 4096 };
+    const tempField: Record<string, number> =
+      isOSeries || options.temperature === undefined ? {} : { temperature: options.temperature };
     const response = await this.client.chat.completions.create(
       {
         model: options.model,
         messages,
-        max_tokens: options.maxTokens ?? 4096,
-        ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
+        ...tokenField,
+        ...tempField,
         ...(options.stopSequences && options.stopSequences.length > 0
           ? { stop: options.stopSequences }
           : {}),
