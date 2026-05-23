@@ -24,6 +24,18 @@ A knowledge health system scores every page on staleness, source availability, l
 
 The runtime is dual-mode: use the local `claude` CLI binary (free with a subscription) or the Claude Agent SDK (pay-per-token) — auto-detected at startup. Multi-user authentication supports per-user bearer tokens with atomic token storage. Failed batches are tracked in a dead-letter queue. All credentials and secrets in wiki content are automatically redacted before storage.
 
+## For agent developers
+
+If your LLM consumes `wotw` as a memory tier, three v0.7.0 retrieval tools let you cut token cost dramatically while preserving answer quality:
+
+- **`query_progressive`** — smallest viable answer first (top hit's lede ≈ 100-300 tokens), continuation token lets you expand on signal. On the benchmark fixtures, tier-0 ships 86-99% fewer tokens than the legacy `query` payload.
+- **`estimate_query_cost`** — pre-flight token estimate so your LLM knows what a retrieval would cost before committing. Heuristic by default; opt-in to per-provider native tokenizers via `precise: true`.
+- **`define` / `relate` / `cite_sources`** — narrow structural primitives at small token caps (256 / 768 / 512 tokens). For "what is X?", "how do X and Y relate?", "what sources support this claim?" patterns.
+
+All five tools are **additive** — the existing `query` / `search` / `read_page` surface is unchanged. See [docs/mcp-tools.md](docs/mcp-tools.md#context-efficient-retrieval-tools-pass-a) for schemas, and [CONTEXT-EFFICIENCY-PASS-A.md](CONTEXT-EFFICIENCY-PASS-A.md) for the benchmark report.
+
+Pure BM25 retrieval, no vector embeddings, no daemon-side LLM synthesis. The daemon does not pay tokens for `query_progressive` / `define` / `relate` / `cite_sources` — the saving is real on both sides of the wire.
+
 ## How it works
 
 The file watcher detects changes in `raw/`, debounces them with exponential backoff, and hands batches to the ingestion queue. The queue builds a prompt, runs it through a Claude agent, reconciles the output into categorized wiki pages, rebuilds the search index, signs a provenance record, and commits to git. A compounding engine periodically synthesizes higher-level pages across tag clusters. The MCP server makes the entire wiki queryable by external AI agents.

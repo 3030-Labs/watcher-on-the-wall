@@ -4,7 +4,10 @@ export default defineConfig({
   test: {
     globals: false,
     environment: "node",
-    include: ["test/**/*.test.ts"],
+    // Pick up both .test.ts (regular unit/integration) and .bench.ts
+    // (Pass A context-efficiency benchmark; runs as vitest assertions
+    // because the 60% reduction target is a hard gate, not a histogram).
+    include: ["test/**/*.test.ts", "test/**/*.bench.ts"],
     exclude: ["node_modules", "dist"],
     testTimeout: 30000,
     hookTimeout: 30000,

@@ -1,5 +1,29 @@
 # BUILD-SUMMARY — watcher-on-the-wall v0.2.0
 
+> ### Context-Efficiency Pass A — Progressive retrieval + token-budget + narrow queries — 2026-05-23
+>
+> Six additive MCP tools shipped (FP-005 progressive, FP-006 token budget,
+> FP-007 narrow-query) targeting client-LLM context efficiency:
+> - `query_progressive` + `query_expand` — tier-based progressive retrieval
+>   over BM25 hits (lede → snippets → section-ledes → full bodies), pure
+>   structural (no daemon-side LLM call).
+> - `estimate_query_cost` — pre-flight token estimate over the BM25
+>   retrieval payload, with heuristic + Anthropic/Gemini native-tokenizer
+>   paths.
+> - `define` / `relate` / `cite_sources` — narrow primitives at small
+>   token caps (256/768/512), intersection-based for `relate`,
+>   provenance-record lookup for `cite_sources`.
+>
+> Benchmark: tier-0 ships **86-99% fewer tokens** than the legacy `query`
+> retrieval payload on all four fixtures (F1-photosynthesis 95.3% /
+> F4-rust-borrow-checker 94.9% / small-corpus 86.9% / large-corpus 98.6%).
+> **693 tests** across **80 files** — 630 prior baseline + 63 new (56
+> unit + 7 benchmark assertions). All 7 daemon gates green. BM25-only
+> commitment preserved (regression-guard tests scan for vector imports).
+> Pass 008 BYOK invariants preserved. AGPL boundary preserved (no
+> wotw-cloud imports). See CONTEXT-EFFICIENCY-PASS-A.md for closure
+> evidence + Group B sequencing.
+
 > ### Multi-LLM Phase 10 — Per-tenant provider config + dispatch — 2026-05-22
 >
 > Daemon-side complete: `WotwConfig.llm.{provider, model, ollama_url}` added

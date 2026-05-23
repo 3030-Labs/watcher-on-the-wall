@@ -17,7 +17,11 @@ import type { CostTracker } from "../ingestion/cost-tracker.js";
 import type { DeadLetterQueue } from "../ingestion/dead-letter.js";
 import type { ProvenanceChain } from "../provenance/chain.js";
 import type { CompoundingEngine } from "../compounding/engine.js";
-import type { WotwConfig } from "../utils/types.js";
+import type { LlmProviderName, WotwConfig } from "../utils/types.js";
+import type { ProgressiveCache } from "./progressive-cache.js";
+import { queryProgressive, queryExpand } from "./progressive-query.js";
+import { estimateQueryCost } from "./cost-estimator.js";
+import { defineEntity, relateEntities, citeSources } from "./narrow-query.js";
 
 const VALID_CATEGORIES = Object.keys(CATEGORY_DIRS) as Array<keyof typeof CATEGORY_DIRS>;
 
@@ -39,6 +43,11 @@ export interface ToolRegistrationContext {
   provenanceGapCount?: number;
   /** Optional watcher reference for degradation reporting. */
   watcher?: { isDegraded(): boolean } | null;
+  /**
+   * Continuation cache for `query_progressive` / `query_expand`. Shared
+   * across MCP requests on the long-lived McpHttpServer instance.
+   */
+  progressiveCache?: ProgressiveCache | null;
 }
 
 /**
@@ -426,6 +435,327 @@ export function registerTools(server: McpServer, ctx: ToolRegistrationContext): 
       },
     );
   }
+
+  // --- query_progressive ----------------------------------------------
+  // Feature Pass 005. Smallest-viable-answer-first retrieval. Pure
+  // structural over the BM25 hit list — no daemon-side LLM call.
+  if (ctx.progressiveCache) {
+    const cache = ctx.progressiveCache;
+    server.registerTool(
+      "query_progressive",
+      {
+        title: "Progressive wiki retrieval",
+        description:
+          "Retrieve the smallest viable answer first (tier 0 = top hit's lede paragraph), with a continuation_token to expand to higher tiers as the client LLM signals it needs more context. Pure BM25 retrieval; no daemon-side LLM synthesis. Use with `query_expand` for paged retrieval.",
+        inputSchema: {
+          question: z.string().min(1),
+          max_tokens_initial: z
+            .number()
+            .int()
+            .min(64)
+            .max(8192)
+            .default(512)
+            .optional()
+            .describe("Token budget for the initial (tier 0) response."),
+          max_tokens_total: z
+            .number()
+            .int()
+            .min(64)
+            .max(32768)
+            .default(8192)
+            .optional()
+            .describe("Hard cap on tokens shipped across all expand calls."),
+        },
+      },
+      async ({ question, max_tokens_initial, max_tokens_total }) => {
+        log.info({ question }, "mcp query_progressive");
+        const result = await queryProgressive(question, {
+          store: ctx.store,
+          search: ctx.search,
+          cache,
+          maxTokensInitial: max_tokens_initial,
+          maxTokensTotal: max_tokens_total,
+        });
+        return {
+          content: [
+            { type: "text", text: result.content },
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  tier: result.tier,
+                  tier_label: result.tier_label,
+                  hit_count_delta: result.hit_count_delta,
+                  hit_count_total: result.hit_count_total,
+                  tokens_delivered: result.tokens_delivered,
+                  tokens_shipped_total: result.tokens_shipped_total,
+                  has_more: result.has_more,
+                  continuation_token: result.continuation_token,
+                  next_tier_label: result.next_tier_label,
+                  next_tier_estimate_tokens: result.next_tier_estimate_tokens,
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+        };
+      },
+    );
+
+    // --- query_expand --------------------------------------------------
+    server.registerTool(
+      "query_expand",
+      {
+        title: "Expand a progressive retrieval to the next tier",
+        description:
+          "Advance one tier on a prior query_progressive call. Returns ONLY the new content the next tier reveals (snippets / section-ledes / full-bodies). Pass the continuation_token from the previous response.",
+        inputSchema: {
+          continuation_token: z.string().min(1),
+          additional_tokens: z
+            .number()
+            .int()
+            .min(64)
+            .max(16384)
+            .default(1024)
+            .optional()
+            .describe("Token budget for this expansion. Bounded by max_tokens_total."),
+        },
+      },
+      async ({ continuation_token, additional_tokens }) => {
+        log.info({ continuation_token: continuation_token.slice(0, 8) }, "mcp query_expand");
+        const result = await queryExpand(continuation_token, {
+          cache,
+          additionalTokens: additional_tokens,
+        });
+        if ("error" in result) {
+          return errorResult(result.error);
+        }
+        return {
+          content: [
+            { type: "text", text: result.content },
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  tier: result.tier,
+                  tier_label: result.tier_label,
+                  hit_count_delta: result.hit_count_delta,
+                  hit_count_total: result.hit_count_total,
+                  tokens_delivered: result.tokens_delivered,
+                  tokens_shipped_total: result.tokens_shipped_total,
+                  has_more: result.has_more,
+                  continuation_token: result.continuation_token,
+                  next_tier_label: result.next_tier_label,
+                  next_tier_estimate_tokens: result.next_tier_estimate_tokens,
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+        };
+      },
+    );
+  }
+
+  // --- estimate_query_cost --------------------------------------------
+  // Feature Pass 006. Pre-flight token estimate so the client LLM knows
+  // what the retrieval payload will cost before committing.
+  server.registerTool(
+    "estimate_query_cost",
+    {
+      title: "Estimate retrieval-payload token cost",
+      description:
+        "Run BM25 retrieval over a candidate question and report the token count of the daemon's resulting retrieval payload, scoped per provider. Use BEFORE calling `query` or `query_progressive` to know what you're committing to. Provider defaults to WOTW_LLM_PROVIDER or the daemon's configured llm.provider; omitting both returns a four-row comparison.",
+      inputSchema: {
+        question: z.string().min(1),
+        provider: z
+          .enum(["anthropic", "openai", "gemini", "ollama"])
+          .optional()
+          .describe("Specific provider to estimate for. Omit to compare all four."),
+        model: z
+          .string()
+          .optional()
+          .describe("Model identifier (required for precise Anthropic/Gemini counts)."),
+        precise: z
+          .boolean()
+          .default(false)
+          .optional()
+          .describe(
+            "Use the provider's native tokenizer (network call for Anthropic/Gemini). Default is the 4-char heuristic.",
+          ),
+        k: z.number().int().min(1).max(20).default(8).optional(),
+      },
+    },
+    async ({ question, provider, model, precise, k }) => {
+      log.info({ question, provider, precise }, "mcp estimate_query_cost");
+      const result = await estimateQueryCost(question, {
+        store: ctx.store,
+        search: ctx.search,
+        config: ctx.config,
+        provider: provider as LlmProviderName | undefined,
+        model,
+        precise: precise ?? false,
+        k,
+      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    },
+  );
+
+  // --- define ---------------------------------------------------------
+  // Feature Pass 007: structural narrow query — single-paragraph definition.
+  server.registerTool(
+    "define",
+    {
+      title: "Get a one-paragraph definition of an entity",
+      description:
+        "BM25-search for `entity` and return the most relevant single-paragraph definition or page lede. Capped at 256 tokens by default — for full-page reading use `read_page`.",
+      inputSchema: {
+        entity: z.string().min(1),
+        max_tokens: z.number().int().min(32).max(2048).default(256).optional(),
+      },
+    },
+    async ({ entity, max_tokens }) => {
+      log.info({ entity }, "mcp define");
+      const result = await defineEntity(entity, {
+        store: ctx.store,
+        search: ctx.search,
+        maxTokens: max_tokens,
+      });
+      return {
+        content: [
+          { type: "text", text: result.definition || `_no definition found for ${entity}_` },
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                entity: result.entity,
+                source_page: result.source_page,
+                score: result.score,
+                tokens: result.tokens,
+                no_hits: result.no_hits,
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+      };
+    },
+  );
+
+  // --- relate ---------------------------------------------------------
+  // Feature Pass 007: up to N atomic relationship statements between
+  // two anchors. Intersection-based — only pages that appear in BOTH
+  // result sets are scanned for sentences.
+  server.registerTool(
+    "relate",
+    {
+      title: "Find relationship statements between two entities",
+      description:
+        "Find sentences in the wiki that contain BOTH `entity_a` and `entity_b`. Returns up to 3 atomic statements by default. Capped at 768 tokens — for broader context use `query_progressive`.",
+      inputSchema: {
+        entity_a: z.string().min(1),
+        entity_b: z.string().min(1),
+        max_tokens: z.number().int().min(64).max(4096).default(768).optional(),
+        max_statements: z.number().int().min(1).max(10).default(3).optional(),
+      },
+    },
+    async ({ entity_a, entity_b, max_tokens, max_statements }) => {
+      log.info({ entity_a, entity_b }, "mcp relate");
+      const result = await relateEntities(entity_a, entity_b, {
+        store: ctx.store,
+        search: ctx.search,
+        maxTokens: max_tokens,
+        maxStatements: max_statements,
+      });
+      const rendered =
+        result.statements.length === 0
+          ? `_no relationship statements found between ${entity_a} and ${entity_b}_`
+          : result.statements.map((s) => `- ${s.statement} _(${s.source_page})_`).join("\n");
+      return {
+        content: [
+          { type: "text", text: rendered },
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                entity_a: result.entity_a,
+                entity_b: result.entity_b,
+                statement_count: result.statements.length,
+                tokens: result.tokens,
+                no_hits: result.no_hits,
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+      };
+    },
+  );
+
+  // --- cite_sources ---------------------------------------------------
+  // Feature Pass 007: provenance citations for a claim.
+  server.registerTool(
+    "cite_sources",
+    {
+      title: "Get provenance citations for a claim",
+      description:
+        "BM25-search for `claim`, then return the provenance records (raw source files + chain hash + timestamp) that produced the matched wiki pages. Capped at 512 tokens by default.",
+      inputSchema: {
+        claim: z.string().min(1),
+        max_tokens: z.number().int().min(64).max(4096).default(512).optional(),
+      },
+    },
+    async ({ claim, max_tokens }) => {
+      log.info({ claim }, "mcp cite_sources");
+      const result = await citeSources(claim, {
+        store: ctx.store,
+        search: ctx.search,
+        provenance: ctx.provenance ?? null,
+        maxTokens: max_tokens,
+      });
+      const rendered =
+        result.citations.length === 0
+          ? result.provenance_unavailable
+            ? "_provenance subsystem is disabled in this daemon_"
+            : `_no provenance citations found for: ${claim}_`
+          : result.citations
+              .map(
+                (c) =>
+                  `- **${c.title}** (\`${c.wiki_page}\`, ${c.type} @ ${c.timestamp})\n  sources: ${c.source_files.length > 0 ? c.source_files.join(", ") : "_none_"}\n  chain: ${c.chain_hash}`,
+              )
+              .join("\n");
+      return {
+        content: [
+          { type: "text", text: rendered },
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                claim: result.claim,
+                citation_count: result.citations.length,
+                tokens: result.tokens,
+                no_hits: result.no_hits,
+                provenance_unavailable: result.provenance_unavailable,
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+      };
+    },
+  );
 
   // --- synthesize ----------------------------------------------------
   if (ctx.compounding) {

@@ -175,6 +175,207 @@ idempotent — existing syntheses covering a cluster are skipped.
 
 ---
 
+## Context-efficient retrieval tools (Pass A)
+
+The tools below ship in **v0.7.0** to give client LLMs ways to consume
+wotw as a memory tier without burning their context window. They are
+**additive** — the existing `query`, `search`, `read_page` tools are
+unchanged. Three feature passes shipped together:
+
+- **Feature Pass 005** — progressive retrieval (`query_progressive`,
+  `query_expand`)
+- **Feature Pass 006** — token-budget estimation (`estimate_query_cost`)
+- **Feature Pass 007** — structural narrow-query primitives (`define`,
+  `relate`, `cite_sources`)
+
+All three pass groups are pure BM25 + structural; **no daemon-side LLM
+call**. This is also what makes the tools dramatically cheaper for the
+client than the synthesis-based `query` tool: when measured on the
+benchmark fixtures, the progressive-flow tier-0 payload is **86-99%
+smaller** than the legacy retrieval payload (see
+`test/bench/context-efficiency.bench.ts` and
+[`CONTEXT-EFFICIENCY-PASS-A.md`](../CONTEXT-EFFICIENCY-PASS-A.md)).
+
+### `query_progressive`
+
+Retrieve the smallest viable answer first (tier 0 = top hit's lede
+paragraph), with a `continuation_token` to expand to higher tiers on
+signal. **Pure structural retrieval — no daemon-side LLM synthesis.**
+
+```json
+{
+  "name": "query_progressive",
+  "arguments": {
+    "question": "what is photosynthesis?",
+    "max_tokens_initial": 512,
+    "max_tokens_total": 8192
+  }
+}
+```
+
+Tier shape:
+
+| tier | label | content | typical tokens |
+|---|---|---|---|
+| 0 | `lede` | top hit's first paragraph | 100-300 |
+| 1 | `snippets` | top hit's outline + next-2 hits' ledes | 500-1500 |
+| 2 | `section-ledes` | top-3 hits' per-section ledes + next-2 hits' ledes | 1500-3000 |
+| 3 | `full-bodies` | top-8 hits' full bodies (matches legacy `query` fanout) | 3000-8000 |
+
+Returns two content blocks: the rendered markdown and a JSON metadata
+blob:
+
+```json
+{
+  "tier": 0,
+  "tier_label": "lede",
+  "hit_count_delta": 1,
+  "hit_count_total": 1,
+  "tokens_delivered": 287,
+  "tokens_shipped_total": 287,
+  "has_more": true,
+  "continuation_token": "f7c4e2d8-1a3b-4e7f-9c2d-5b8a4f3e1c9b",
+  "next_tier_label": "snippets",
+  "next_tier_estimate_tokens": 1200
+}
+```
+
+`max_tokens_total` is a **hard cap** across all subsequent
+`query_expand` calls — once exhausted, expand returns an error.
+Continuation tokens TTL at **5 minutes** and the cache holds the most
+recent 100 entries.
+
+### `query_expand`
+
+Advance one tier on a prior `query_progressive` call. Returns **only the
+new content** the next tier reveals (clients stitch the conversation
+together).
+
+```json
+{
+  "name": "query_expand",
+  "arguments": {
+    "continuation_token": "f7c4e2d8-...",
+    "additional_tokens": 1024
+  }
+}
+```
+
+Possible error responses (returned as `isError: true`):
+- `continuation_token expired or invalid` — token unknown or TTL
+  exceeded
+- `no further tiers available` — already at tier 3
+- `max_tokens_total budget exhausted` — total budget consumed
+
+### `estimate_query_cost`
+
+Pre-flight token estimate so the client LLM knows what the retrieval
+payload would cost **before** committing. Identical retrieval-assembly
+math to the legacy `query` tool, so the estimate reflects the real
+on-the-wire payload.
+
+```json
+{
+  "name": "estimate_query_cost",
+  "arguments": {
+    "question": "what is photosynthesis?",
+    "provider": "anthropic",
+    "model": "claude-haiku-4-5",
+    "precise": false,
+    "k": 8
+  }
+}
+```
+
+- `provider` (optional) — `anthropic` | `openai` | `gemini` | `ollama`.
+  Defaults to the `WOTW_LLM_PROVIDER` env var, falling back to the
+  daemon's configured provider. Omit both and you get a 4-row
+  comparison.
+- `precise` (default `false`) — when `true`, the daemon uses the
+  provider's native tokenizer (Anthropic `messages.countTokens()` or
+  Gemini `countTokens()` — a **network call**). When `false` (default),
+  uses the 4-char-per-token heuristic; deterministic, network-free,
+  good to ~10-15% on English prose.
+
+Returns:
+
+```json
+{
+  "question": "what is photosynthesis?",
+  "estimates": [
+    {
+      "tokens": 287,
+      "confidence": "approximate",
+      "method": "4-char-heuristic",
+      "provider": "anthropic",
+      "model": "claude-haiku-4-5"
+    }
+  ],
+  "hit_count": 8,
+  "per_page_byte_cap": 16384,
+  "retrieval_payload_chars": 1148,
+  "no_hits": false
+}
+```
+
+When OpenAI/Ollama are requested with `precise: true`, the tool falls
+back to the heuristic and surfaces `confidence: "approximate"` —
+operators wanting exact OpenAI counts install `tiktoken` separately
+(deferred to a follow-up pass to keep the daemon bundle narrow).
+
+### `define`
+
+Get a one-paragraph definition of an entity. BM25-search for the
+entity, then return the most relevant single-paragraph definition or
+page lede.
+
+```json
+{ "name": "define", "arguments": { "entity": "photosynthesis", "max_tokens": 256 } }
+```
+
+The tool looks for, in order: a `## Definition` (or `### Definition`)
+section header, a `**Definition**:` inline lead-in, or the first
+section whose lede starts with `<Capital> ... is/are` (encyclopaedia
+opening). Falls back to the page's first paragraph.
+
+### `relate`
+
+Find sentences in the wiki that contain **both** `entity_a` and
+`entity_b`. Intersection-based — only pages that appear in BOTH BM25
+result sets get scanned for sentences.
+
+```json
+{
+  "name": "relate",
+  "arguments": {
+    "entity_a": "Alice",
+    "entity_b": "Bob",
+    "max_tokens": 768,
+    "max_statements": 3
+  }
+}
+```
+
+Returns up to `max_statements` atomic sentences, each annotated with
+the source page they came from.
+
+### `cite_sources`
+
+Get provenance citations for a claim. BM25-search for the claim, then
+return the provenance records that produced the matched wiki pages
+(raw source files + chain hash + timestamp).
+
+```json
+{ "name": "cite_sources", "arguments": { "claim": "photosynthesis produces oxygen", "max_tokens": 512 } }
+```
+
+Citations include `wiki_page`, `source_files`, a truncated `chain_hash`
+(16 hex chars) for cross-referencing against
+`get_provenance_log`/`verify_provenance`, plus `timestamp` and record
+`type`.
+
+---
+
 ## Authentication
 
 - **Single-token mode** (default): set `server.auth_token` in the

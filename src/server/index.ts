@@ -61,6 +61,7 @@ import { registerTools } from "./tools.js";
 import { registerResources } from "./resources.js";
 import { RateLimiter, runMiddleware } from "./middleware.js";
 import { loadAllPages } from "../ingestion/wiki-writer.js";
+import { ProgressiveCache } from "./progressive-cache.js";
 
 export interface McpServerOptions {
   config: WotwConfig;
@@ -93,6 +94,13 @@ export class McpHttpServer implements DaemonSubsystem {
   private limiter: RateLimiter;
   private queryEngine: QueryEngine;
   private tokenStore: TokenStore | null = null;
+  /**
+   * Continuation cache for `query_progressive` / `query_expand`. Lives on
+   * the long-lived McpHttpServer (not per-request) so a client's tier-0
+   * call and follow-up tier-1 expand call hit the same cache, even though
+   * each /mcp request constructs a fresh McpServer instance.
+   */
+  private progressiveCache: ProgressiveCache;
   /** Set of in-flight transports so we can clean up on shutdown. */
   private inFlight: Set<StreamableHTTPServerTransport> = new Set();
 
@@ -108,6 +116,7 @@ export class McpHttpServer implements DaemonSubsystem {
       provenance: opts.provenance ?? null,
       runtimeMode: opts.runtimeMode,
     });
+    this.progressiveCache = new ProgressiveCache();
     if (opts.config.multi_user.enabled) {
       this.tokenStore = new TokenStore({
         workspacesDir: opts.config.multi_user.workspaces_dir,
@@ -300,6 +309,7 @@ export class McpHttpServer implements DaemonSubsystem {
       provenance: this.opts.provenance ?? null,
       compounding: this.opts.compounding ?? null,
       deadLetter: this.opts.deadLetter ?? null,
+      progressiveCache: this.progressiveCache,
     });
     registerResources(mcpServer, {
       config: this.opts.config,
