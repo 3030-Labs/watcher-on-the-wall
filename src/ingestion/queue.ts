@@ -38,6 +38,9 @@ import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { ModelRouter } from "./model-router.js";
 import { buildIngestionPrompt, type ExistingPageManifestEntry } from "./prompt-builder.js";
+import type { FactStore } from "../facts/store.js";
+import type { FactIndex } from "../facts/index-manager.js";
+import { extractFactsFromPage, isExtractionActive } from "../facts/extractor.js";
 import { TenantScheduler } from "./tenant-scheduler.js";
 import { loadAllPages, reconcileWrittenPages } from "./wiki-writer.js";
 
@@ -62,6 +65,15 @@ export interface IngestionQueueOptions {
    * a JSONL ledger so operators can inspect it and replay later.
    */
   deadLetter?: DeadLetterQueue | null;
+  /**
+   * Pass B fact-extraction sidecar. When both factStore + factIndex are
+   * provided AND `isExtractionActive(config, runtimeMode)` returns true,
+   * the queue runs fact extraction after each successful page write and
+   * appends a `fact_extracted` provenance record. Best-effort: extraction
+   * failure does NOT fail the ingestion.
+   */
+  factStore?: FactStore | null;
+  factIndex?: FactIndex | null;
 }
 
 export interface IngestionOutcome {
@@ -538,6 +550,20 @@ export class IngestionQueue implements DaemonSubsystem {
       }
     }
 
+    // 8b. Pass B — fact extraction sidecar. Best-effort: a single call
+    // per written page emits atomic facts + synthetic questions, the
+    // SQLite store keeps the persistent record, FactIndex picks them
+    // up for query_facts retrieval. Failures are logged + swallowed
+    // (fact layer is additive; ingestion stays green either way).
+    if (this.opts.factStore && this.opts.factIndex) {
+      const active = isExtractionActive(this.opts.config, runtimeMode);
+      if (active.active) {
+        await this.runFactExtraction(newPages, runtimeMode, model, batch.id);
+      } else {
+        log.debug({ reason: active.reason }, "fact extraction inactive — skipping");
+      }
+    }
+
     // 9. Commit
     const changedPaths = [
       ...newPages.map((p) => p.path),
@@ -579,6 +605,116 @@ export class IngestionQueue implements DaemonSubsystem {
     log.info(outcome, "batch complete");
     this.lastOutcome = outcome;
     return outcome;
+  }
+
+  /**
+   * Pass B sidecar: for each newly written page, run the LLM
+   * fact-extractor, supersede any prior active facts for the same page,
+   * insert the new facts + synthetic questions into the SQLite store,
+   * keep the in-memory {@link FactIndex} in sync, and emit a
+   * `fact_extracted` provenance record. Best-effort — any single-page
+   * extraction failure logs + continues to the next page.
+   */
+  private async runFactExtraction(
+    newPages: Awaited<ReturnType<typeof reconcileWrittenPages>>["pages"],
+    runtimeMode: RuntimeMode,
+    model: string,
+    batchId: string,
+  ): Promise<void> {
+    const log = getLogger("ingestion");
+    const store = this.opts.factStore;
+    const index = this.opts.factIndex;
+    if (!store || !index) return;
+    const wikiRoot = this.opts.config.wiki_root;
+
+    for (const page of newPages) {
+      const relPath = relative(wikiRoot, page.path) || page.path;
+      let extraction;
+      try {
+        extraction = await extractFactsFromPage({
+          config: this.opts.config,
+          runtimeMode,
+          wikiPageId: relPath,
+          pageBody: page.body,
+          title: page.frontmatter.title,
+          costTracker: this.opts.costTracker,
+        });
+      } catch (err) {
+        log.warn(
+          {
+            err: err instanceof Error ? err.message.slice(0, 120) : "unknown",
+            page: relPath,
+            batchId,
+          },
+          "fact extraction threw — skipping page",
+        );
+        continue;
+      }
+      if (!extraction.ran) {
+        log.debug({ reason: extraction.skipReason, page: relPath }, "fact extraction skipped");
+        continue;
+      }
+      if (extraction.facts.length === 0) {
+        log.debug({ page: relPath }, "fact extraction produced zero facts");
+        continue;
+      }
+
+      // Supersede any active facts for this page (re-ingest case), then
+      // insert the new ones inside the same SQLite transaction effect.
+      const superseded = store.supersedeByWikiPage(relPath);
+      const added: string[] = [];
+      for (const f of extraction.facts) {
+        try {
+          const { id, fact_hash } = store.insertFact({
+            wiki_page_id: relPath,
+            entity: f.entity,
+            statement: f.statement,
+          });
+          const questions = store.insertQuestions(id, f.questions);
+          const fact = store.getFact(id);
+          if (fact) index.add(fact, questions);
+          added.push(fact_hash);
+        } catch (err) {
+          log.warn(
+            { err: err instanceof Error ? err.message.slice(0, 120) : "unknown", page: relPath },
+            "fact insert failed — continuing",
+          );
+        }
+      }
+
+      // Emit a fact_extracted provenance record so an external auditor
+      // can correlate which facts entered the index at which point in
+      // the chain. Best-effort: failures don't roll back the SQLite
+      // inserts (the facts themselves are authoritative).
+      if (this.opts.provenance && (added.length > 0 || superseded.length > 0)) {
+        try {
+          await this.opts.provenance.append({
+            type: "fact_extracted",
+            source_files: [relPath],
+            source_hashes: [sha256Hex(page.body)],
+            prompt_hash: sha256Hex(extraction.rawResponse.slice(0, 4096)),
+            model_id: model,
+            response_hash: sha256Hex(extraction.rawResponse),
+            wiki_files_written: [],
+            wiki_file_hashes_after: {},
+            fact_hashes_added: added,
+            fact_hashes_superseded: superseded,
+            metadata: {
+              batch_id: batchId,
+              facts_added: added.length,
+              facts_superseded: superseded.length,
+              cost_usd: Number(extraction.costUsd.toFixed(6)),
+              duration_ms: extraction.durationMs,
+            },
+          });
+        } catch (err) {
+          log.warn(
+            { err: err instanceof Error ? err.message.slice(0, 120) : "unknown", page: relPath },
+            "fact_extracted provenance append failed",
+          );
+        }
+      }
+    }
   }
 
   /**

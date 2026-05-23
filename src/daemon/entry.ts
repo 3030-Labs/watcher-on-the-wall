@@ -138,6 +138,37 @@ async function main(): Promise<void> {
       path: config.ingestion.dead_letter_file,
       runtimeMode,
     });
+    // Pass B fact-extraction sidecar. Persistent SQLite at
+    // <wiki_root>/.wotw/facts.db, with a parallel in-memory minisearch
+    // index loaded from the live rows. Best-effort: extraction is gated
+    // by `fact_extraction.enabled` + runtime cost-freeness, and any
+    // failure inside the layer never breaks ingestion.
+    const { FactStore } = await import("../facts/store.js");
+    const { FactIndex } = await import("../facts/index-manager.js");
+    const { isExtractionActive } = await import("../facts/extractor.js");
+    const factsDbPath = `${config.wiki_root}/.wotw/facts.db`;
+    const factStore = new FactStore({ path: factsDbPath });
+    const factIndex = new FactIndex();
+    try {
+      factIndex.rebuild(factStore.listActive(), factStore.listActiveQuestions());
+    } catch (err) {
+      log.warn(
+        { err: err instanceof Error ? err.message : String(err) },
+        "facts.db: initial index rebuild failed; layer will be empty until next reindex",
+      );
+    }
+    const extractionStatus = isExtractionActive(config, runtimeMode);
+    log.info(
+      {
+        active: extractionStatus.active,
+        reason: extractionStatus.reason,
+        path: factsDbPath,
+        facts: factIndex.size(),
+        questions: factIndex.questionCount(),
+      },
+      "fact-extraction layer status",
+    );
+
     const ingestion = new IngestionQueue({
       config,
       store,
@@ -148,6 +179,8 @@ async function main(): Promise<void> {
       provenance,
       runtimeMode,
       deadLetter,
+      factStore,
+      factIndex,
     });
 
     // Compounding engine (Phase 4) — not a subsystem; invoked on demand via
@@ -198,6 +231,8 @@ async function main(): Promise<void> {
       compounding,
       runtimeMode,
       deadLetter,
+      factStore,
+      factIndex,
     });
 
     // Feature 1: periodic background lint. Cheap no-op unless

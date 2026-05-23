@@ -107,6 +107,11 @@ export function defaultConfig(): WotwConfig {
     query: {
       expand: true,
     },
+    fact_extraction: {
+      enabled: "auto",
+      force_enabled: false,
+      questions_per_fact: 3,
+    },
     lint: {
       schedule_enabled: false,
       interval_hours: 24,
@@ -441,6 +446,7 @@ export function mergeConfig(base: WotwConfig, override: Partial<WotwConfig>): Wo
   if (override.provenance) assign("provenance", override.provenance);
   if (override.multi_user) assign("multi_user", override.multi_user);
   if (override.query) assign("query", override.query);
+  if (override.fact_extraction) assign("fact_extraction", override.fact_extraction);
   if (override.lint) assign("lint", override.lint);
   if (override.health) {
     // Deep-merge the weights sub-object separately.
@@ -541,6 +547,12 @@ const WotwConfigSchema = z.object({
   }),
   query: z.object({
     expand: z.boolean(),
+  }),
+  fact_extraction: z.object({
+    enabled: z.union([z.boolean(), z.literal("auto")]),
+    force_enabled: z.boolean(),
+    questions_per_fact: z.number().int().min(1).max(5),
+    model: z.string().min(1).optional(),
   }),
   lint: z.object({
     schedule_enabled: z.boolean(),

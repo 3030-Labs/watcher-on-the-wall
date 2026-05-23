@@ -51,6 +51,16 @@ export interface ProvenanceAppendInput {
    * as a record of tenant B without recomputing id + chain_hash + hmac.
    */
   tenant_id?: string;
+  /**
+   * Pass B (fact extraction): fact_hash strings added by this operation.
+   * Stored on the record but NOT folded into the canonical payload — they
+   * are best-effort metadata, not cryptographically attested, so new
+   * daemons emitting these fields produce records that verify identically
+   * under older daemons that don't know about them.
+   */
+  fact_hashes_added?: string[];
+  /** Pass B: fact_hash strings superseded by this operation. */
+  fact_hashes_superseded?: string[];
 }
 
 export interface VerificationError {
@@ -285,6 +295,12 @@ export class ProvenanceChain {
         ...(input.metadata ? { metadata: input.metadata } : {}),
         ...(effectiveTenantId ? { tenant_id: effectiveTenantId } : {}),
         ...(hmac ? { hmac } : {}),
+        ...(input.fact_hashes_added && input.fact_hashes_added.length > 0
+          ? { fact_hashes_added: input.fact_hashes_added }
+          : {}),
+        ...(input.fact_hashes_superseded && input.fact_hashes_superseded.length > 0
+          ? { fact_hashes_superseded: input.fact_hashes_superseded }
+          : {}),
       };
 
       // Append a single line. We open in append mode so multiple processes

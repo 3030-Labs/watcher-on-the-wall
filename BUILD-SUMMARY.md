@@ -1,5 +1,44 @@
 # BUILD-SUMMARY — watcher-on-the-wall v0.2.0
 
+> ### Context-Efficiency Pass B — Fact-level retrieval + synthetic questions + provenance — 2026-05-23
+>
+> Pass B closes the foundational fact-extraction layer. Three feature
+> passes (FP-008 fact extraction, FP-009 synthetic questions, FP-010
+> lifecycle + provenance) plus a new MCP tool + Group A behavior
+> extension + CLI command:
+> - SQLite `.wotw/facts.db` (better-sqlite3) with idempotent
+>   user_version=1 migration; FactStore stores (entity, statement)
+>   pairs + synthetic questions, supersession via `superseded_at`.
+> - FactIndex wraps two parallel minisearch instances (facts +
+>   questions) and fuses scores weighted 0.4 + 0.6 — question shape
+>   wins per Cambridge ALTA.
+> - Extractor runs a single combined LLM call returning facts +
+>   questions; gated cost-free by default (Ollama/Claude Code CLI
+>   auto-active; metered providers opt-in via
+>   `fact_extraction.force_enabled`).
+> - New MCP tool `query_facts` ships 82.5%-98.7% fewer tokens than the
+>   legacy `query` retrieval on atomic-question fixtures (F1 86.7% / F4
+>   82.5% / small-corpus 84.5% / large-corpus 96.2%).
+> - Group A tools (define / relate / cite_sources) now check the fact
+>   layer first via FactIndex; each response carries a `source_layer`
+>   field; Pass A contracts unchanged.
+> - ProvenanceRecord extended with `fact_extracted` type +
+>   `fact_hashes_added` / `fact_hashes_superseded` optional fields
+>   (NOT folded into canonical payload — forward/backward compat
+>   verified end-to-end).
+> - Cost tracking metered under `operation_type:"fact_extraction"`.
+> - New CLI command `wotw facts reindex` for existing-wiki migration.
+>
+> **747 tests** across **80 files** — 700 prior baseline + 47 new
+> (43 unit + 4 benchmark assertions). All 7 daemon gates green.
+> BM25-only commitment preserved (no new vector deps). Pass 008 BYOK
+> preserved. AGPL boundary preserved (better-sqlite3 MIT). Schema +
+> provenance forward/backward compat verified. **Live-API
+> per-provider quality measurement is deferred per Phase-A pattern
+> (irreducibly external) — documented as Group C precondition in
+> CONTEXT-EFFICIENCY-PASS-B.md §5.** Recommended next roadmap step:
+> Compliance tier (G5 chain attestation + audit export) — see §7.
+
 > ### Context-Efficiency Pass A — Progressive retrieval + token-budget + narrow queries — 2026-05-23
 >
 > Six additive MCP tools shipped (FP-005 progressive, FP-006 token budget,

@@ -26,15 +26,26 @@ The runtime is dual-mode: use the local `claude` CLI binary (free with a subscri
 
 ## For agent developers
 
-If your LLM consumes `wotw` as a memory tier, three v0.7.0 retrieval tools let you cut token cost dramatically while preserving answer quality:
+If your LLM consumes `wotw` as a memory tier, two passes of additive retrieval tools cut token cost dramatically while preserving answer quality:
 
-- **`query_progressive`** — smallest viable answer first (top hit's lede ≈ 100-300 tokens), continuation token lets you expand on signal. On the benchmark fixtures, tier-0 ships 86-99% fewer tokens than the legacy `query` payload.
-- **`estimate_query_cost`** — pre-flight token estimate so your LLM knows what a retrieval would cost before committing. Heuristic by default; opt-in to per-provider native tokenizers via `precise: true`.
-- **`define` / `relate` / `cite_sources`** — narrow structural primitives at small token caps (256 / 768 / 512 tokens). For "what is X?", "how do X and Y relate?", "what sources support this claim?" patterns.
+**Pass A (v0.7.0) — progressive + structural primitives**
 
-All five tools are **additive** — the existing `query` / `search` / `read_page` surface is unchanged. See [docs/mcp-tools.md](docs/mcp-tools.md#context-efficient-retrieval-tools-pass-a) for schemas, and [CONTEXT-EFFICIENCY-PASS-A.md](CONTEXT-EFFICIENCY-PASS-A.md) for the benchmark report.
+- **`query_progressive`** — smallest viable answer first (top hit's lede ≈ 100-300 tokens), continuation token lets you expand on signal. Tier-0 ships **86-99% fewer tokens** than the legacy `query` payload on the benchmark fixtures.
+- **`estimate_query_cost`** — pre-flight token estimate so your LLM knows what a retrieval would cost before committing.
+- **`define` / `relate` / `cite_sources`** — narrow structural primitives at small token caps (256 / 768 / 512 tokens).
 
-Pure BM25 retrieval, no vector embeddings, no daemon-side LLM synthesis. The daemon does not pay tokens for `query_progressive` / `define` / `relate` / `cite_sources` — the saving is real on both sides of the wire.
+**Pass B (v0.8.0) — atomic facts**
+
+- **`query_facts`** — BM25-fused retrieval over atomic `(entity, statement)` pairs + synthetic questions extracted at ingestion (per Yanhong Li / TTIC + Cambridge ALTA). Ships **80%+ fewer tokens** than the legacy `query` retrieval for atomic-question workloads. Returns `fallback: "page-level"` when the fact layer is disabled — clients route to `query_progressive` automatically.
+- `define`, `relate`, `cite_sources` from Pass A now check the fact layer first; each response carries a `source_layer` field. Pass A contracts unchanged.
+
+**Gating + cost**
+
+Pass B fact extraction runs at ingestion time and requires an LLM call. It defaults to **cost-free runtimes only** (Claude Code CLI subscription or local Ollama). On metered API providers (Anthropic / OpenAI / Gemini), set `fact_extraction.force_enabled: true` in `wotw.config.yaml` to opt in. To populate an existing wiki, run `wotw facts reindex`.
+
+All Pass A + B tools are **additive** — existing `query` / `search` / `read_page` are unchanged. See [docs/mcp-tools.md](docs/mcp-tools.md#context-efficient-retrieval-tools-pass-a), [CONTEXT-EFFICIENCY-PASS-A.md](CONTEXT-EFFICIENCY-PASS-A.md), and [CONTEXT-EFFICIENCY-PASS-B.md](CONTEXT-EFFICIENCY-PASS-B.md).
+
+Pure BM25 retrieval, no vector embeddings. Pass A queries are zero-LLM-cost on the daemon side. Pass B incurs LLM cost at ingestion (gated) but query-time retrieval is BM25-only.
 
 ## How it works
 

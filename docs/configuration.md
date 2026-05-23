@@ -171,6 +171,45 @@ Set to `true` when running behind a reverse proxy (nginx, Cloudflare,
 etc.) that sets `X-Forwarded-For`. The rate limiter will use the
 first IP in the `X-Forwarded-For` chain as the client identity.
 
+### `fact_extraction`
+
+The Pass B fact-extraction layer decomposes each ingested wiki page into
+atomic `(entity, statement)` facts + a handful of synthetic questions
+per fact (Cambridge ALTA / Li-TTIC). Facts are persisted at
+`<wiki_root>/.wotw/facts.db` (SQLite) and indexed via BM25 alongside the
+page-level minisearch index. Retrieval through `query_facts` ships
+80%+ fewer tokens than the legacy `query` for atomic-question workloads.
+
+```yaml
+fact_extraction:
+  enabled: auto         # "auto" | true | false
+  force_enabled: false  # api-mode opt-in
+  questions_per_fact: 3 # range 1-5
+  # model: claude-sonnet-4-5  # optional override (defaults to models.lint)
+```
+
+- `enabled: "auto"` (default) — active when the runtime is *cost-free*:
+  Claude Code CLI (subscription-covered) or Ollama (local). Inactive
+  on metered API providers (Anthropic / OpenAI / Gemini) so daemons
+  don't silently amplify per-ingest cost.
+- `enabled: true` — always active regardless of runtime. Use this when
+  you've explicitly budgeted for fact extraction.
+- `enabled: false` — fully disabled. The Pass A `query`,
+  `query_progressive`, `search` etc. still work; `query_facts`
+  returns `fallback: "page-level"`.
+- `force_enabled` — when combined with `enabled: "auto"` AND a
+  metered provider, runs extraction anyway.
+- `questions_per_fact` — number of synthetic questions emitted per
+  fact at extraction time. Boost to 5 for query-shape diversity; drop
+  to 1 if storage is tight.
+
+The daemon startup banner logs the resolved state + reason
+(`fact-extraction layer status active=true reason=...`) so operators
+can confirm the gate at a glance.
+
+To populate the fact store on an existing wiki, run
+`wotw facts reindex` (see [cli-reference.md](cli-reference.md)).
+
 ### `ingestion.dead_letter_file`
 
 When an ingestion batch fails permanently (budget exhausted, agent

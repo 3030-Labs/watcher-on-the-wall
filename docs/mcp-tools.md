@@ -376,6 +376,85 @@ Citations include `wiki_page`, `source_files`, a truncated `chain_hash`
 
 ---
 
+## Fact-level retrieval tools (Pass B)
+
+The tools below ship in **v0.8.0** and add atomic-fact retrieval on top
+of Pass A. Each ingested wiki page is decomposed into `(entity,
+statement)` pairs at extraction time, persisted in
+`<wiki_root>/.wotw/facts.db` (SQLite), and indexed via BM25 alongside
+synthetic questions emitted per fact. The result: a `query_facts`
+payload that ships **80%+ fewer tokens** than the legacy `query`
+retrieval for atomic-question workloads.
+
+Pass B is gated on cost-free runtimes (Claude Code CLI or Ollama)
+by default. API-mode tenants opt in via `fact_extraction.force_enabled`
+in `wotw.config.yaml` — see [`configuration.md`](configuration.md#fact_extraction).
+
+When the fact layer is disabled or empty, `query_facts` returns
+`fallback: "page-level"` and the Group A tools (`define`, `relate`,
+`cite_sources`) silently fall back to their Pass A page-level
+behavior — backwards-compatible by construction.
+
+### `query_facts`
+
+Atomic-fact retrieval over the BM25-fused fact + synthetic-question
+index. Returns up to N facts ranked by weighted fusion (questions 0.6,
+facts 0.4) — per Cambridge ALTA, question-shape matching beats keyword
+overlap on atomic questions.
+
+```json
+{ "name": "query_facts", "arguments": { "question": "what is photosynthesis?", "limit": 5 } }
+```
+
+Returns two content blocks: a markdown bullet list of matched facts +
+a JSON metadata blob:
+
+```json
+{
+  "question": "what is photosynthesis?",
+  "hit_count": 3,
+  "tokens": 142,
+  "fallback": null,
+  "index_size": 87,
+  "hits": [
+    {
+      "entity": "Photosynthesis",
+      "statement": "Photosynthesis converts light energy into chemical energy stored in glucose.",
+      "wiki_page": "wiki/concepts/photosynthesis.md",
+      "score": 1.42,
+      "matched_via_fact": true,
+      "matched_via_question": true
+    }
+  ]
+}
+```
+
+When the fact layer is empty or disabled, `fallback` is `"page-level"`
+and `hits` is empty — the client LLM should redirect to
+`query_progressive` or `query`.
+
+### `define` / `relate` / `cite_sources` (Pass B behavior)
+
+These three tools (from Pass A) now check the fact layer **first**
+when it's populated. Each response carries a `source_layer` field
+indicating whether the answer came from the fact layer (`"fact"`) or
+the page-level fallback (`"page"`).
+
+- `define(entity)` — when a fact matches the entity, the fact's
+  `statement` is returned as the definition. Falls back to the page's
+  Definition section / lede when the fact layer is empty or sparse.
+- `relate(entity_a, entity_b)` — when a fact's statement mentions BOTH
+  anchors, it's surfaced as a relationship statement. Falls back to
+  sentence-level scan across pages that mention both.
+- `cite_sources(claim)` — when facts match the claim, the matched
+  facts' wiki pages are looked up in the provenance chain. Otherwise
+  uses page-level BM25 to pick which pages to cite.
+
+This routing is automatic and the existing tool contracts are
+unchanged — clients written against Pass A keep working.
+
+---
+
 ## Authentication
 
 - **Single-token mode** (default): set `server.auth_token` in the

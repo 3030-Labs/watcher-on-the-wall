@@ -62,6 +62,8 @@ import { registerResources } from "./resources.js";
 import { RateLimiter, runMiddleware } from "./middleware.js";
 import { loadAllPages } from "../ingestion/wiki-writer.js";
 import { ProgressiveCache } from "./progressive-cache.js";
+import type { FactStore } from "../facts/store.js";
+import type { FactIndex } from "../facts/index-manager.js";
 
 export interface McpServerOptions {
   config: WotwConfig;
@@ -82,6 +84,13 @@ export interface McpServerOptions {
    * can see the count of permanently-failed batches.
    */
   deadLetter?: DeadLetterQueue | null;
+  /**
+   * Pass B fact-extraction sidecar. When both are provided, the daemon
+   * registers `query_facts` and routes the Group A tools (define /
+   * relate / cite_sources) through the fact layer first.
+   */
+  factStore?: FactStore | null;
+  factIndex?: FactIndex | null;
 }
 
 /**
@@ -310,6 +319,8 @@ export class McpHttpServer implements DaemonSubsystem {
       compounding: this.opts.compounding ?? null,
       deadLetter: this.opts.deadLetter ?? null,
       progressiveCache: this.progressiveCache,
+      factStore: this.opts.factStore ?? null,
+      factIndex: this.opts.factIndex ?? null,
     });
     registerResources(mcpServer, {
       config: this.opts.config,

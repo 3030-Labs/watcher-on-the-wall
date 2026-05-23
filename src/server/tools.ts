@@ -22,6 +22,9 @@ import type { ProgressiveCache } from "./progressive-cache.js";
 import { queryProgressive, queryExpand } from "./progressive-query.js";
 import { estimateQueryCost } from "./cost-estimator.js";
 import { defineEntity, relateEntities, citeSources } from "./narrow-query.js";
+import { queryFacts, renderFactsMarkdown } from "./fact-query.js";
+import type { FactIndex } from "../facts/index-manager.js";
+import type { FactStore } from "../facts/store.js";
 
 const VALID_CATEGORIES = Object.keys(CATEGORY_DIRS) as Array<keyof typeof CATEGORY_DIRS>;
 
@@ -48,6 +51,14 @@ export interface ToolRegistrationContext {
    * across MCP requests on the long-lived McpHttpServer instance.
    */
   progressiveCache?: ProgressiveCache | null;
+  /**
+   * Pass B fact-extraction sidecar. When present, the query_facts MCP
+   * tool is registered and the Group A tools (define / relate /
+   * cite_sources) prefer fact-layer matches before falling back to
+   * page-level retrieval.
+   */
+  factStore?: FactStore | null;
+  factIndex?: FactIndex | null;
 }
 
 /**
@@ -629,6 +640,7 @@ export function registerTools(server: McpServer, ctx: ToolRegistrationContext): 
         store: ctx.store,
         search: ctx.search,
         maxTokens: max_tokens,
+        factIndex: ctx.factIndex ?? null,
       });
       return {
         content: [
@@ -642,6 +654,7 @@ export function registerTools(server: McpServer, ctx: ToolRegistrationContext): 
                 score: result.score,
                 tokens: result.tokens,
                 no_hits: result.no_hits,
+                source_layer: result.source_layer,
               },
               null,
               2,
@@ -676,6 +689,7 @@ export function registerTools(server: McpServer, ctx: ToolRegistrationContext): 
         search: ctx.search,
         maxTokens: max_tokens,
         maxStatements: max_statements,
+        factIndex: ctx.factIndex ?? null,
       });
       const rendered =
         result.statements.length === 0
@@ -693,6 +707,7 @@ export function registerTools(server: McpServer, ctx: ToolRegistrationContext): 
                 statement_count: result.statements.length,
                 tokens: result.tokens,
                 no_hits: result.no_hits,
+                source_layer: result.source_layer,
               },
               null,
               2,
@@ -723,6 +738,7 @@ export function registerTools(server: McpServer, ctx: ToolRegistrationContext): 
         search: ctx.search,
         provenance: ctx.provenance ?? null,
         maxTokens: max_tokens,
+        factIndex: ctx.factIndex ?? null,
       });
       const rendered =
         result.citations.length === 0
@@ -747,6 +763,61 @@ export function registerTools(server: McpServer, ctx: ToolRegistrationContext): 
                 tokens: result.tokens,
                 no_hits: result.no_hits,
                 provenance_unavailable: result.provenance_unavailable,
+                source_layer: result.source_layer,
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+      };
+    },
+  );
+
+  // --- query_facts ----------------------------------------------------
+  // Feature Pass 008: structural fact-level retrieval. BM25 over the
+  // facts + synthetic-questions index (weighted 0.4 + 0.6). When the
+  // fact layer is empty / disabled, the response carries
+  // fallback: "page-level" so the client LLM knows to redirect to
+  // query_progressive.
+  server.registerTool(
+    "query_facts",
+    {
+      title: "Atomic-fact retrieval (Pass B)",
+      description:
+        'Search the fact-level index (atomic entity/statement pairs + synthetic questions) for the best matching facts. Per Cambridge ALTA + Yanhong Li / TTIC, this gives precise atomic answers at ~10x fewer tokens than page-level retrieval. When the fact layer is disabled / empty, returns fallback:"page-level" so the caller can redirect to `query_progressive`.',
+      inputSchema: {
+        question: z.string().min(1),
+        limit: z.number().int().min(1).max(20).default(5).optional(),
+      },
+    },
+    async ({ question, limit }) => {
+      log.info({ question }, "mcp query_facts");
+      const result = queryFacts(question, {
+        factIndex: ctx.factIndex ?? null,
+        factStore: ctx.factStore ?? null,
+        limit,
+      });
+      return {
+        content: [
+          { type: "text", text: renderFactsMarkdown(result) },
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                question: result.question,
+                hit_count: result.hits.length,
+                tokens: result.tokens,
+                fallback: result.fallback,
+                index_size: result.index_size,
+                hits: result.hits.map((h) => ({
+                  entity: h.fact.entity,
+                  statement: h.fact.statement,
+                  wiki_page: h.fact.wiki_page_id,
+                  score: h.score,
+                  matched_via_fact: h.matched_via_fact,
+                  matched_via_question: h.matched_via_question,
+                })),
               },
               null,
               2,

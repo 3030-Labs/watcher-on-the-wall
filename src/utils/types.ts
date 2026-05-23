@@ -6,7 +6,16 @@
 export type ModelId = string;
 
 /** Operation type for an ingestion / provenance record. */
-export type OperationType = "ingest" | "query" | "compound" | "archive" | "lint" | "merge" | "heal";
+export type OperationType =
+  | "ingest"
+  | "query"
+  | "compound"
+  | "archive"
+  | "lint"
+  | "merge"
+  | "heal"
+  | "fact_extraction"
+  | "fact_extracted";
 
 /**
  * Execution mode. Controls which Claude runtime the daemon invokes:
@@ -135,6 +144,29 @@ export interface WotwConfig {
   query: {
     /** Enable LLM-powered query expansion before BM25 search. */
     expand: boolean;
+  };
+  /**
+   * Pass B fact-extraction layer. After every wiki page write, the
+   * daemon optionally runs a single LLM call to decompose the page into
+   * atomic (entity, statement) facts + a handful of synthetic questions
+   * per fact. Indexed in a SQLite + minisearch sidecar at `.wotw/facts.db`.
+   *
+   * `enabled` semantics:
+   *   - `"auto"` (default): active when the runtime is *cost-free* —
+   *     Ollama (local) or Claude Code CLI (subscription). Inactive in
+   *     API mode (Anthropic / OpenAI / Gemini) so the daemon doesn't
+   *     silently amplify per-ingest cost.
+   *   - `true`: always active regardless of runtime.
+   *   - `false`: never active.
+   * `force_enabled` is the API-mode opt-in: when `enabled: "auto"` AND
+   * `force_enabled: true`, extraction runs even on metered providers.
+   */
+  fact_extraction: {
+    enabled: "auto" | boolean;
+    force_enabled: boolean;
+    questions_per_fact: number;
+    /** Optional model override (defaults to `models.lint`). */
+    model?: ModelId;
   };
   lint: {
     /** If true, the daemon runs a lint pass on a recurring interval. */
@@ -328,6 +360,18 @@ export interface ProvenanceRecord {
    * they cannot mint records the daemon's verifier would accept.
    */
   hmac?: string;
+  /**
+   * Pass B (fact extraction): list of fact_hash strings added by this
+   * operation. Present on `type: "fact_extracted"` records and (when
+   * relevant) on `type: "ingest"` / `type: "heal"` records whose downstream
+   * extraction wrote new facts. Optional + backwards-compatible — old
+   * daemons reading a chain that contains this field ignore it during
+   * verification because the canonical-payload computation reads only the
+   * fields it knows about.
+   */
+  fact_hashes_added?: string[];
+  /** Pass B: list of fact_hash strings superseded by this operation. */
+  fact_hashes_superseded?: string[];
   metadata?: Record<string, string | number | boolean>;
 }
 
