@@ -31,6 +31,13 @@ function configWith(
   // touch anything else, so we cast through `unknown` to avoid duplicating
   // the full config shape here.
   return {
+    // Review item 62: the resolver now reads config.llm.provider to
+    // avoid silently dispatching non-anthropic tenants through CLI mode.
+    // Tests default to anthropic to exercise the auto-detect path.
+    llm: {
+      provider: "anthropic",
+      model: "claude-sonnet-4-5",
+    },
     execution: {
       mode: "auto",
       cli_path: "definitely-not-a-real-binary-xyzzy",

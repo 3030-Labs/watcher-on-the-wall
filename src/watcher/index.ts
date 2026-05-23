@@ -44,7 +44,21 @@ export interface WatcherBatch {
   deletedPaths: string[];
 }
 
-export type BatchHandler = (batch: WatcherBatch) => void | Promise<void>;
+/**
+ * Review item 25: optional handler return value. When the consumer
+ * (IngestionQueue) knows a batch was skipped for a reason that should
+ * NOT mark the files as processed (daily-budget-exceeded, per-ingest
+ * cap), it returns `{ retainForRetry: true }` so the watcher re-tries
+ * those paths on the next reconciliation pass. When the handler returns
+ * undefined/void, the legacy "mark processed" semantics apply.
+ */
+export interface BatchHandlerResult {
+  retainForRetry?: boolean;
+}
+
+export type BatchHandler = (
+  batch: WatcherBatch,
+) => Promise<BatchHandlerResult | void> | BatchHandlerResult | void;
 
 export interface WatcherOptions {
   config: WotwConfig;
@@ -198,8 +212,18 @@ export class FileWatcher implements DaemonSubsystem {
     };
     log.info({ batchId: batch.id, count: paths.length, deletes: deletes.length }, "flushing batch");
     try {
-      await this.opts.onBatch(batch);
-      for (const p of batch.paths) this.processedPaths.add(p);
+      const handlerResult = await this.opts.onBatch(batch);
+      // Review item 25: don't mark processed when the handler signals
+      // "retain for retry" (daily-budget-exceeded, per-ingest cap).
+      // Without this gate budget-skipped files were silently lost.
+      if (!handlerResult || handlerResult.retainForRetry !== true) {
+        for (const p of batch.paths) this.processedPaths.add(p);
+      } else {
+        log.info(
+          { batchId: batch.id, count: batch.paths.length },
+          "batch retained for retry — not marking files processed",
+        );
+      }
     } catch (err: unknown) {
       const errMessage = err instanceof Error ? err.message : String(err);
       log.error({ err: errMessage, batchId: batch.id }, "batch handler failed — re-queuing files");

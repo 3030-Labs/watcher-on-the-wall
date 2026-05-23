@@ -441,29 +441,71 @@ export async function healConsolidation(
  * Dispatch a finding to the appropriate heal handler. Returns null for
  * finding kinds that cannot be auto-healed.
  */
+/**
+ * Review item 30: in-memory idempotency / backoff map for heal attempts.
+ * Pre-fix, the same finding could be re-found by lint on each interval
+ * and re-healed → unbounded provenance growth + cost burn in auto_fix
+ * mode. Now: each finding.id is throttled to one attempt per HEAL_BACKOFF_MS
+ * unless the prior attempt SUCCEEDED (fixed:true). Keyed by finding.id
+ * so re-finding the same issue under the same id is recognized.
+ *
+ * Lives at module scope: tied to daemon process lifetime, which matches
+ * the lint-scheduler's lifetime. Restart clears the map by design —
+ * a fresh daemon takes a fresh look at the wiki.
+ */
+const healAttempts = new Map<string, { attemptedAt: number; lastFixed: boolean }>();
+const HEAL_BACKOFF_MS = 6 * 60 * 60 * 1000; // 6 hours
+function recordHealAttempt(id: string, fixed: boolean): void {
+  healAttempts.set(id, { attemptedAt: Date.now(), lastFixed: fixed });
+}
+function shouldSkipHeal(id: string): boolean {
+  const last = healAttempts.get(id);
+  if (!last) return false;
+  if (last.lastFixed) return false; // successful fixes don't block future re-attempts
+  return Date.now() - last.attemptedAt < HEAL_BACKOFF_MS;
+}
+
+/** Test-only: reset the backoff state. */
+export function _resetHealBackoffForTests(): void {
+  healAttempts.clear();
+}
+
 export async function healFinding(
   finding: HealthFinding,
   ctx: HealContext,
 ): Promise<HealResult | null> {
-  switch (finding.kind) {
-    case "stale":
-      return healStale(finding, ctx);
-    case "duplicate":
-      return healDuplicate(finding, ctx);
-    case "broken-link":
-      return healBrokenLinks(finding, ctx);
-    case "missing-backlink":
-      return healMissingBacklinks(finding, ctx);
-    case "contradiction":
-      return healContradiction(finding, ctx);
-    case "consolidation":
-      return healConsolidation(finding, ctx);
-    case "orphan":
-      // Already handled by archive system — not auto-fixable.
-      return null;
-    default:
-      return null;
+  // Review item 30: idempotency / backoff. Skip if a recent attempt
+  // for this exact finding.id failed; let it rediscover after the
+  // backoff window so cost-burn loops cannot form.
+  if (shouldSkipHeal(finding.id)) {
+    return { finding, fixed: false, reason: "heal backoff active", costUsd: 0 };
   }
+  const dispatch = async (): Promise<HealResult | null> => {
+    switch (finding.kind) {
+      case "stale":
+        return healStale(finding, ctx);
+      case "duplicate":
+        return healDuplicate(finding, ctx);
+      case "broken-link":
+        return healBrokenLinks(finding, ctx);
+      case "missing-backlink":
+        return healMissingBacklinks(finding, ctx);
+      case "contradiction":
+        return healContradiction(finding, ctx);
+      case "consolidation":
+        return healConsolidation(finding, ctx);
+      case "orphan":
+        // Already handled by archive system — not auto-fixable.
+        return null;
+      default:
+        return null;
+    }
+  };
+  const result = await dispatch();
+  if (result) {
+    recordHealAttempt(finding.id, result.fixed);
+  }
+  return result;
 }
 
 // ---------------------------------------------------------------------------

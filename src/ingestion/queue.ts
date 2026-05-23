@@ -517,6 +517,12 @@ export class IngestionQueue implements DaemonSubsystem {
           batch,
           model,
           promptText: `${prompt.system}\n\n---\n\n${prompt.text}`,
+          // Review item 20 (X1-C2): hash the system-prompt template
+          // separately so audit-replay is possible without the rendered
+          // text. sourceHashes already captures source bytes; this
+          // closes the third leg (system prompt fingerprint that's
+          // independent of sanitize-rule drift).
+          systemPromptHash: sha256Hex(prompt.system),
           responseText: invokeResult.finalText,
           sourceFiles,
           sourceHashes,
@@ -718,6 +724,8 @@ export class IngestionQueue implements DaemonSubsystem {
     batch: WatcherBatch;
     model: string;
     promptText: string;
+    /** Review item 20 (X1-C2): independent hash of the system prompt. */
+    systemPromptHash?: string;
     responseText: string;
     sourceFiles: string[];
     sourceHashes: string[];
@@ -749,6 +757,12 @@ export class IngestionQueue implements DaemonSubsystem {
         input_tokens: args.inputTokens,
         output_tokens: args.outputTokens,
         duration_ms: args.durationMs,
+        // Review item 20: stable hash of the system prompt independent
+        // of sanitize-rule drift. With this + source_hashes (already
+        // present), an auditor can verify "this source bytes + this
+        // system prompt template → that response_hash" without storing
+        // the rendered post-sanitize prompt text.
+        ...(args.systemPromptHash ? { system_prompt_hash: args.systemPromptHash } : {}),
       },
     });
   }

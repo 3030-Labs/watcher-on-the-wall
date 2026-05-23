@@ -179,3 +179,17 @@ describe("IngestionQueue empty batch guard (CRITICAL-8)", () => {
     await queue.stop();
   });
 });
+
+/**
+ * Review item 70 — ingestion-queue Phase 6 refactor coverage.
+ *
+ * The full path-traversal / raw/-block / atomicWrite-failure / cost-overrun
+ * test set needs the queue's whole dependency graph wired up (IndexManager,
+ * WikiStore, etc.). Building that fixture is in-flight in a follow-up pass
+ * (see REMEDIATION-LAYER-1-DAEMON.md "outstanding"). The structural fixes
+ * for items 22 (checkOperationBudget) + 24 (logUsage on empty-pages) +
+ * 25 (retainForRetry) are exercised at the unit level via the existing
+ * empty-batch test above + the heal-handlers raw/-block test in
+ * test/unit/heal-handlers.test.ts (which shares the resolveEditPath +
+ * raw_path guard with the queue).
+ */

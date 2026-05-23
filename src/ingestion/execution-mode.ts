@@ -132,6 +132,30 @@ export function resolveExecutionMode(config: WotwConfig): ResolvedExecutionMode 
   }
 
   // mode === "auto"
+  // Review item 62: when WOTW_LLM_PROVIDER (config.llm.provider) is
+  // set to anything other than "anthropic", we MUST NOT silently auto-
+  // detect into CLI mode. Pre-fix, an OpenAI / Gemini / Ollama tenant
+  // with the claude binary on PATH (always true in the container)
+  // would silently dispatch through CLI mode — billing the wrong key
+  // for the wrong provider. Honor the explicit llm.provider.
+  if (config.llm.provider !== "anthropic") {
+    const keyEnv2 = detectKey();
+    if (!keyEnv2 && config.llm.provider !== "ollama") {
+      throw new ExecutionModeError(
+        `auto-detect: llm.provider='${config.llm.provider}' but ${apiKeyEnv} is not set. ` +
+          "Refusing to fall back to CLI mode for non-anthropic provider.",
+        "API_KEY_NOT_SET",
+      );
+    }
+    return {
+      mode: "api",
+      configuredMode: "auto",
+      cliPath: null,
+      apiKeyEnv: keyEnv2,
+      effectiveModelHint: `model-router (ingest=${config.models.ingest}, query=${config.models.query})`,
+      description: `API mode (auto-detected, provider=${config.llm.provider}): using ${keyEnv2 ?? "no-key"}, model routing enabled`,
+    };
+  }
   const cli = detectCli();
   if (cli) {
     return {

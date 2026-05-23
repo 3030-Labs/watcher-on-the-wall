@@ -164,7 +164,19 @@ async function main(): Promise<void> {
       config,
       runtimeMode,
       onBatch: async (batch) => {
-        await ingestion.enqueue(batch);
+        const outcome = await ingestion.enqueue(batch);
+        // Review item 25: when ingestion skipped for budget reasons,
+        // signal retainForRetry so the watcher does NOT mark the files
+        // as processed. Otherwise budget-skipped files would be silently
+        // lost (never re-tried tomorrow when the daily window resets).
+        if (
+          outcome?.skipped === true &&
+          typeof outcome.skipReason === "string" &&
+          /budget|cap|exceeds/i.test(outcome.skipReason)
+        ) {
+          return { retainForRetry: true };
+        }
+        return undefined;
       },
     });
 
