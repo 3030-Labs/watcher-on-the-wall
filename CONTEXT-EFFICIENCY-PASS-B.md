@@ -240,6 +240,59 @@ Specific G5-to-Compliance closure scope, when the time comes:
 5. **Update release notes** with the Pass B headline + link to this
    document + benchmark numbers.
 
+### Runtime-exercise residual (deferred to first cloud-side spawn)
+
+Added 2026-05-24 as part of the `SHIP-V0.8.0.md` closure.
+
+The ship pass (commit `b1213de`) built the v0.8.0 image and pushed it
+to `registry.fly.io/wotw-daemon:v0.8.0` (index digest
+`sha256:4d13f66f756dc0618aafae7d869152570c06490ae1b8d1277184df6f300a52ac`).
+The smoke test was **scope-limited** to:
+
+- Local proxy: `node dist/cli/index.js --version` → `0.8.0` (exit 0),
+  proving the source-version surface is correctly wired.
+- Registry-side: `docker buildx imagetools inspect` confirmed the
+  pushed manifest is well-formed (OCI image index + linux/amd64 +
+  attestation manifest).
+
+**Explicitly NOT performed in the ship pass:**
+
+- `docker run` of the v0.8.0 image exercising `wotw-entrypoint`
+  (the entrypoint expects `TENANT_ID`, `WIKI_ROOT`,
+  `ADMIN_SERVICE_KEY`, `ANTHROPIC_API_KEY` and bridges them into a
+  `wotw.yaml` before exec'ing `wotw start` — it's a per-tenant boot
+  shape, not a standalone command).
+- Fly Machine spawn from the v0.8.0 image.
+- End-to-end exercise of `query_facts` / `define` / `relate` /
+  `cite_sources` against a live daemon booted from this image.
+
+**Where the gap closes:** the cloud-side `/goal` that consumes
+`SHIP-V0.8.0.md` fires `flyctl secrets set FLY_DAEMON_IMAGE=...@sha256:4d13f66f...`
+against the orchestrator. The next per-tenant Fly Machine spawn IS the
+first real runtime exercise of this image. If anything regresses vs.
+the v0.7.0 image, the rollback path is the existing v0.7.0 digest
+(historical, captured by `flyctl image show --app wotw-daemon` history
+or the previous ship doc).
+
+This residual is consistent with the `[[feedback-irreducibly-external]]`
+discipline: structural correctness is gated in-session (source + build
++ registry artifact), runtime exercise that requires per-tenant env or
+external infra defers to where that infra naturally lives. The
+difference vs. live-API quality measurement (PASS-B §5) is that
+runtime exercise is **closed at the first cloud-side spawn** — no
+explicit re-engagement precondition needed.
+
+### Ship-time deployment note (vs. §8 original plan)
+
+§8 listed `flyctl deploy --config .fly-registry.toml --build-only --push`
+as the build path (the v0.4.0 / v0.7.0 documented pattern). The actual
+v0.8.0 ship used `docker buildx build --platform linux/amd64 --push`
+locally (Docker Desktop WSL2 integration was toggled on at ship time;
+the local path is faster + more debuggable, with the flyctl remote
+builder remaining as the proven fallback). Both paths produce the same
+artifact at the same registry tag; the difference is build-time
+infrastructure, not the shipped image. See `SHIP-V0.8.0.md` §2.
+
 ---
 
 ## 9. Appendix — file inventory

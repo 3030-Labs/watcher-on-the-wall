@@ -1,5 +1,32 @@
 # BUILD-SUMMARY — watcher-on-the-wall v0.2.0
 
+> ### v0.8.0 Deployment — Image pushed to Fly registry — 2026-05-24
+>
+> Daemon v0.8.0 image (Pass B closure) built and pushed to
+> `registry.fly.io/wotw-daemon:v0.8.0`. Cloud's `FLY_DAEMON_IMAGE` rev
+> bump consumes the manifest digest from `SHIP-V0.8.0.md`.
+>
+> - **Image tag:** `registry.fly.io/wotw-daemon:v0.8.0`
+> - **OCI index digest (pin this in `FLY_DAEMON_IMAGE`):**
+>   `sha256:4d13f66f756dc0618aafae7d869152570c06490ae1b8d1277184df6f300a52ac`
+> - **linux/amd64 image manifest digest:**
+>   `sha256:9b33b29b96113560dbaed9829e571bd1cda861948840d6af6b9bd7010caf79ff`
+> - **Build commit:** `b1213de` (`chore(version): bump 0.4.0 → 0.8.0`).
+>   Source HEAD at Pass B closure: `99d74ab`.
+> - **Build timestamp:** 2026-05-24T14:45:26Z
+> - **Build tool:** `docker buildx build --platform linux/amd64 --push`
+>   (local Docker Desktop on WSL2, BuildKit v0.29.0)
+> - **Smoke invocation:** `node dist/cli/index.js --version` →
+>   `0.8.0` (exit 0). Runtime entrypoint exercise deferred to first
+>   cloud-side tenant spawn (documented in
+>   `CONTEXT-EFFICIENCY-PASS-B.md` §"Runtime-exercise residual").
+> - **Gates:** all 7 green at HEAD `99d74ab` (pre-bump) and
+>   `b1213de` (post-bump) — **752 passed (752)** across 78 files.
+>   `check-llm-types-sync` + `check-chain-hash-sync` both byte-identical
+>   with cloud.
+>
+> Closure doc: `SHIP-V0.8.0.md` (handoff to cloud /goal).
+
 > ### Context-Efficiency Pass B — Fact-level retrieval + synthetic questions + provenance — 2026-05-23
 >
 > Pass B closes the foundational fact-extraction layer. Three feature
