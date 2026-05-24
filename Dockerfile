@@ -43,6 +43,28 @@ RUN pnpm install --frozen-lockfile --ignore-scripts
 # instance #9 surfaced this during Pass 009 Step 7B verification.
 RUN node /app/node_modules/@anthropic-ai/claude-code/install.cjs
 
+# Rebuild better-sqlite3's native binding. Same --ignore-scripts gap as the
+# claude-code install above: the package's install script
+# (`prebuild-install || node-gyp rebuild --release`) was skipped, so the
+# compiled build/Release/better_sqlite3.node is absent from node_modules.
+# Without this step the source tree (deps/, src/, lib/) ships fine but the
+# .node artifact is missing, and any `new Database()` call in the runtime
+# (FactStore constructor, hits at first ingestion / first MCP request) throws
+# at module load with "Could not locate the bindings file." v0.8.0 shipped
+# without this step and crashed on FactStore init in production; v0.8.1
+# adds this rebuild + the runtime-stage SQL exercise below as a build-time
+# gate so this class of bug fails the image build instead of the daemon.
+#
+# `pnpm rebuild` invokes the package's lifecycle scripts regardless of the
+# pnpm.onlyBuiltDependencies allowlist (the allowlist gates install-time
+# scripts; rebuild is explicit). prebuild-install fetches a prebuilt
+# linux-x64 .node from GitHub releases, so no C++ toolchain is needed in
+# node:20-slim. If prebuild-install ever fails to find a matching ABI,
+# node-gyp falls back to compiling from source and this RUN will exit
+# non-zero — at which point the build stage must add build-essential +
+# python3.
+RUN pnpm rebuild better-sqlite3
+
 # Copy the rest of the repo. .dockerignore drops node_modules, dist, tests,
 # docs, etc. so this layer is small.
 COPY . .
@@ -80,6 +102,15 @@ COPY --from=build /app/src/wiki/templates /app/src/wiki/templates
 # root-check (instance #11) does not fire even though this RUN executes as
 # root during build.
 RUN /app/node_modules/.bin/claude --version
+
+# Build-time gate: exercise better-sqlite3's native binding end-to-end. If
+# build/Release/better_sqlite3.node is missing or unloadable, this RUN
+# exits non-zero and the image build fails BEFORE the push step. v0.8.0
+# shipped without this gate; FactStore crashed on first instantiation at
+# tenant boot. The opening + DDL + DML + SELECT chain ensures the bindings
+# load, sqlite is callable, and the addon's hot paths are wired — not just
+# that the .node file exists on disk.
+RUN node -e 'const db = new (require("better-sqlite3"))(":memory:"); db.exec("CREATE TABLE t(x INTEGER); INSERT INTO t VALUES (1);"); const row = db.prepare("SELECT x FROM t").get(); if (row.x !== 1) { throw new Error("better-sqlite3 self-test returned wrong value: " + JSON.stringify(row)); } console.log("better-sqlite3 self-test passed");'
 
 # Runtime entrypoint: chowns /data and drops to wotw via gosu, then bridges
 # container env vars into a wotw.yaml.
