@@ -18,8 +18,19 @@
 #     wotw
 FROM node:20-slim AS build
 
+# python3 + make + g++ are node-gyp prerequisites for native module
+# compilation. better-sqlite3 12.10.0's `install` script tries
+# `prebuild-install` first (matches against the prebuilt manifest on
+# GitHub releases by target/runtime/arch/libc), and falls back to
+# `node-gyp rebuild --release` if no match. The current node:20-slim
+# is on node 20.20.2 and the prebuild-install match fails (libc=
+# empty in the target string mismatches the published prebuilds),
+# so node-gyp's fallback path fires — and that needs python + the
+# C++ toolchain. These tools live in the build stage only; the
+# runtime stage's apt-get is unaffected, so the final image stays
+# slim. ~100MB build-stage cost, 0 runtime-stage cost.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends git ca-certificates \
+ && apt-get install -y --no-install-recommends git ca-certificates python3 make g++ \
  && rm -rf /var/lib/apt/lists/*
 
 RUN npm install -g pnpm@10.13.1
@@ -57,12 +68,11 @@ RUN node /app/node_modules/@anthropic-ai/claude-code/install.cjs
 #
 # `pnpm rebuild` invokes the package's lifecycle scripts regardless of the
 # pnpm.onlyBuiltDependencies allowlist (the allowlist gates install-time
-# scripts; rebuild is explicit). prebuild-install fetches a prebuilt
-# linux-x64 .node from GitHub releases, so no C++ toolchain is needed in
-# node:20-slim. If prebuild-install ever fails to find a matching ABI,
-# node-gyp falls back to compiling from source and this RUN will exit
-# non-zero — at which point the build stage must add build-essential +
-# python3.
+# scripts; rebuild is explicit). On the current node 20.20.2 base image
+# prebuild-install's matcher returns no prebuilt (libc= empty in the
+# target mismatches the published prebuilds), so node-gyp's fallback
+# fires and compiles from source. The build stage's apt-get above
+# installs python3 + make + g++ for exactly this case.
 RUN pnpm rebuild better-sqlite3
 
 # Copy the rest of the repo. .dockerignore drops node_modules, dist, tests,
