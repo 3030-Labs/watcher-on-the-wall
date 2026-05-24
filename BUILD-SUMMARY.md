@@ -1,13 +1,73 @@
 # BUILD-SUMMARY — watcher-on-the-wall v0.2.0
 
-> ### v0.8.0 Deployment — Image pushed to Fly registry — 2026-05-24
+> ### v0.8.1 Deployment — Patch ship (better-sqlite3 .node fix) — 2026-05-24
 >
-> Daemon v0.8.0 image (Pass B closure) built and pushed to
-> `registry.fly.io/wotw-daemon:v0.8.0`. Cloud's `FLY_DAEMON_IMAGE` rev
-> bump consumes the manifest digest from `SHIP-V0.8.0.md`.
+> Daemon v0.8.1 image built and pushed to
+> `registry.fly.io/wotw-daemon:v0.8.1`, **superseding the broken v0.8.0
+> image**. v0.8.0 (digest `sha256:4d13f66f...`) booted past the banner
+> then crashed FATAL on FactStore construction with "Could not locate
+> the bindings file" — the compiled `build/Release/better_sqlite3.node`
+> was absent from the runtime image. v0.8.1 fixes the Dockerfile.
+>
+> - **Image tag:** `registry.fly.io/wotw-daemon:v0.8.1`
+> - **OCI index digest (pin this in `FLY_DAEMON_IMAGE`):**
+>   `sha256:f62d153fd598d68b8651aba5ca62180e6d7e229d39556b0fb2b7ecbda7a68d05`
+> - **linux/amd64 image manifest digest:**
+>   `sha256:b190cccf7dee989a7e37190db9daf44d06e69231538ed5825b386c0d69e06960`
+> - **Build commits:** `e4d22ad` (`fix(docker): rebuild better-sqlite3
+>   native binding`) + `7c7ca84` (`fix(docker): add python3+make+g++
+>   to build stage for node-gyp fallback`). Source HEAD unchanged from
+>   v0.8.0: `99d74ab`.
+> - **Build timestamp:** ~2026-05-24T18:20Z
+> - **Root cause:** Dockerfile's build stage runs
+>   `pnpm install --ignore-scripts` (needed to bypass husky `prepare`),
+>   which skipped better-sqlite3's `install: prebuild-install ||
+>   node-gyp rebuild --release` lifecycle. The C++ source tree shipped
+>   but no compiled `.node` artifact. Pass B added the better-sqlite3
+>   dep without an explicit rebuild step (analogous to the pre-existing
+>   handling for @anthropic-ai/claude-code's native binary).
+> - **Fix shape:**
+>   1. Add `python3 make g++` to the build stage's apt-get
+>      (node-gyp fallback prerequisites; build-stage only, runtime
+>      slim image unaffected).
+>   2. Add `RUN pnpm rebuild better-sqlite3` after the install step.
+>   3. Add runtime-stage `RUN node -e '<open + DDL + DML + SELECT>'`
+>      as a build-time gate — image build fails BEFORE push if the
+>      bindings can't load. Standing pattern for any future native dep.
+> - **Smoke (scope-expanded vs v0.8.0):**
+>   - Local proxy: `node dist/cli/index.js --version` → `0.8.1` ✓
+>   - Container `find /app -path '*better_sqlite3.node*'` → `.node`
+>     present at expected path ✓ (v0.8.0 returned empty)
+>   - Container SQL exercise: `docker run ... node -e '<INSERT/SELECT>'`
+>     → `ok: {"x":1}`, exit 0 ✓
+>   - Build-time gate inside Dockerfile fires every build: ✓
+> - **Gates:** all 7 green at HEAD `e4d22ad` — 752 passed (752).
+>   Source unchanged from v0.8.0, baseline preserved.
+>
+> Closure doc: `SHIP-V0.8.1.md`. Cloud `FLY_DAEMON_IMAGE` rev bump
+> handoff: pin the v0.8.1 OCI index digest, NOT the v0.8.0 digest
+> (which is the broken one).
+
+> ### v0.8.0 Deployment — Image pushed to Fly registry — 2026-05-24 [SUPERSEDED — broken]
+>
+> **Status: superseded by v0.8.1.** This image (digest
+> `sha256:4d13f66f...`) is the broken one — boot reaches the banner
+> then crashes FATAL on FactStore due to missing
+> `build/Release/better_sqlite3.node`. See v0.8.1 entry above for the
+> fix. v0.8.0 image is left in the registry for forensics but should
+> NOT be pinned by `FLY_DAEMON_IMAGE` — the v0.8.0 ship pass's
+> local-proxy smoke didn't exercise the container runtime, and the
+> runtime-exercise residual was scope-limited to "first cloud-side
+> spawn." That deferred gate caught the bug — at the cost of one bad
+> tenant boot. **Lesson:** any native dep added after a daemon-only
+> source-level smoke MUST get a corresponding container-level smoke
+> in the ship pass itself. v0.8.1 codifies this via the Dockerfile's
+> runtime-stage SQL exercise (build-time gated, can't ship without it).
+>
+> Original v0.8.0 ship-doc record retained below for forensics:
 >
 > - **Image tag:** `registry.fly.io/wotw-daemon:v0.8.0`
-> - **OCI index digest (pin this in `FLY_DAEMON_IMAGE`):**
+> - **OCI index digest (DO NOT PIN — broken):**
 >   `sha256:4d13f66f756dc0618aafae7d869152570c06490ae1b8d1277184df6f300a52ac`
 > - **linux/amd64 image manifest digest:**
 >   `sha256:9b33b29b96113560dbaed9829e571bd1cda861948840d6af6b9bd7010caf79ff`
@@ -16,16 +76,21 @@
 > - **Build timestamp:** 2026-05-24T14:45:26Z
 > - **Build tool:** `docker buildx build --platform linux/amd64 --push`
 >   (local Docker Desktop on WSL2, BuildKit v0.29.0)
-> - **Smoke invocation:** `node dist/cli/index.js --version` →
->   `0.8.0` (exit 0). Runtime entrypoint exercise deferred to first
->   cloud-side tenant spawn (documented in
->   `CONTEXT-EFFICIENCY-PASS-B.md` §"Runtime-exercise residual").
+> - **Smoke invocation (insufficient):** `node dist/cli/index.js
+>   --version` → `0.8.0` (exit 0). This proved the source-version
+>   surface compiled correctly but did NOT exercise the container.
+>   Runtime entrypoint exercise was deferred to first cloud-side
+>   tenant spawn (documented in `CONTEXT-EFFICIENCY-PASS-B.md`
+>   §"Runtime-exercise residual"). The deferred gate caught the
+>   missing-bindings bug — too late to prevent the bad ship.
 > - **Gates:** all 7 green at HEAD `99d74ab` (pre-bump) and
 >   `b1213de` (post-bump) — **752 passed (752)** across 78 files.
->   `check-llm-types-sync` + `check-chain-hash-sync` both byte-identical
->   with cloud.
+>   The Pass B test suite covered FactStore in unit tests (where
+>   the local node_modules' compiled .node WAS present); did NOT
+>   exercise FactStore inside the container. That gap is what
+>   shipped the bug.
 >
-> Closure doc: `SHIP-V0.8.0.md` (handoff to cloud /goal).
+> Closure doc: `SHIP-V0.8.0.md` (now historical).
 
 > ### Context-Efficiency Pass B — Fact-level retrieval + synthetic questions + provenance — 2026-05-23
 >
