@@ -30,6 +30,7 @@ import { registerRejectCommand } from "./commands/reject.js";
 import { registerCandidatesCommand } from "./commands/candidates.js";
 import { registerFactsCommand } from "./commands/facts.js";
 import { registerKeysCommand } from "./commands/keys.js";
+import { registerWorkspaceCommand } from "./commands/workspace.js";
 
 import { VERSION } from "../utils/version.js";
 
@@ -68,6 +69,7 @@ async function main(): Promise<void> {
   registerCandidatesCommand(program);
   registerFactsCommand(program);
   registerKeysCommand(program);
+  registerWorkspaceCommand(program);
 
   await program.parseAsync(process.argv);
 }

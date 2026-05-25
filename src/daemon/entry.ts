@@ -6,6 +6,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { Daemon } from "./index.js";
 import { LintScheduler } from "./lint-scheduler.js";
+import { DekArchiveScheduler } from "./dek-archive-scheduler.js";
 import { getLogger, initLogger, setLoggerContext } from "../utils/logger.js";
 import { WikiStore } from "../wiki/store.js";
 import { IndexManager } from "../wiki/index-manager.js";
@@ -84,6 +85,10 @@ async function main(): Promise<void> {
     // Provenance chain (Phase 4). Initialized before any subsystem that may
     // append to it so early queries/ingestions don't race the file creation.
     let provenance: ProvenanceChain | null = null;
+    // PASS-019 Part C: hoisted out of the provenance-enabled block so the
+    // DEK auto-archive scheduler below can reference them.
+    let keyStore: KeyStoreType | null = null;
+    let workspaceId: string | undefined;
     if (config.provenance.enabled) {
       // Hosted-mode cloud sink (SD-1 closure, Pass-pair with wotw-cloud
       // /api/internal/append-provenance). Sink is null in local /
@@ -107,7 +112,7 @@ async function main(): Promise<void> {
       // single-key 4-tier resolution.
       const tenantId =
         config.hosted.enabled && config.hosted.tenant_id ? config.hosted.tenant_id : undefined;
-      let keyStore: KeyStoreType | null = null;
+      workspaceId = tenantId;
       if (tenantId && process.env.WOTW_WORKSPACE_KEK) {
         const { readKekFromEnv } = await import("../keys/envelope.js");
         const { KeyStore } = await import("../keys/store.js");
@@ -280,10 +285,19 @@ async function main(): Promise<void> {
     // ingestion/watcher loop on a timer.
     const lintScheduler = new LintScheduler({ config });
 
+    // PASS-019 Part C: DEK auto-archive cron. Hourly tick scans
+    // workspace_keys for `rotating` DEKs past their overlap window
+    // (default 24h, configurable via WOTW_DEK_OVERLAP_HOURS) and
+    // transitions them to `archived`. No-op unless keyStore is set
+    // (hosted mode + WOTW_WORKSPACE_KEK present). Idempotent.
+    const dekArchiveScheduler =
+      keyStore && workspaceId ? new DekArchiveScheduler({ keyStore, workspaceId }) : null;
+
     daemon.attachSubsystem(ingestion);
     daemon.attachSubsystem(watcher);
     daemon.attachSubsystem(mcp);
     daemon.attachSubsystem(lintScheduler);
+    if (dekArchiveScheduler) daemon.attachSubsystem(dekArchiveScheduler);
 
     // Review item 23: startReconciliation was defined + tested but
     // never called. The watcher relies on it to catch files dropped

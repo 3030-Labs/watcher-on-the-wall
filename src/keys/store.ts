@@ -82,7 +82,12 @@ type Row = {
 export class KeyStore {
   readonly path: string;
   private readonly db: Database.Database;
-  private readonly kek: Buffer;
+  /**
+   * Current KEK reference. Mutable so `rotateKek()` (PASS-019 Part B)
+   * can swap it in-place atomically after a successful re-encrypt of
+   * every non-revoked row. Never serialized; only held in memory.
+   */
+  private kek: Buffer;
   /** Cache of decrypted DEKs keyed by key_id. Bounded by the small number of keys per workspace. */
   private readonly dekCache: Map<string, Buffer>;
 
@@ -243,6 +248,130 @@ export class KeyStore {
       )
       .run(keyId);
     return Number(result.changes) > 0;
+  }
+
+  /**
+   * Archive every `rotating` DEK whose `rotated_at` is older than the
+   * overlap window. Bulk version of `archive()` for the auto-archive
+   * cron (PASS-019 Part C). Idempotent.
+   *
+   * @param workspaceId the workspace to scan
+   * @param overlapMs   overlap window in milliseconds. Rows whose
+   *                    `rotated_at` is older than `now - overlapMs`
+   *                    transition to `archived`. Pass the configured
+   *                    `WOTW_DEK_OVERLAP_HOURS * 3600 * 1000` here.
+   * @param now         injected for testability (ISO string). Defaults
+   *                    to the current time.
+   * @returns the list of key_ids that transitioned
+   */
+  archiveOverlapped(
+    workspaceId: string,
+    overlapMs: number,
+    now: string = new Date().toISOString(),
+  ): string[] {
+    // Compute the cutoff timestamp. Anything rotated_at older than this
+    // is past the overlap window and should be archived. Doing the date
+    // arithmetic in JS rather than SQLite so we control the time source
+    // for tests (`now` is injectable).
+    const cutoff = new Date(new Date(now).getTime() - overlapMs).toISOString();
+    return this.db.transaction(() => {
+      const candidates = this.db
+        .prepare(
+          `SELECT key_id FROM workspace_keys
+             WHERE workspace_id = ?
+               AND key_state = 'rotating'
+               AND rotated_at IS NOT NULL
+               AND rotated_at <= ?`,
+        )
+        .all(workspaceId, cutoff) as { key_id: string }[];
+      if (candidates.length === 0) return [];
+      const ids = candidates.map((r) => r.key_id);
+      const placeholders = ids.map(() => "?").join(",");
+      this.db
+        .prepare(
+          `UPDATE workspace_keys SET key_state = 'archived'
+             WHERE key_id IN (${placeholders}) AND key_state = 'rotating'`,
+        )
+        .run(...ids);
+      return ids;
+    })();
+  }
+
+  /**
+   * Re-encrypt every non-revoked DEK in the store under a new KEK
+   * (PASS-019 Part B). Single SQLite transaction — partial failure
+   * rolls back, the store's effective KEK stays unchanged. On
+   * success, `this.kek` is updated to `newKek` so future
+   * provision/rotate calls use the new KEK.
+   *
+   * Revoked DEKs are skipped: they're forensic; if a row's encrypted
+   * material can't unwrap under the old KEK (corruption, prior
+   * tampering), the rotation fails LOUD rather than silently dropping
+   * the row.
+   *
+   * Idempotent in semantics: re-running with the same `newKek` produces
+   * new ciphertexts (fresh nonces) but the underlying DEK plaintext is
+   * unchanged, so verify continues to work either way.
+   *
+   * Operator runbook: see `docs/policies/kek-rotation.md`. The Fly
+   * secret swap is OUT of the daemon's hands — the operator sets
+   * `WOTW_WORKSPACE_KEK_NEW` alongside the existing
+   * `WOTW_WORKSPACE_KEK`, runs this op, then swaps the Fly secret and
+   * restarts the daemon. KEK plaintext is never logged or printed.
+   *
+   * @returns count of DEK rows re-encrypted (active + rotating + archived)
+   * @throws if any row fails to unwrap under the old KEK; transaction
+   *         rolls back and `this.kek` is unchanged
+   */
+  rotateKek(newKek: Buffer): { rotated: number } {
+    if (newKek.length !== 32) {
+      throw new Error(`new KEK must be exactly 32 bytes (got ${newKek.length})`);
+    }
+    const result = this.db.transaction(() => {
+      // Read every non-revoked DEK. Revoked keys are deliberately left
+      // under the old KEK — they're terminal forensic records and
+      // re-encrypting them would mask any KEK compromise that motivated
+      // the revocation.
+      const rows = this.db
+        .prepare(
+          `SELECT key_id, encrypted_dek, nonce, auth_tag FROM workspace_keys
+             WHERE key_state != 'revoked'`,
+        )
+        .all() as {
+        key_id: string;
+        encrypted_dek: Buffer;
+        nonce: Buffer;
+        auth_tag: Buffer;
+      }[];
+      const update = this.db.prepare(
+        `UPDATE workspace_keys
+           SET encrypted_dek = ?, nonce = ?, auth_tag = ?
+           WHERE key_id = ?`,
+      );
+      for (const r of rows) {
+        // Decrypt under the CURRENT (old) KEK. If this throws, the
+        // transaction rolls back and `this.kek` is unchanged.
+        const dek = unwrapDek(
+          { ciphertext: r.encrypted_dek, nonce: r.nonce, auth_tag: r.auth_tag },
+          this.kek,
+        );
+        // Re-wrap under the new KEK with a fresh nonce.
+        const wrapped = wrapDek(dek, newKek);
+        update.run(wrapped.ciphertext, wrapped.nonce, wrapped.auth_tag, r.key_id);
+      }
+      return { rotated: rows.length };
+    })();
+    // Commit-then-swap. If commit failed we wouldn't reach here.
+    // Clear the cache because the underlying ciphertext changed — any
+    // stale cached DEK is still correct (plaintext unchanged) but the
+    // cache invariant (cache miss → re-decrypt under current KEK)
+    // requires the KEK reference to match what the rows are encrypted
+    // under. Re-populating lazily on next resolveById is cheap.
+    this.dekCache.clear();
+    // Swap in the new KEK reference last — anything before this that
+    // throws leaves the store consistent with the old KEK.
+    this.kek = newKek;
+    return result;
   }
 
   /**
