@@ -1,5 +1,55 @@
 # BUILD-SUMMARY — watcher-on-the-wall v0.2.0
 
+> ### PASS-019 — G5 Completion (KEK rotation + DEK auto-archive cron) + v0.8.3 ship — 2026-05-25
+>
+> Closes the two G5 items Pass 018 explicitly deferred: KEK rotation
+> operation + the auto-archive cron that transitions rotating DEKs to
+> archived after their overlap window. Implementation commit `9b86597`,
+> image push commit chain follow-on.
+>
+> **Substrate (KEK rotation):**
+> - `KeyStore.rotateKek(newKek)` — single SQLite transaction
+>   re-encrypts every non-revoked DEK under the new KEK; cache clear
+>   + `this.kek` swap happen post-commit. Atomicity verified:
+>   mid-rotation throw rolls back rows + leaves `this.kek` unchanged.
+> - `KeyStore.archiveOverlapped(workspaceId, overlapMs, now)` — bulk
+>   variant of `archive()` filtered by `state='rotating' AND
+>   rotated_at <= cutoff`. Idempotent, workspace-isolated.
+> - CLI: `wotw workspace rotate-kek --confirm` + `wotw workspace
+>   archive-overlapped` (manual cron trigger).
+> - Runbook: `docs/policies/kek-rotation.md` with dual-secret pattern
+>   for zero-downtime rotation, rollback scenarios, forbidden ops.
+>
+> **Substrate (auto-archive cron):**
+> - `DekArchiveScheduler` implements `DaemonSubsystem`, mirroring
+>   `LintScheduler`. Hourly tick, configurable via
+>   `WOTW_DEK_OVERLAP_HOURS` env (default 24h). `unref()`'d timer.
+>   In-flight guard + injectable `now` for tests.
+> - Wired in `daemon/entry.ts` only when keyStore + workspaceId both
+>   present (hosted mode + `WOTW_WORKSPACE_KEK`). Forward-compat with
+>   v0.8.1 daemons: no-op subsystem when keystore absent.
+>
+> **Tests: 852 passed (852) across 87 files** — 813 baseline + 39 new
+> (14 KEK rotation + 8 rotation-under-load + 12 scheduler + 5
+> workspace-CLI wiring). HMAC overhead bench unchanged at 0.463ms p99
+> (rotation is a separate, rare path; not in append's hot loop). All
+> 7 daemon gates green.
+>
+> **v0.8.3 image shipped:**
+> - **OCI index digest (pin in `FLY_DAEMON_IMAGE`):**
+>   `sha256:4d26edff70043f565d8b61b5b357577a2e0fcd954620e064df89e23c94b95cd6`
+> - **linux/amd64 manifest:**
+>   `sha256:cd1a3b6a43889555ecd871f92161cd18e2120c6e3011840de93596a0fdf3b9f5`
+> - Build-time SQL gate fired (`better-sqlite3 self-test passed`);
+>   .node artifact present in pushed image; boot smoke
+>   `/healthz` returned `version: 0.8.3` in 4s.
+>
+> Closure docs: `PASS-019-G5-COMPLETION.md` (this pass) +
+> `docs/policies/kek-rotation.md` (operator runbook). Cloud handoff:
+> two-stage rev bump (v0.8.2 first to activate substrate, then v0.8.3
+> for rotation operations) OR pin v0.8.3 directly — v0.8.3 strictly
+> supersedes.
+
 > ### v0.8.2 Deployment — Image ship for Pass 018 G5 substrate — 2026-05-25
 >
 > Daemon v0.8.2 image built and pushed to
