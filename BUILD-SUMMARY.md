@@ -1,5 +1,58 @@
 # BUILD-SUMMARY — watcher-on-the-wall v0.2.0
 
+> ### PASS-018 — G5 End-to-End Attestation Closure — 2026-05-24
+>
+> Closes CT1.01 🟡 PARTIAL → ✅. The Layer-1 G5 scaffolding (commit
+> `1875925`) shipped HMAC + tenant_id + tail-verify hooks but left the
+> substrate as a stub: single static key, no encryption-at-rest, no
+> rotation, and `verify()` didn't actually validate HMACs. This pass
+> ships the complete workspace-key substrate. Implementation commit
+> `574d34f` — `feat(provenance-g5)` (v0.8.2).
+>
+> - **Workspace key lifecycle** via SQLite at `.wotw/keys.db` (schema v1
+>   under `PRAGMA user_version`, same pattern as Pass B's facts.db).
+>   States: `active → rotating → archived`, plus terminal `revoked`.
+>   Partial unique index enforces at-most-one-active-per-workspace at
+>   the DB level.
+> - **Envelope encryption** (AES-256-GCM) with KEK in
+>   `WOTW_WORKSPACE_KEK` Fly secret. Per-workspace DEKs encrypted under
+>   KEK; plaintext only in process memory, never on disk, never logged.
+> - **Attestation-on-append** wired: every record HMAC-SHA256 signed
+>   with the active DEK; new `key_id` field stamped on the record but
+>   excluded from canonical payload (same [[project-provenance-compat]]
+>   pattern as `hmac` and `fact_hashes_*`).
+> - **Tail-verify + full-verify** now validate HMACs via
+>   `KeyStore.resolveById()` across all key states. Records signed
+>   under a rotating, archived, or revoked DEK still verify
+>   cryptographically; state is forensic.
+> - **Mid-chain DEK rotation** with overlap window: `rotate()` is a
+>   single atomic SQL transaction. Both old and new DEKs resolvable
+>   for verify during overlap. Manual via `wotw keys rotate` CLI;
+>   auto-archive cron deferred.
+> - **`/internal/verify` HTTP endpoint** admin-keyed surface. Contract
+>   frozen for the future `wotw-verify` Go CLI (CT5.01, separate pass).
+> - **HMAC overhead**: 0.463ms p99 (under the 1ms budget). Append
+>   latency dominated by fsync; HMAC compute is microseconds.
+> - **813 tests passed (813)** across 83 files — 752 baseline + 61 new
+>   (19 envelope + 24 store + 12 G5 attestation + 5 /verify integration
+>   + 1 HMAC overhead bench). All 7 daemon gates green.
+> - **Backward-compat** verified: pre-G5 chains (no `hmac` field) and
+>   G5-scaffolding chains (`hmac`, no `key_id`) both verify under
+>   v0.8.2 daemon. Latent bug fixed in `verify()` canonical-payload
+>   walk: `tenant_id` now included (matches `append()` + `init()`
+>   tail-verify which already included it).
+> - **Forward-compat** verified at the hash level: v0.8.2 chain
+>   canonical `id` matches what an older daemon would compute, because
+>   `key_id` is excluded from canonical payload.
+>
+> Closure doc: `PASS-018-G5-CLOSURE.md`. Daemon image v0.8.2 not built
+> in this pass — separate SHIP-V0.8.2 pass following the v0.8.1 ship
+> pattern. CT1.02-CT5.03 + KEK rotation are downstream.
+>
+> Unblocks every Compliance-tier item that depends on real attestation
+> (CT1.02 SKU, CT2.x retention, CT3.x redaction audit, CT4.x Compliance
+> Pack export, CT5.x wotw-verify CLI).
+
 > ### v0.8.1 Deployment — Patch ship (better-sqlite3 .node fix) — 2026-05-24
 >
 > Daemon v0.8.1 image built and pushed to
