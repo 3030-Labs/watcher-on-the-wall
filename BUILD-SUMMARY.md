@@ -1,5 +1,38 @@
 # BUILD-SUMMARY — watcher-on-the-wall v0.2.0
 
+> ### v0.8.2 Deployment — Image ship for Pass 018 G5 substrate — 2026-05-25
+>
+> Daemon v0.8.2 image built and pushed to
+> `registry.fly.io/wotw-daemon:v0.8.2` from source HEAD `fb19cdb`
+> (Pass 018 closure). Cloud's `FLY_DAEMON_IMAGE` rev bump consumes
+> the manifest digest. **Part A of the PASS-019 directive closed.**
+>
+> - **Image tag:** `registry.fly.io/wotw-daemon:v0.8.2`
+> - **OCI index digest (pin in `FLY_DAEMON_IMAGE`):**
+>   `sha256:a40b1619f5cd8978169b2c738f305b8e31f09c0aa944b30d2c7be4a6ac4a6012`
+> - **linux/amd64 image manifest:**
+>   `sha256:72d91ed2d0cc7497c05e2eada1836fe8d6c38ceac71b906ef5a6ee28723298ee`
+> - **Source HEAD:** `fb19cdb` (Pass 018 G5 closure, tag `v0.8.2`)
+> - **Build timestamp:** 2026-05-25T02:54Z
+> - **Build tool:** `docker buildx build --platform linux/amd64 --push`
+>   (local Docker Desktop on WSL2, BuildKit v0.29.0). v0.8.1 native-dep
+>   pattern preserved: `pnpm rebuild better-sqlite3` in build stage,
+>   build-time SQL self-test gate in runtime stage.
+> - **Smoke evidence (scope-expanded vs v0.8.0/v0.8.1):**
+>   - Container `find /app -path '*better_sqlite3.node*'` → .node present ✓
+>   - Throwaway container boot: `/healthz` returned
+>     `{"ok":true,"name":"watcher-on-the-wall","version":"0.8.2"}` in
+>     4 seconds (well under 60s budget)
+>   - Deprovision clean
+> - **G5 activation cloud-side:** v0.8.2 daemons spawn with G5
+>   attestation ACTIVE only when `WOTW_WORKSPACE_KEK` is in env.
+>   Without it, falls back to v0.8.1 single-key 4-tier HMAC.
+> - **Gates:** all 7 green at HEAD `fb19cdb` — 813 passed (813).
+>
+> Closure doc: `SHIP-V0.8.2.md` (handoff to cloud /goal). Parts B+C
+> of PASS-019 (KEK rotation + auto-archive cron) continue in the
+> same goal; if both land, v0.8.3 follow-on image will ship.
+
 > ### PASS-018 — G5 End-to-End Attestation Closure — 2026-05-24
 >
 > Closes CT1.01 🟡 PARTIAL → ✅. The Layer-1 G5 scaffolding (commit
