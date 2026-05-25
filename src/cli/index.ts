@@ -29,6 +29,7 @@ import { registerApproveCommand } from "./commands/approve.js";
 import { registerRejectCommand } from "./commands/reject.js";
 import { registerCandidatesCommand } from "./commands/candidates.js";
 import { registerFactsCommand } from "./commands/facts.js";
+import { registerKeysCommand } from "./commands/keys.js";
 
 import { VERSION } from "../utils/version.js";
 
@@ -66,6 +67,7 @@ async function main(): Promise<void> {
   registerRejectCommand(program);
   registerCandidatesCommand(program);
   registerFactsCommand(program);
+  registerKeysCommand(program);
 
   await program.parseAsync(process.argv);
 }

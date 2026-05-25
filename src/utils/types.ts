@@ -353,13 +353,33 @@ export interface ProvenanceRecord {
   previous_chain_hash: string;
   chain_hash: string;
   /**
-   * Review item 42: HMAC signature over `id || chain_hash` using a
-   * daemon-derived secret (HMAC_PROVENANCE_KEY in env, falling back to
-   * a per-tenant-id-derived key when in hosted mode). Detects forge /
-   * delete attacks even when an attacker can read the chain file —
-   * they cannot mint records the daemon's verifier would accept.
+   * Review item 42: HMAC signature over `id || chain_hash`. From G5
+   * closure (Pass 018, v0.8.2) this is signed with the active workspace
+   * DEK from the KeyStore. Older chains (pre-G5 or G5-scaffolding only)
+   * fall back to the 4-tier resolution at construction (`hmacKey` opts >
+   * `WOTW_PROVENANCE_HMAC_KEY` env > derived from tenant_id > undefined).
+   * Detects forge / delete attacks even when an attacker can read the
+   * chain file — they cannot mint records the verifier would accept.
+   *
+   * NOT in the canonical payload (canonical-payload-exclusion pattern).
    */
   hmac?: string;
+  /**
+   * G5 closure (Pass 018, v0.8.2): identifier of the workspace DEK that
+   * signed this record's `hmac`. Used at verify time to look up the right
+   * DEK across rotations — records signed under a previous DEK still
+   * verify after rotation because their key_id resolves to the
+   * `rotating` or `archived` row in workspace_keys.
+   *
+   * Absent on records produced before v0.8.2 (those used the
+   * single-key 4-tier resolution and the verifier falls back to it
+   * when key_id is missing).
+   *
+   * NOT in the canonical payload — canonical-payload-exclusion pattern,
+   * same as `fact_hashes_*` and `hmac` itself. Old daemons compute
+   * identical id / chain_hash on records carrying this field.
+   */
+  key_id?: string;
   /**
    * Pass B (fact extraction): list of fact_hash strings added by this
    * operation. Present on `type: "fact_extracted"` records and (when

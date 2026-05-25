@@ -17,6 +17,7 @@ import { IngestionQueue } from "../ingestion/queue.js";
 import { FileWatcher } from "../watcher/index.js";
 import { McpHttpServer } from "../server/index.js";
 import { ProvenanceChain } from "../provenance/chain.js";
+import type { KeyStore as KeyStoreType } from "../keys/store.js";
 import { CompoundingEngine } from "../compounding/engine.js";
 
 async function main(): Promise<void> {
@@ -96,6 +97,44 @@ async function main(): Promise<void> {
           "provenance cloud sink active",
         );
       }
+      // G5 closure (Pass 018, v0.8.2): workspace KeyStore for end-to-end
+      // attestation. Provisions a per-workspace DEK encrypted under a
+      // KEK from Fly secrets (WOTW_WORKSPACE_KEK). Each chain append
+      // signs with the active DEK and stamps `key_id` so verify can
+      // look up the right DEK after rotation. Opt-in: requires both
+      // hosted mode (workspace_id from tenant_id) AND the KEK env var.
+      // Without these, ProvenanceChain falls back to the v0.8.1
+      // single-key 4-tier resolution.
+      const tenantId =
+        config.hosted.enabled && config.hosted.tenant_id ? config.hosted.tenant_id : undefined;
+      let keyStore: KeyStoreType | null = null;
+      if (tenantId && process.env.WOTW_WORKSPACE_KEK) {
+        const { readKekFromEnv } = await import("../keys/envelope.js");
+        const { KeyStore } = await import("../keys/store.js");
+        try {
+          const kek = readKekFromEnv();
+          keyStore = new KeyStore({ path: `${config.wiki_root}/.wotw/keys.db`, kek });
+          const existing = keyStore.active(tenantId);
+          if (existing) {
+            log.info(
+              { keyId: existing.key_id.slice(0, 8), workspaceId: tenantId },
+              "workspace key store ready (existing active DEK)",
+            );
+          } else {
+            const provisioned = keyStore.provision(tenantId);
+            log.info(
+              { keyId: provisioned.key_id.slice(0, 8), workspaceId: tenantId },
+              "workspace key store ready (new DEK provisioned)",
+            );
+          }
+        } catch (err) {
+          log.fatal(
+            { err: err instanceof Error ? err.message : String(err) },
+            "workspace key store init failed; refusing to start with attestation enabled but broken",
+          );
+          throw err;
+        }
+      }
       provenance = new ProvenanceChain({
         path: config.provenance.chain_file,
         sink,
@@ -103,8 +142,9 @@ async function main(): Promise<void> {
         // HMAC key falls back to a per-tenant derivation when no explicit
         // env override is set. Together these make forge / delete /
         // cross-tenant-replay detectable.
-        tenantId:
-          config.hosted.enabled && config.hosted.tenant_id ? config.hosted.tenant_id : undefined,
+        tenantId,
+        workspaceId: tenantId,
+        keyStore,
       });
       await provenance.init();
       log.info({ path: provenance.path, records: provenance.count() }, "provenance chain ready");

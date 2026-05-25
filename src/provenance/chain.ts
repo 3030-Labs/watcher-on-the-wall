@@ -18,11 +18,12 @@
  */
 import { open, readFile, stat } from "node:fs/promises";
 import { dirname } from "node:path";
-import { createHmac } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import type { ProvenanceRecord, OperationType, ModelId } from "../utils/types.js";
 import { ensureDir, fileExists } from "../utils/fs.js";
 import { getLogger } from "../utils/logger.js";
 import { GENESIS_HASH, canonicalJson, sha256Canonical, sha256Hex } from "./hash.js";
+import type { KeyStore } from "../keys/store.js";
 
 /**
  * Optional sink invoked fire-and-forget after a JSONL append succeeds.
@@ -106,14 +107,25 @@ export class ProvenanceChain {
    */
   private readonly tenantId: string | undefined;
   /**
-   * Review item 42: HMAC key for record signing. Resolved at construction:
+   * G5 closure (Pass 018, v0.8.2): workspace key store. When set, every
+   * append signs the record's HMAC with the workspace's currently active
+   * DEK and stamps `key_id` on the record so the verifier can look up
+   * the right DEK after rotation. When null, falls back to the
+   * single-key 4-tier resolution below (backwards-compat for chains
+   * predating G5 closure).
+   */
+  private readonly keyStore: KeyStore | null;
+  /** Workspace id used to look up DEKs in the key store. Defaults to tenantId. */
+  private readonly workspaceId: string | undefined;
+  /**
+   * Review item 42 (backward-compat path): single-key fallback. Resolved
+   * at construction when no `keyStore` is provided:
    *   1. Explicit opts.hmacKey
    *   2. process.env.WOTW_PROVENANCE_HMAC_KEY
-   *   3. Derived from tenant_id when in hosted mode (sha256("wotw-provenance-v1:" + tenant_id))
-   *   4. undefined → no HMAC field on records (backwards-compat)
-   * Per X2 recommendation, HMAC complements the existing chain-hash by
-   * making forge / delete attacks detectable when an attacker has read
-   * access to the chain file but not the key.
+   *   3. Derived from tenant_id (sha256("wotw-provenance-v1", tenant_id))
+   *   4. undefined → no HMAC field on records (pre-G5)
+   * Used by the verifier to validate records that have an `hmac` field
+   * but no `key_id` (i.e., produced by a pre-v0.8.2 daemon).
    */
   private readonly hmacKey: string | undefined;
 
@@ -121,6 +133,8 @@ export class ProvenanceChain {
     path: string;
     sink?: ProvenanceSink | null;
     tenantId?: string;
+    workspaceId?: string;
+    keyStore?: KeyStore | null;
     hmacKey?: string;
   }) {
     this.path = opts.path;
@@ -132,14 +146,17 @@ export class ProvenanceChain {
     this.writeLock = Promise.resolve();
     this.sink = opts.sink ?? null;
     this.tenantId = opts.tenantId;
-    // Resolve HMAC key per the documented preference order.
+    this.keyStore = opts.keyStore ?? null;
+    this.workspaceId = opts.workspaceId ?? opts.tenantId;
+    // Resolve fallback HMAC key per the documented preference order. Used
+    // both as the signing key when no keyStore is provided, AND as the
+    // backward-compat verification key for records lacking a key_id
+    // (produced by a pre-v0.8.2 daemon).
     if (opts.hmacKey) {
       this.hmacKey = opts.hmacKey;
     } else if (process.env.WOTW_PROVENANCE_HMAC_KEY) {
       this.hmacKey = process.env.WOTW_PROVENANCE_HMAC_KEY;
     } else if (opts.tenantId) {
-      // Derive a stable per-tenant key from tenant_id. Not as strong as
-      // a Fly-secret-managed key, but does prevent cross-tenant forge.
       this.hmacKey = createHmac("sha256", "wotw-provenance-v1").update(opts.tenantId).digest("hex");
     } else {
       this.hmacKey = undefined;
@@ -214,6 +231,16 @@ export class ProvenanceChain {
           `provenance tail chain_hash inconsistent: stored=${last.chain_hash} recomputed=${recomputedChainHash}. Refuse to continue.`,
         );
       }
+      // Tail HMAC verify (G5 closure, Pass 018). The tail is the most
+      // likely place for tampering (an attacker who can't recompute the
+      // whole chain at least tries to replace just the last record).
+      // Check matches verify()'s logic — see verifyHmac().
+      const hmacError = this.verifyHmac(last);
+      if (hmacError) {
+        throw new Error(
+          `provenance tail hmac verification failed: ${hmacError.reason}. Refuse to continue.`,
+        );
+      }
       this.nextSeq = last.seq + 1;
       this.lastChainHash = last.chain_hash;
       this.lastId = last.id;
@@ -267,15 +294,26 @@ export class ProvenanceChain {
       // The chain hash is SHA-256 of `previous_chain_hash + id`. Hashing the
       // id (rather than the whole payload twice) keeps verification cheap.
       const chainHash = sha256Hex(previousChainHash + id);
-      // Review item 42: HMAC over `id || chain_hash` using a daemon-
-      // derived key. Detects forge / delete attacks even with read
-      // access to the chain file — attackers cannot mint records the
-      // verifier accepts without the key. Key resolved at init time
-      // from HMAC_PROVENANCE_KEY env (or derived from tenant_id when
-      // hosted) — see this.hmacKey.
-      const hmac = this.hmacKey
-        ? createHmac("sha256", this.hmacKey).update(`${id}|${chainHash}`).digest("hex")
-        : undefined;
+      // HMAC over `id || chain_hash`. Two paths:
+      // 1. G5-closed (Pass 018, v0.8.2+): keyStore is set + workspaceId
+      //    resolves to an active DEK. Sign with the DEK, stamp key_id.
+      //    Verifier looks up the same DEK via key_id even after rotation.
+      // 2. Backward-compat (G5-scaffolding or pre-G5): keyStore null,
+      //    use the single-key fallback resolved at construction. No
+      //    key_id on the record. Verifier falls back to the same
+      //    single-key resolution at verify time.
+      let hmac: string | undefined;
+      let keyId: string | undefined;
+      if (this.keyStore && this.workspaceId) {
+        const resolved = this.keyStore.active(this.workspaceId);
+        if (resolved) {
+          hmac = createHmac("sha256", resolved.dek).update(`${id}|${chainHash}`).digest("hex");
+          keyId = resolved.key_id;
+        }
+      }
+      if (!hmac && this.hmacKey) {
+        hmac = createHmac("sha256", this.hmacKey).update(`${id}|${chainHash}`).digest("hex");
+      }
 
       const record: ProvenanceRecord = {
         id,
@@ -295,6 +333,7 @@ export class ProvenanceChain {
         ...(input.metadata ? { metadata: input.metadata } : {}),
         ...(effectiveTenantId ? { tenant_id: effectiveTenantId } : {}),
         ...(hmac ? { hmac } : {}),
+        ...(keyId ? { key_id: keyId } : {}),
         ...(input.fact_hashes_added && input.fact_hashes_added.length > 0
           ? { fact_hashes_added: input.fact_hashes_added }
           : {}),
@@ -381,6 +420,12 @@ export class ProvenanceChain {
       }
 
       // Recompute id and chain_hash from the record's own content.
+      // Canonical payload must EXACTLY match what append() built (lines
+      // ~248-263), or recomputed id diverges. Same fields, same
+      // conditional-inclusion of metadata + tenant_id. Fields that were
+      // deliberately excluded by canonical-payload-exclusion (hmac,
+      // key_id, fact_hashes_*) MUST stay excluded here too — that's how
+      // forward/backward compat works.
       const payload: Record<string, unknown> = {
         seq: r.seq,
         timestamp: r.timestamp,
@@ -396,6 +441,7 @@ export class ProvenanceChain {
         previous_chain_hash: r.previous_chain_hash,
       };
       if (r.metadata !== undefined) payload.metadata = r.metadata;
+      if (r.tenant_id !== undefined) payload.tenant_id = r.tenant_id;
       const expectedId = sha256Canonical(payload);
       if (expectedId !== r.id) {
         errors.push({
@@ -411,6 +457,20 @@ export class ProvenanceChain {
           id: r.id,
           reason: `chain_hash mismatch: expected ${expectedChainHash}, got ${r.chain_hash}`,
         });
+      }
+
+      // HMAC verification (G5 closure, Pass 018). Two paths:
+      // - key_id present → look up DEK via keyStore.resolveById(); the
+      //   resolved DEK could be in any state (active/rotating/archived/
+      //   revoked). Revoked records still verify cryptographically;
+      //   operators decide whether to trust them based on key_state.
+      // - key_id absent, hmac present → backward-compat with the
+      //   single-key 4-tier resolution from the G5-scaffolding commit
+      //   `1875925`. Uses this.hmacKey.
+      // - hmac absent → pre-G5 record, no check.
+      if (r.hmac !== undefined) {
+        const hmacError = this.verifyHmac(r);
+        if (hmacError) errors.push(hmacError);
       }
 
       prevChainHash = r.chain_hash;
@@ -491,6 +551,68 @@ export class ProvenanceChain {
   async signature(): Promise<string> {
     const records = await this.readAll();
     return sha256Hex(records.map((r) => canonicalJson(r)).join("\n"));
+  }
+
+  /**
+   * Recompute the HMAC for a record and compare against the stored
+   * value. Returns null on success, a VerificationError on mismatch.
+   *
+   * Key resolution mirrors append():
+   * 1. record.key_id set + keyStore available → resolve DEK by key_id
+   *    across all states. Missing row OR keyStore-absent → error.
+   * 2. record.key_id absent + this.hmacKey set → backward-compat,
+   *    use the single-key fallback.
+   * 3. Neither → error (record claims hmac but verifier can't resolve a key).
+   */
+  private verifyHmac(r: ProvenanceRecord): VerificationError | null {
+    if (r.hmac === undefined) return null;
+    let key: Buffer | string | undefined;
+    let keyDescription = "";
+    if (r.key_id !== undefined) {
+      if (!this.keyStore) {
+        return {
+          seq: r.seq,
+          id: r.id,
+          reason: `record carries key_id=${r.key_id.slice(0, 8)}… but daemon has no keyStore configured`,
+        };
+      }
+      const resolved = this.keyStore.resolveById(r.key_id);
+      if (!resolved) {
+        return {
+          seq: r.seq,
+          id: r.id,
+          reason: `record key_id=${r.key_id.slice(0, 8)}… not found in keyStore`,
+        };
+      }
+      key = resolved.dek;
+      keyDescription = `key_id=${r.key_id.slice(0, 8)}… state=${resolved.key_state}`;
+    } else if (this.hmacKey) {
+      key = this.hmacKey;
+      keyDescription = "fallback 4-tier resolution";
+    } else {
+      return {
+        seq: r.seq,
+        id: r.id,
+        reason: "record carries hmac but verifier has no key (no keyStore, no fallback hmacKey)",
+      };
+    }
+    const expected = createHmac("sha256", key).update(`${r.id}|${r.chain_hash}`).digest();
+    const stored = Buffer.from(r.hmac, "hex");
+    if (stored.length !== expected.length) {
+      return {
+        seq: r.seq,
+        id: r.id,
+        reason: `hmac length mismatch: stored ${stored.length} bytes vs expected ${expected.length}`,
+      };
+    }
+    if (!timingSafeEqual(stored, expected)) {
+      return {
+        seq: r.seq,
+        id: r.id,
+        reason: `hmac mismatch (${keyDescription})`,
+      };
+    }
+    return null;
   }
 
   /**

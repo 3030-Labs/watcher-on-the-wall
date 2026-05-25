@@ -467,6 +467,39 @@ export class McpHttpServer implements DaemonSubsystem {
           break;
         }
 
+        case "/internal/verify": {
+          // G5 closure (Pass 018, v0.8.2): full provenance chain verify.
+          // Walks every record; recomputes id + chain_hash; validates
+          // HMAC via KeyStore lookup (or 4-tier fallback for pre-v0.8.2
+          // records). Returns the same VerificationResult shape that
+          // ProvenanceChain.verify() produces. Surface contract frozen
+          // for the future wotw-verify Go CLI (CT5.01, separate pass).
+          //
+          // Errors are returned in the body (200 with ok:false), not as
+          // HTTP errors — a "the chain is broken" response is still a
+          // successful call to the endpoint. HTTP 503 only if provenance
+          // is disabled / unavailable on this daemon.
+          if (!this.opts.provenance) {
+            json(503, {
+              error: "provenance_disabled",
+              note: "this daemon has provenance.enabled=false",
+            });
+            break;
+          }
+          log.info({ tenantId: body.tenant_id }, "running provenance chain verify");
+          const startMs = Date.now();
+          const result = await this.opts.provenance.verify();
+          const durationMs = Date.now() - startMs;
+          json(200, {
+            ok: result.ok,
+            total_records: result.totalRecords,
+            verified_records: result.verifiedRecords,
+            errors: result.errors,
+            duration_ms: durationMs,
+          });
+          break;
+        }
+
         case "/internal/export": {
           // Review item 56: pre-fix returned 200 "acknowledged" but did
           // NO work. A control plane that trusts the response would mark
