@@ -3,27 +3,91 @@
 ## Supported versions
 
 `wotw` is pre-1.0. Only the latest minor version receives security
-fixes.
+fixes. We do not backport to older minors; if a CVE lands, expect a
+patch release on the current minor and an upgrade prompt.
 
 | Version | Supported |
 |----|----|
-| 0.1.x | ✅ |
-| < 0.1 | ❌ |
+| 0.8.x  | ✅ (current) |
+| < 0.8  | ❌ |
 
 ## Reporting a vulnerability
 
-**Do not open a public GitHub issue.**
+**Do not open a public GitHub issue.** Public-issue disclosure puts
+existing users at risk before they can patch.
 
 Email `security@3030labs.io` with:
 
-- A clear description of the vulnerability
-- Reproduction steps or a proof of concept
-- The commit SHA (or version tag) you tested against
-- Your disclosure timeline preferences
+- A clear description of the vulnerability and the threat it enables
+- Reproduction steps or a proof of concept (a minimal `wotw.config.yaml`
+  + the exact command sequence is usually enough)
+- The commit SHA (`git rev-parse HEAD`) or version tag (`wotw --version`)
+  you tested against
+- The platform (OS + arch + Node version)
+- Your disclosure timeline preferences (default: coordinated 30 days)
+- Whether you'd like attribution in the release notes (default: yes,
+  with a name + optional link of your choosing)
 
-We aim to acknowledge reports within 72 hours and to ship a fix (or
-have a fix in review) within 14 days for high-severity issues. You'll
-be credited in the release notes unless you ask otherwise.
+You may PGP-encrypt the report. Our key is published at
+[wotw.dev/keys/security.asc](https://wotw.dev/keys/security.asc) (or in
+`scripts/security-pgp-key.asc` if pinned to a commit).
+
+## Response SLA
+
+We commit to the following timeline for any report received at
+`security@3030labs.io`:
+
+| Phase | Target |
+|---|---|
+| Initial acknowledgment ("we received it, here is the tracking ID") | **5 business days** |
+| Triage decision (in scope / out of scope, severity assigned) | **10 business days** |
+| Fix shipped OR coordinated public disclosure | **30 calendar days** for high/critical; **90 days** for low/moderate |
+| Credit + post-mortem in release notes | At publish of the fix release |
+
+If we miss any of these targets, the reporter is welcome to publish
+their findings. We will not pursue legal action against good-faith
+research that follows this policy (see safe harbor below).
+
+## Safe harbor for security researchers
+
+3030 Labs LLC will NOT pursue legal action against security researchers
+who, in good faith, report vulnerabilities to `security@3030labs.io`
+under the following conditions:
+
+1. **Scope discipline.** Testing is limited to `wotw` daemon code,
+   official `@driftvane/wotw` npm artifacts, the `DriftVane/wotw-verify`
+   binary, and infrastructure you control (your own laptop, your own
+   VMs). Testing against **other people's hosted wotw deployments,
+   3030 Labs' production infrastructure, or `wotw-cloud` tenants you
+   are not authorized for** is out of scope and not covered.
+2. **No data exfiltration beyond proof-of-concept.** If your PoC needs
+   to demonstrate that data is reachable, fetch one record and stop.
+   Do not exfiltrate, retain, or redistribute another user's wiki
+   contents, provenance records, tokens, or LLM keys.
+3. **No denial-of-service.** Rate-limit bypass demonstrations should
+   stop at the smallest input that proves the bypass. Don't drive
+   anyone's machine into a hot loop.
+4. **Coordinated disclosure timeline.** Hold publication for the SLA
+   window above (or until we ship a fix, whichever is sooner) unless
+   we miss a SLA target. We will tell you up front if a fix needs more
+   than 30 days and explain why.
+5. **No social engineering.** Reports targeting 3030 Labs personnel,
+   contractors, or users via phishing / pretexting are out of scope.
+6. **Compliance with applicable law.** Safe harbor is contingent on
+   the research being legal in your jurisdiction. We can't waive the
+   CFAA on a foreign researcher's behalf, but we can confirm that
+   testing you do against your own machine, on your own data, with
+   no production-infra interaction, is something we authorize.
+
+If you're uncertain whether a test plan falls inside safe harbor, ask
+us first at `security@3030labs.io` and we'll tell you in writing.
+
+## Bug bounty
+
+We do not currently run a paid bounty. We will credit researchers in
+release notes and at `wotw.dev/security/researchers` (once that page
+exists). If you'd like a written reference letter for a portfolio,
+we'll provide one for any in-scope finding rated moderate or higher.
 
 ## In scope
 

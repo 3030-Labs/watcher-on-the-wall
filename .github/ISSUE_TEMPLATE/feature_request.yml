@@ -1,0 +1,87 @@
+name: Feature request
+description: Suggest a feature, capability, or improvement.
+title: "[feature] "
+labels:
+  - enhancement
+  - triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion. Feature requests are evaluated against the
+        project's roadmap and design principles (local-first, BYOK, provenance-first,
+        BM25-only retrieval, AGPL community-compatible).
+
+        Requests that violate those principles are usually closed with a pointer
+        to a related design doc rather than ignored — we want to be transparent
+        about why.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: |
+        Describe the underlying need, not the feature. "I can't find pages older
+        than 90 days quickly" is better than "add a --since flag to wotw search."
+        Solutions can be brainstormed once we understand the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: proposed
+    attributes:
+      label: Proposed solution (optional)
+      description: |
+        If you have a specific solution in mind, describe it. CLI surface,
+        config knobs, MCP tool shape, etc. We may end up with a different
+        solution — knowing what you'd build helps us understand the shape.
+    validations:
+      required: false
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: |
+        What did you try? What workarounds exist today? If "nothing", that's
+        fine — but if there's an existing CLI / MCP tool / config option that
+        gets you 80% there, naming it helps us see whether the gap warrants
+        a new feature or a refinement of the existing one.
+    validations:
+      required: false
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      description: Where does this feature belong?
+      options:
+        - CLI (`wotw <command>`)
+        - MCP tool (server-side)
+        - Ingestion / queue / heal-handlers
+        - Wiki store / provenance chain
+        - Retrieval (search, query, query_progressive, query_facts)
+        - Configuration / init wizard
+        - Docs only
+        - Multi-tenant / wotw-cloud surface (track separately)
+        - Other (describe in problem statement)
+    validations:
+      required: true
+  - type: textarea
+    id: examples
+    attributes:
+      label: Example usage
+      description: |
+        Show what success looks like. CLI invocation, MCP request/response,
+        config file diff, sample log line — whatever makes the intent
+        concrete.
+      render: shell
+    validations:
+      required: false
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Pre-submit checklist
+      options:
+        - label: I have searched existing issues and discussions for similar requests.
+          required: true
+        - label: This is a request, not a bug report.
+          required: true
+        - label: I understand acceptance depends on alignment with project principles, not just usefulness.
+          required: true

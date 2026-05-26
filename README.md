@@ -1,97 +1,125 @@
 # watcher-on-the-wall
 
-> Self-bootstrapping AI knowledge daemon that turns a folder of raw files into a persistent, compounding LLM wiki with provenance signing, MCP serving, and zero manual maintenance.
+> A local-first AI knowledge daemon. Drops files in, persistent wiki out.
+> Every operation cryptographically signed. Served to any MCP-capable agent.
 
-## What it does
+`wotw` is a small background process. You feed it raw notes, transcripts, and
+documents; it writes you an interlinked Obsidian-compatible wiki, refreshes it
+as your inputs change, and proves to you (and to auditors) exactly which model
+wrote which page from which source at what cost.
 
-Drop files into a `raw/` directory and `wotw` watches for changes, batches them through a Claude agent, and writes interlinked markdown wiki pages with YAML frontmatter. Every operation is signed into an append-only SHA-256 provenance chain so you can prove which model wrote what, from which inputs, at what cost. The wiki is served to any MCP-capable client (Claude Code, Claude Desktop, IDEs) and designed to use Obsidian as the visual frontend.
+It runs entirely on your machine. Your data never leaves unless you wire it
+to a hosted LLM yourself (Anthropic, OpenAI, Gemini, or Ollama for fully
+offline). Reads happen over MCP, so any agent that speaks Model Context
+Protocol — Claude Code, Claude Desktop, Cursor — can query your wiki as a
+memory tier.
 
 ## Install
 
 ```bash
-npm i -g @driftvane/wotw
-wotw init
-wotw start
+npm install -g @driftvane/wotw
+wotw init        # interactive: pick a vault, configure runtime
+wotw start       # daemon goes to the background
 ```
 
-Drop files into `raw/`. The daemon ingests them, writes wiki pages, and serves them to Claude Code via MCP.
+Requires **Node.js ≥ 20**. macOS arm64 / amd64, Linux amd64, Windows amd64.
 
-## Key features
+> **Note (publish-gap window):** `npm install -g @driftvane/wotw` becomes
+> available with the v0.8.4 publish. If you see a 404 from the registry,
+> the package hasn't shipped yet — try again in a few minutes, or clone
+> the repo + `pnpm install && pnpm build && pnpm link --global` for a
+> local install.
 
-The daemon runs as a detached background process with PID/lock management and graceful shutdown. `wotw init` is an interactive wizard that auto-detects Obsidian vaults from the system registry, overlays into existing vaults or scaffolds new ones, and offers to launch the result in Obsidian. Generated pages land in a candidates queue for human review before entering the wiki — approve, reject with feedback, or configure auto-approve. The wiki is full-text searchable via BM25 with title and tag boosting, and supports natural-language queries grounded in retrieved pages with inline citations.
+## 30-second quickstart
 
-A knowledge health system scores every page on staleness, source availability, link integrity, duplicate risk, and contradiction risk. `wotw lint --fix` auto-heals stale pages, broken links, missing backlinks, duplicates, and contradictions — all budget-gated and capped per run. Every state-mutating operation appends a SHA-256-chained JSONL record; `wotw audit` walks the chain and reports tampering. The MCP server exposes 10 tools over streamable HTTP with bearer-token auth and per-IP rate limiting.
+```bash
+$ wotw init
+┌  watcher-on-the-wall — setup wizard
+│
+◇  Where should your wiki live?
+│  ~/Obsidian/research (detected)
+│
+◇  Which LLM runtime?
+│  claude CLI (free with subscription)
+│
+│  Runtime ─ CLI mode (claude binary found at /usr/local/bin/claude)
+│  Next steps ─
+│    1. Drop files in ~/Obsidian/research/raw/
+│    2. wotw start
+│    3. Inspect ~/Obsidian/research/wiki/ as files are written
+│
+└  Done! Your wiki is ready.
 
-The runtime is dual-mode: use the local `claude` CLI binary (free with a subscription) or the Claude Agent SDK (pay-per-token) — auto-detected at startup. Multi-user authentication supports per-user bearer tokens with atomic token storage. Failed batches are tracked in a dead-letter queue. All credentials and secrets in wiki content are automatically redacted before storage.
+$ wotw start
+daemon running (pid 18412). logs: ~/.wotw/daemon.log
 
-## For agent developers
-
-If your LLM consumes `wotw` as a memory tier, two passes of additive retrieval tools cut token cost dramatically while preserving answer quality:
-
-**Pass A (v0.7.0) — progressive + structural primitives**
-
-- **`query_progressive`** — smallest viable answer first (top hit's lede ≈ 100-300 tokens), continuation token lets you expand on signal. Tier-0 ships **86-99% fewer tokens** than the legacy `query` payload on the benchmark fixtures.
-- **`estimate_query_cost`** — pre-flight token estimate so your LLM knows what a retrieval would cost before committing.
-- **`define` / `relate` / `cite_sources`** — narrow structural primitives at small token caps (256 / 768 / 512 tokens).
-
-**Pass B (v0.8.0) — atomic facts**
-
-- **`query_facts`** — BM25-fused retrieval over atomic `(entity, statement)` pairs + synthetic questions extracted at ingestion (per Yanhong Li / TTIC + Cambridge ALTA). Ships **80%+ fewer tokens** than the legacy `query` retrieval for atomic-question workloads. Returns `fallback: "page-level"` when the fact layer is disabled — clients route to `query_progressive` automatically.
-- `define`, `relate`, `cite_sources` from Pass A now check the fact layer first; each response carries a `source_layer` field. Pass A contracts unchanged.
-
-**Gating + cost**
-
-Pass B fact extraction runs at ingestion time and requires an LLM call. It defaults to **cost-free runtimes only** (Claude Code CLI subscription or local Ollama). On metered API providers (Anthropic / OpenAI / Gemini), set `fact_extraction.force_enabled: true` in `wotw.config.yaml` to opt in. To populate an existing wiki, run `wotw facts reindex`.
-
-All Pass A + B tools are **additive** — existing `query` / `search` / `read_page` are unchanged. See [docs/mcp-tools.md](docs/mcp-tools.md#context-efficient-retrieval-tools-pass-a), [CONTEXT-EFFICIENCY-PASS-A.md](CONTEXT-EFFICIENCY-PASS-A.md), and [CONTEXT-EFFICIENCY-PASS-B.md](CONTEXT-EFFICIENCY-PASS-B.md).
-
-Pure BM25 retrieval, no vector embeddings. Pass A queries are zero-LLM-cost on the daemon side. Pass B incurs LLM cost at ingestion (gated) but query-time retrieval is BM25-only.
-
-## How it works
-
-The file watcher detects changes in `raw/`, debounces them with exponential backoff, and hands batches to the ingestion queue. The queue builds a prompt, runs it through a Claude agent, reconciles the output into categorized wiki pages, rebuilds the search index, signs a provenance record, and commits to git. A compounding engine periodically synthesizes higher-level pages across tag clusters. The MCP server makes the entire wiki queryable by external AI agents.
-
-## CLI
-
+$ cp ~/Downloads/meeting-transcript.md ~/Obsidian/research/raw/
+# ingested in ~3s; wiki page appears under wiki/candidates/
 ```
-wotw init          Scaffold wiki inside an Obsidian vault
-wotw start         Start the daemon
-wotw stop          Stop the daemon
-wotw status        Show daemon health and wiki stats
-wotw search        Full-text search across wiki
-wotw query         Ask the wiki a natural-language question
-wotw lint          Run health checks (--fix to auto-heal)
-wotw approve       Approve a candidate wiki page
-wotw reject        Reject a candidate with feedback
-wotw candidates    List pages awaiting review
-wotw audit         Verify the provenance chain
-wotw logs          Tail the daemon log
-```
+
+Open the vault in Obsidian to see your wiki rendered as linked notes. The
+daemon will batch subsequent file drops, write new pages, refresh stale
+ones, and sign every operation into a provenance chain you can verify with
+`wotw audit`.
+
+## What you get
+
+- **Compounding wiki.** Drop a transcript, get categorized markdown with
+  YAML frontmatter, internal links, and a generated index. Drop ten more
+  on the same topic, get synthesis pages.
+- **Provenance you can prove.** Every write — content + model + cost +
+  source — appended to a SHA-256 chain. `wotw audit` walks it and reports
+  tampering. Cryptographic attestation under tenant-managed keys (G5).
+- **MCP-served.** Ten tools over streamable HTTP: search, query, define,
+  relate, cite_sources, query_progressive, query_facts, read_page, get_page,
+  list_pages. Bearer-token auth, per-IP rate limiting.
+- **Local-first, BYOK.** Pick your provider (Anthropic / OpenAI / Gemini /
+  Ollama / claude CLI). Your Anthropic key never leaves your machine. The
+  wiki and its provenance chain are yours.
+- **Token-efficient retrieval.** Context-efficiency Pass A + B ship
+  86-99% fewer tokens than naive query retrieval on benchmark fixtures.
+  Pure BM25, no embeddings.
+- **Audit-ready.** Compliance Pack export (CT4.01) bundles your chain
+  with encrypted DEKs for offline verification via the separately
+  distributed [wotw-verify](https://github.com/DriftVane/wotw-verify) Go
+  binary. Single statically-linked customer-side verifier, no daemon needed.
 
 ## Documentation
 
-- [Architecture](docs/architecture.md) — system design and subsystem interactions
-- [Configuration](docs/configuration.md) — every knob in `wotw.yaml`
-- [CLI Reference](docs/cli-reference.md) — every command and flag
-- [MCP Tools](docs/mcp-tools.md) — the 10 MCP tools and their schemas
-- [Provenance](docs/provenance.md) — the cryptographic chain format
-- [Execution Modes](docs/execution-modes.md) — CLI vs API runtime
-- [Knowledge Health](docs/knowledge-health.md) — scoring, deduplication, and auto-healing
-- [Obsidian Setup](docs/obsidian-setup.md) — vault integration guide
-- [Multi-User](docs/multi-user.md) — per-user tokens and workspace isolation
-- [Retrieval Hardening](docs/retrieval-hardening.md) — query expansion and metadata enrichment
+| | |
+|---|---|
+| Up and running | [docs/init-walkthrough.md](docs/init-walkthrough.md) |
+| Configuration knobs | [docs/configuration.md](docs/configuration.md) |
+| CLI commands | [docs/cli-reference.md](docs/cli-reference.md) |
+| MCP tools | [docs/mcp-tools.md](docs/mcp-tools.md) |
+| Architecture | [docs/architecture.md](docs/architecture.md) |
+| BYOK + LLM providers | [docs/self-hosted-byok.md](docs/self-hosted-byok.md) |
+| Fact extraction gating | [docs/llm-provider-auto-resolution.md](docs/llm-provider-auto-resolution.md) |
+| Provenance chain format | [docs/provenance.md](docs/provenance.md) |
+| Compliance Pack wire format | [docs/pack-format-daemon.md](docs/pack-format-daemon.md) |
+| Knowledge health + auto-heal | [docs/knowledge-health.md](docs/knowledge-health.md) |
+| Obsidian integration | [docs/obsidian-setup.md](docs/obsidian-setup.md) |
+| Multi-user + per-tenant tokens | [docs/multi-user.md](docs/multi-user.md) |
+| Retrieval design (BM25 rationale) | [docs/retrieval-hardening.md](docs/retrieval-hardening.md) |
+| Opt-in telemetry | [docs/telemetry.md](docs/telemetry.md) |
 
-## Requirements
+## Project status
 
-Node.js >= 20. Claude Code or an Anthropic API key.
+`wotw` is pre-1.0. The substrate (ingestion, provenance, MCP, Compliance
+Pack format) is stable and exercised by 900+ tests across 7 build gates;
+the npm package is `@driftvane/wotw`. Breaking changes are possible at
+minor-version bumps until 1.0; see [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
-AGPL-3.0-or-later — [3030 Labs LLC](https://3030labs.io)
+[AGPL-3.0-or-later](LICENSE) — see [LICENSE-NOTICES.md](LICENSE-NOTICES.md)
+for the plain-English summary (what counts as a derivative work, how a
+service offering must comply, what competitors can fork).
 
 ## Links
 
-- [GitHub](https://github.com/DriftVane/watcher-on-the-wall)
-- [Documentation](https://github.com/DriftVane/watcher-on-the-wall/tree/main/docs)
-- [Contributing](./CONTRIBUTING.md)
-- [Security](./SECURITY.md)
+- Reporting a vulnerability: [SECURITY.md](SECURITY.md)
+- Contributing: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Verifier binary: [DriftVane/wotw-verify](https://github.com/DriftVane/wotw-verify)
+- Marketing + docs site: [wotw.dev](https://wotw.dev)
+- Maintainer: [3030 Labs LLC](https://3030labs.io)

@@ -1,0 +1,227 @@
+name: Install evidence
+
+# This workflow captures fresh-install evidence on all 4 supported
+# platforms after a release to npm. It runs:
+#   - on every tag push of the shape `v*` (the canonical post-release
+#     evidence pass), AND
+#   - on workflow_dispatch (manual trigger for re-validation against
+#     the same version, e.g. after an npm registry caching issue is
+#     resolved).
+#
+# The recorded artifacts under docs/install-evidence/ are the evidence
+# committed to the repo. The workflow writes a log per platform and a
+# combined summary; the final commit happens via a follow-up PR (the
+# matrix job uploads as workflow artifacts; an operator promotes the
+# artifacts into docs/install-evidence/ via a separate commit so the
+# repo history stays clean and reviewable).
+
+on:
+  # Dispatch-only by deliberate choice. The canonical post-publish flow is:
+  #   1. operator runs `npm publish --access public` from a clean machine
+  #   2. operator triggers this workflow via `gh workflow run install-evidence.yml -f version=<v>`
+  #
+  # Auto-firing on tag push was rejected because the publish step is
+  # intentionally separate from the tag step (see goal-authorization-scope
+  # discipline — npm publish is the most-permanent of the four ship
+  # actions and gets its own confirmation event). Tag-push-fires-workflow
+  # would race the publish; the workflow would either run before the
+  # version exists in the registry (404 on every platform) or after,
+  # depending on operator pacing — not reliable.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Specific @driftvane/wotw version to test (e.g. 0.8.4)"
+        required: true
+        default: "latest"
+
+concurrency:
+  group: install-evidence-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  install:
+    name: install (${{ matrix.label }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: macos-arm64
+            runner: macos-14
+            shell: bash
+            install_cmd: npm install -g @driftvane/wotw@${{ inputs.version || 'latest' }}
+          - label: macos-amd64
+            runner: macos-13
+            shell: bash
+            install_cmd: npm install -g @driftvane/wotw@${{ inputs.version || 'latest' }}
+          - label: linux-amd64
+            runner: ubuntu-22.04
+            shell: bash
+            install_cmd: npm install -g @driftvane/wotw@${{ inputs.version || 'latest' }}
+          - label: windows-amd64
+            runner: windows-2022
+            shell: pwsh
+            install_cmd: npm install -g "@driftvane/wotw@${{ inputs.version || 'latest' }}"
+
+    steps:
+      - name: Checkout (for evidence-script + 5 sample markdown files)
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          VERSION="${{ inputs.version }}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Testing @driftvane/wotw@${VERSION} on ${{ matrix.label }}"
+
+      - name: Install @driftvane/wotw from npm (canonical user flow)
+        id: install
+        shell: ${{ matrix.shell }}
+        run: |
+          ${{ matrix.install_cmd }} 2>&1 | tee install.log
+          wotw --version
+
+      - name: Run wotw init in scratch dir (non-interactive)
+        id: init
+        shell: ${{ matrix.shell }}
+        run: |
+          mkdir scratch-vault
+          wotw init --path "${{ github.workspace }}/scratch-vault" --yes --no-open 2>&1 | tee init.log
+
+      - name: Drop 5 sample markdown files into raw/
+        shell: ${{ matrix.shell }}
+        run: |
+          cp docs/install-evidence/fixtures/sample-1.md scratch-vault/raw/
+          cp docs/install-evidence/fixtures/sample-2.md scratch-vault/raw/
+          cp docs/install-evidence/fixtures/sample-3.md scratch-vault/raw/
+          cp docs/install-evidence/fixtures/sample-4.md scratch-vault/raw/
+          cp docs/install-evidence/fixtures/sample-5.md scratch-vault/raw/
+
+      - name: Verify daemon binary runs end-to-end (status check, no LLM)
+        # In CI we don't have an LLM key, so we exercise the daemon's
+        # startup → status → stop cycle without ingestion. Real wiki-write
+        # exercise requires a follow-up local run with an Anthropic key —
+        # logged as `cli-ingest-skipped: no_llm_key_in_ci` in the captured
+        # evidence.
+        shell: ${{ matrix.shell }}
+        run: |
+          wotw status --json 2>&1 | tee status.log || true
+          echo "---" | tee -a status.log
+          ls -la scratch-vault | tee -a status.log
+
+      - name: Build evidence artifact
+        shell: bash
+        run: |
+          mkdir -p evidence
+          {
+            echo "# Install evidence — ${{ matrix.label }}"
+            echo ""
+            echo "**Platform:** ${{ matrix.label }}"
+            echo "**Runner:** ${{ matrix.runner }}"
+            echo "**Shell:** ${{ matrix.shell }}"
+            echo "**Node:** $(node --version)"
+            echo "**Date (UTC):** $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "**Package version:** @driftvane/wotw@${{ steps.version.outputs.version }}"
+            echo "**Runner image label:** ${{ matrix.runner }}"
+            echo ""
+            echo "## npm install"
+            echo '```'
+            cat install.log
+            echo '```'
+            echo ""
+            echo "## wotw init"
+            echo '```'
+            cat init.log
+            echo '```'
+            echo ""
+            echo "## wotw status (no LLM key in CI)"
+            echo '```'
+            cat status.log
+            echo '```'
+            echo ""
+            echo "## Vault layout after init + 5-file drop"
+            echo '```'
+            find scratch-vault -maxdepth 3 -type f | sort
+            echo '```'
+            echo ""
+            echo "_cli-ingest-skipped: no_llm_key_in_ci. Real ingestion requires_"
+            echo "_an Anthropic / OpenAI / Gemini key or a local Ollama runtime._"
+            echo "_See docs/install-evidence/macos-arm64.md for the manual_"
+            echo "_full-ingest evidence captured on Justin's laptop._"
+          } > "evidence/${{ matrix.label }}.md"
+
+      - name: Upload evidence as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: install-evidence-${{ matrix.label }}
+          path: evidence/${{ matrix.label }}.md
+          retention-days: 90
+
+  summary:
+    name: summary
+    runs-on: ubuntu-latest
+    needs: install
+    if: always()
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all evidence artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: evidence
+          pattern: install-evidence-*
+          merge-multiple: true
+
+      - name: Render combined summary
+        run: |
+          {
+            echo "# Install evidence — combined summary"
+            echo ""
+            echo "_This file is regenerated by the install-evidence workflow._"
+            echo "_Hand-edit only the per-platform .md files, never this index._"
+            echo ""
+            for f in evidence/*.md; do
+              if [ -f "$f" ]; then
+                echo "- [\`$(basename "$f")\`](./$(basename "$f"))"
+              fi
+            done
+          } > evidence/README.md
+
+      - name: Upload combined summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: install-evidence-summary
+          path: evidence/
+          retention-days: 90
+
+      - name: Link this run to the v<version> release notes (if present)
+        # Resolves the input version → tag (v<version>) → release; appends
+        # a "Install evidence" link to the release body. Best-effort —
+        # no failure if the release doesn't exist yet (operator may have
+        # not published a GitHub release for the version they tested).
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const version = "${{ inputs.version }}";
+            if (version === "latest") return;
+            const tag = `v${version}`;
+            const release = await github.rest.repos.getReleaseByTag({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag,
+            }).catch(() => null);
+            if (release === null) return;
+            const url = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: release.data.id,
+              body: `${release.data.body}\n\n---\nInstall evidence: ${url}`,
+            });

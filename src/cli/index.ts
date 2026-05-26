@@ -9,6 +9,7 @@
  * still supporting detached daemon spawning.
  */
 import { Command } from "commander";
+import { isActionableError } from "../utils/actionable-error.js";
 import { errMsg } from "../utils/errors.js";
 import { registerInitCommand } from "./commands/init.js";
 import { registerStartCommand } from "./commands/start.js";
@@ -75,7 +76,16 @@ async function main(): Promise<void> {
 }
 
 main().catch((err: unknown) => {
-  // Last-ditch error handler — anything that propagates this far is a bug.
+  if (isActionableError(err)) {
+    process.stderr.write(`✖ ${err.message}\n`);
+    if (process.env.WOTW_DEBUG === "1") {
+      const cause = (err as { cause?: unknown }).cause;
+      if (cause instanceof Error && cause.stack) {
+        process.stderr.write(`\nUnderlying cause:\n${cause.stack}\n`);
+      }
+    }
+    process.exit(1);
+  }
   process.stderr.write(`fatal: ${errMsg(err)}\n`);
   if (process.env.WOTW_DEBUG === "1") {
     process.stderr.write(`${err instanceof Error ? (err.stack ?? "") : ""}\n`);

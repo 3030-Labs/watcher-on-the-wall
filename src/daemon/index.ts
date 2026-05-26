@@ -10,7 +10,23 @@ import { loadConfig, resolveConfigPaths } from "./config.js";
 import { acquireStartLock, checkDaemonAlive, removePidFile, writePidFile } from "./lifecycle.js";
 import { getLogger, initLogger } from "../utils/logger.js";
 import type { WotwConfig } from "../utils/types.js";
+import {
+  daemonAlreadyRunningError,
+  looksLikePermissionDenied,
+  wikiDirPermissionError,
+} from "../utils/actionable-error.js";
 import { ensureDirSync } from "../utils/fs.js";
+
+function ensureDirSyncOrActionable(path: string): void {
+  try {
+    ensureDirSync(path);
+  } catch (err) {
+    if (looksLikePermissionDenied(err)) {
+      throw wikiDirPermissionError(path, err);
+    }
+    throw err;
+  }
+}
 import { VERSION } from "../utils/version.js";
 import {
   resolveExecutionMode,
@@ -62,8 +78,8 @@ export class Daemon {
       "daemon initializing",
     );
 
-    ensureDirSync(this.config.wiki_root);
-    ensureDirSync(this.config.raw_path);
+    ensureDirSyncOrActionable(this.config.wiki_root);
+    ensureDirSyncOrActionable(this.config.raw_path);
 
     // Resolve execution mode BEFORE starting any subsystem. If neither a
     // claude CLI binary nor an API key is available, refuse to start with a
@@ -117,7 +133,7 @@ export class Daemon {
     const alive = checkDaemonAlive(this.config.daemon.pid_file);
     if (alive.alive) {
       log.error({ pid: alive.pid }, "another daemon instance is already running");
-      throw new Error(`Another watcher-on-the-wall daemon is already running (PID ${alive.pid}).`);
+      throw daemonAlreadyRunningError(this.config.daemon.pid_file);
     }
 
     // Acquire lock to prevent simultaneous starts
@@ -125,9 +141,7 @@ export class Daemon {
       this.releaseLock = await acquireStartLock(this.config.daemon.lock_file);
     } catch (err) {
       log.error({ err }, "failed to acquire start lock");
-      throw new Error(
-        `Could not acquire start lock at ${this.config.daemon.lock_file}. Another start may be in progress.`,
-      );
+      throw daemonAlreadyRunningError(this.config.daemon.lock_file, err);
     }
 
     // Write PID file

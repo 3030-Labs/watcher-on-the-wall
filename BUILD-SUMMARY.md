@@ -1,5 +1,98 @@
-# BUILD-SUMMARY — watcher-on-the-wall v0.2.0
+# BUILD-SUMMARY — watcher-on-the-wall v0.8.4
 
+> ### PASS-023 — Daemon public-launch readiness — 2026-05-26
+>
+> Closes the onboarding-shell gap before DriftVane/watcher-on-the-wall
+> flips public. 14 items across fresh-install evidence, README/docs
+> rewrite, repo hygiene + policy docs (SECURITY/CHANGELOG/LICENSE-NOTICES/
+> CONTRIBUTING/ISSUE_TEMPLATEs), Pack-format daemon-side spec, error-message
+> audit on 10 unhappy paths, opt-in BYO-DSN telemetry. Implementation
+> commits in this single ship chain.
+>
+> **Onboarding shell:**
+> - `README.md` rewritten for first-60-second comprehension: tagline +
+>   2-paragraph "what it is" + 5-line install + 30-sec quickstart with
+>   concrete output + links to deeper docs. Note about npm publish-gap
+>   window kept honest during the bounded window between repo public-flip
+>   and v0.8.4 publish.
+> - New docs: `init-walkthrough.md`, `self-hosted-byok.md`,
+>   `llm-provider-auto-resolution.md`, `pack-format-daemon.md`,
+>   `telemetry.md`, `install-evidence/` (README + macOS arm64 runbook
+>   + 5 fixture markdown files).
+> - `CHANGELOG.md` rewritten per-version user-visible (v0.7.0 Pass A
+>   through v0.8.4 current); internal closure docs referenced not exposed.
+> - `SECURITY.md` updated SLA (5 business days ack, 30 calendar days
+>   fix-or-disclosure for high/critical) + explicit safe-harbor for
+>   good-faith researchers + PGP key reference.
+> - `LICENSE-NOTICES.md` (new) — AGPL-3.0 in plain English; derivative-work
+>   test, network-use §13, wotw-cloud relationship, fork rules.
+>   Attorney-disclaimable.
+> - `CONTRIBUTING.md` rewritten — AGPL implications, DCO sign-off
+>   (Developer Certificate of Origin), 7 quality gates, PR review SLAs,
+>   bot-PR policy.
+> - `.github/ISSUE_TEMPLATE/*.yml` migrated from legacy `.md` to GitHub
+>   issue forms (bug_report / feature_request / question / config).
+>
+> **Code (new subsystems):**
+> - `src/utils/actionable-error.ts` — `ActionableError` class +
+>   10-path categorical constructor helpers + heuristic matchers
+>   (native-binding load, permission-denied, file-lock, port-in-use).
+>   CLI top-level handler at `src/cli/index.ts` renders these as
+>   structured stderr blocks.
+> - `src/telemetry/{types,sink,categorize,index}.ts` — opt-in BYO-DSN
+>   Sentry breadcrumbs. **Disabled by default; no 3030 Labs DSN.**
+>   Sentry SDK is an optional peer dep; sink falls back to no-op if
+>   not installed. Validator rejects PII-shaped fields; categorical
+>   events only (10 stable enum values).
+>
+> **Code (wraps at existing call-sites):**
+> - `src/keys/store.ts` + `src/facts/store.ts` — better-sqlite3 binding
+>   load wrapped with `looksLikeNativeBindingFailure` + `nativeBindingLoadError`.
+> - `src/daemon/index.ts` — `ensureDirSync` calls wrapped with
+>   `looksLikePermissionDenied` + `wikiDirPermissionError`. Daemon-already-running
+>   path migrated to `daemonAlreadyRunningError`.
+> - `src/daemon/config.ts` — cosmiconfig parse failures wrapped with
+>   `configParseError`.
+> - `src/server/index.ts` — port-bind error path wrapped with
+>   `looksLikePortInUse` + `portInUseError`.
+> - `src/cli/commands/init.ts` — OBSIDIAN_VAULT_PATH env var now honored;
+>   non-empty-target collision detection added; init-failure pipe
+>   routes through `recordInitFailure` to the telemetry sink.
+>
+> **CI:**
+> - `.github/workflows/install-evidence.yml` — `workflow_dispatch`-only
+>   (deliberate; tag-push-fires-workflow would race the publish step).
+>   Matrix: macos-14 (arm64), macos-13 (amd64), ubuntu-22.04,
+>   windows-2022. Each captures `npm install → wotw init → 5-file drop
+>   → status` per-platform artifact for promotion into
+>   `docs/install-evidence/`.
+>
+> **Tests: 929 passed (929) across 90 files** — 813 baseline + 116 new
+> (38 actionable-error + 7 init-error-paths + 38 telemetry +
+> existing-test isolation refactor). Crosses the ≥ 900 hard gate.
+> All 7 build gates green: typecheck / lint / format / build / test /
+> docs-in-sync / provenance-compat.
+>
+> **package.json metadata:**
+> - version 0.8.3 → 0.8.4
+> - homepage → https://wotw.dev (was GH repo URL)
+> - keywords expanded for npm discovery
+> - SECURITY.md / CHANGELOG.md / LICENSE-NOTICES.md added to `files`
+>   array so they ship in the tarball
+>
+> **Irreversible-action sequencing (per goal-authorization-scope):**
+> 1. ✅ Commit + push to main
+> 2. ✅ `gh repo edit --visibility public`
+> 3. ✅ Tag v0.8.4 + push
+> 4. 🟡 Operator dogfood pass (next checkpoint)
+> 5. 🟡 npm publish v0.8.4 (held behind dogfood gate)
+> 6. 🟡 install-evidence workflow dispatched + 4 platform artifacts
+>    captured + promoted
+> 7. 🟡 Manual macOS arm64 capture committed
+>
+> Closure doc: `PASS-023-DAEMON-PUBLIC-READINESS.md`. Pass remains
+> 🟡 substrate-complete until items 4-7 above land.
+>
 > ### PASS-019 — G5 Completion (KEK rotation + DEK auto-archive cron) + v0.8.3 ship — 2026-05-25
 >
 > Closes the two G5 items Pass 018 explicitly deferred: KEK rotation

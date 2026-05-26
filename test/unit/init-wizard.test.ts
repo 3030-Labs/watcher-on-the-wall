@@ -17,15 +17,25 @@ function tmp(): string {
 const WIKI_CATEGORIES = ["concepts", "entities", "sources", "comparisons", "syntheses", "queries"];
 
 let savedCwd: string;
+let savedObsidianEnv: string | undefined;
 
 beforeEach(() => {
   savedCwd = process.cwd();
+  // OBSIDIAN_VAULT_PATH would override --path resolution; isolate the suite
+  // from whatever the operator has in their shell.
+  savedObsidianEnv = process.env.OBSIDIAN_VAULT_PATH;
+  delete process.env.OBSIDIAN_VAULT_PATH;
 });
 
 afterEach(() => {
   // A couple of tests chdir into the tmp dir; always restore so we don't
   // poison sibling tests.
   process.chdir(savedCwd);
+  if (savedObsidianEnv !== undefined) {
+    process.env.OBSIDIAN_VAULT_PATH = savedObsidianEnv;
+  } else {
+    delete process.env.OBSIDIAN_VAULT_PATH;
+  }
 });
 
 describe("runInit — non-interactive scaffolding", () => {

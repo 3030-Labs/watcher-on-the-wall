@@ -1,6 +1,6 @@
 {
   "name": "@driftvane/wotw",
-  "version": "0.8.3",
+  "version": "0.8.4",
   "description": "Self-bootstrapping AI knowledge daemon that turns a folder of raw files into a persistent, compounding LLM wiki with provenance signing, MCP serving, and zero manual maintenance.",
   "type": "module",
   "bin": {
@@ -12,7 +12,10 @@
     "dist",
     "src/wiki/templates",
     "LICENSE",
-    "README.md"
+    "LICENSE-NOTICES.md",
+    "README.md",
+    "SECURITY.md",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "build": "tsup",
@@ -34,15 +37,26 @@
     "knowledge-base",
     "obsidian",
     "mcp",
+    "model-context-protocol",
     "provenance",
+    "attestation",
+    "chain-hash",
+    "compliance",
     "ai-daemon",
+    "ai-agent",
     "knowledge-management",
+    "byok",
+    "local-first",
     "claude",
-    "markdown-wiki"
+    "anthropic",
+    "openai",
+    "ollama",
+    "markdown-wiki",
+    "agpl"
   ],
   "author": "3030 Labs LLC <support@3030labs.io>",
   "license": "AGPL-3.0-or-later",
-  "homepage": "https://github.com/DriftVane/watcher-on-the-wall",
+  "homepage": "https://wotw.dev",
   "repository": {
     "type": "git",
     "url": "https://github.com/DriftVane/watcher-on-the-wall.git"

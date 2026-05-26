@@ -44,8 +44,10 @@
  */
 import * as p from "@clack/prompts";
 import type { Command } from "commander";
+import { getTelemetrySink, recordInitFailure } from "../../telemetry/index.js";
+import { initTargetNotEmptyError, isActionableError } from "../../utils/actionable-error.js";
 import { errMsg } from "../../utils/errors.js";
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { findApiKey, findOnPath } from "../../ingestion/execution-mode.js";
@@ -141,6 +143,16 @@ export function registerInitCommand(program: Command): void {
           process.exitCode = 0;
           return;
         }
+        // Opt-in BYO-DSN telemetry: best-effort categorical record of
+        // the failure, gated on WOTW_TELEMETRY_DSN being set. Default
+        // is no-op. See docs/telemetry.md.
+        recordInitFailure(getTelemetrySink(), err);
+        // Re-throw ActionableErrors so the CLI top-level handler
+        // renders them with structured suggestions. Plain errors
+        // continue to use the legacy "init failed: ..." path.
+        if (isActionableError(err)) {
+          throw err;
+        }
         fail(`init failed: ${errMsg(err)}`);
         process.exitCode = 1;
       }
@@ -163,8 +175,11 @@ export async function runInit(opts: InitOptions): Promise<RunInitResult> {
 
   // --- Step 2: vault location ---------------------------------------------
   let vaultPath: string;
+  const envVaultPath = resolveEnvVaultPath();
   if (ttyPath !== null) {
     vaultPath = ttyPath;
+  } else if (envVaultPath !== null) {
+    vaultPath = envVaultPath;
   } else if (interactive) {
     vaultPath = await promptForVaultPath();
   } else {
@@ -187,6 +202,18 @@ export async function runInit(opts: InitOptions): Promise<RunInitResult> {
       createdFreshVault: false,
       overlaySubdir: null,
     };
+  }
+
+  // --- Step 2.5: non-empty-target guard ------------------------------------
+  // If the target exists, has content, AND is neither an Obsidian vault nor a
+  // partial wotw scaffold, refuse to scaffold over it. This catches the
+  // "stranger ran `wotw init` in their Downloads folder" mistake before the
+  // wizard scatters files into a user-meaningful directory.
+  if (!opts.force) {
+    const collision = detectNonEmptyTargetCollision(vaultPath);
+    if (collision !== null) {
+      throw initTargetNotEmptyError(vaultPath, collision);
+    }
   }
 
   // --- Step 3: overlay detection -----------------------------------------
@@ -315,6 +342,57 @@ function resolveExplicitVaultPath(input: string | undefined): string | null {
   if (!input) return null;
   const expanded = expandHome(input);
   return isAbsolute(expanded) ? expanded : resolve(process.cwd(), expanded);
+}
+
+/**
+ * Resolve the OBSIDIAN_VAULT_PATH environment variable to an absolute path,
+ * or null when unset/empty. This takes precedence over the cwd fallback in
+ * non-interactive mode and over the prompt in interactive mode — operators
+ * who export it expect it to be honored.
+ */
+function resolveEnvVaultPath(): string | null {
+  const raw = process.env.OBSIDIAN_VAULT_PATH;
+  if (!raw || raw.trim().length === 0) return null;
+  const expanded = expandHome(raw.trim());
+  return isAbsolute(expanded) ? expanded : resolve(process.cwd(), expanded);
+}
+
+/**
+ * Detect whether `vaultPath` is a non-empty directory that is NEITHER an
+ * Obsidian vault NOR an existing wotw scaffold. Returns the list of
+ * conflicting top-level entries when collision detected, or null when the
+ * target is safe to scaffold into.
+ *
+ * Considered safe:
+ *   - path doesn't exist (will be created during scaffold)
+ *   - path is an empty directory
+ *   - path contains `.obsidian/` (overlay path; prompt will handle subdir choice)
+ *   - path is already a wotw scaffold (caught upstream by checkAlreadyInitialized)
+ */
+function detectNonEmptyTargetCollision(vaultPath: string): string[] | null {
+  if (!existsSync(vaultPath)) return null;
+  let entries: string[];
+  try {
+    entries = readdirSync(vaultPath);
+  } catch {
+    // Unreadable — let downstream EACCES handling surface that distinctly.
+    return null;
+  }
+  // Hidden-file noise + macOS/Windows housekeeping entries don't count.
+  const ignored = new Set([".DS_Store", "Thumbs.db", ".git", ".gitignore"]);
+  const meaningful = entries.filter((e) => !ignored.has(e));
+  if (meaningful.length === 0) return null;
+  // Obsidian vault → overlay flow handles this.
+  if (meaningful.includes(".obsidian")) return null;
+  // Existing wotw scaffold → idempotency guard handles this.
+  if (
+    meaningful.includes(".wotw") ||
+    meaningful.includes("wotw.config.yaml") ||
+    (meaningful.includes("raw") && meaningful.includes("wiki"))
+  ) {
+    return null;
+  }
+  return meaningful;
 }
 
 /**

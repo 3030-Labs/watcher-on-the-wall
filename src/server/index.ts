@@ -43,6 +43,7 @@ function constantTimeEqual(a: string, b: string): boolean {
 }
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { looksLikePortInUse, portInUseError } from "../utils/actionable-error.js";
 import { getLogger } from "../utils/logger.js";
 import type { DaemonSubsystem } from "../daemon/index.js";
 import type { RuntimeMode, WotwConfig } from "../utils/types.js";
@@ -201,9 +202,16 @@ export class McpHttpServer implements DaemonSubsystem {
     });
 
     await new Promise<void>((resolve, reject) => {
-      this.httpServer?.once("error", reject);
+      const onError = (err: unknown): void => {
+        if (looksLikePortInUse(err)) {
+          reject(portInUseError(port, err));
+          return;
+        }
+        reject(err instanceof Error ? err : new Error(String(err)));
+      };
+      this.httpServer?.once("error", onError);
       this.httpServer?.listen(port, host, () => {
-        this.httpServer?.off("error", reject);
+        this.httpServer?.off("error", onError);
         log.info({ host, port }, "mcp server listening");
         resolve();
       });

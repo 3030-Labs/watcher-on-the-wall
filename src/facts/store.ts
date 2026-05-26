@@ -24,6 +24,10 @@
 import Database from "better-sqlite3";
 import { createHash } from "node:crypto";
 import { dirname } from "node:path";
+import {
+  looksLikeNativeBindingFailure,
+  nativeBindingLoadError,
+} from "../utils/actionable-error.js";
 import { ensureDirSync } from "../utils/fs.js";
 import { getLogger } from "../utils/logger.js";
 import type { Fact, FactQuestion } from "./types.js";
@@ -80,7 +84,14 @@ export class FactStore {
     if (!opts.inMemory) {
       ensureDirSync(dirname(this.path));
     }
-    this.db = new Database(opts.inMemory ? ":memory:" : this.path);
+    try {
+      this.db = new Database(opts.inMemory ? ":memory:" : this.path);
+    } catch (err) {
+      if (looksLikeNativeBindingFailure(err)) {
+        throw nativeBindingLoadError("better-sqlite3", err);
+      }
+      throw err;
+    }
     this.db.pragma("journal_mode = WAL");
     this.db.pragma("foreign_keys = ON");
     this.migrate();

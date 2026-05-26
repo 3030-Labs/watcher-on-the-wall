@@ -1,0 +1,68 @@
+name: Question / discussion
+description: Ask a usage, configuration, or design question.
+title: "[question] "
+labels:
+  - question
+  - triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For questions that are likely to interest other users (configuration patterns,
+        usage idioms, architecture rationale) this is the right place.
+
+        **For security questions: email `security@3030labs.io` instead** — see
+        [SECURITY.md](../../SECURITY.md).
+
+        **For "is this a bug?"**: please file a bug report instead and we'll close
+        as not-a-bug if it turns out to be a usage question.
+
+        Before posting, please read the [docs/](../../docs/) directory — the
+        most-asked questions are answered there.
+  - type: input
+    id: wotw_version
+    attributes:
+      label: wotw version
+      description: Output of `wotw --version` (if applicable to the question).
+      placeholder: "0.8.3"
+    validations:
+      required: false
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+      description: |
+        Be specific. "How does wotw handle X under Y conditions?" is much easier
+        to answer than "is wotw the right tool for me?". Include context about
+        what you're trying to accomplish.
+    validations:
+      required: true
+  - type: textarea
+    id: tried
+    attributes:
+      label: What you've already tried / read
+      description: |
+        Which docs did you check? Which configs did you try? Which terms did
+        you search for in existing issues? This helps us improve the docs if
+        the answer turns out to be buried.
+    validations:
+      required: false
+  - type: dropdown
+    id: category
+    attributes:
+      label: Question category
+      options:
+        - Installation / setup
+        - Configuration (`wotw.config.yaml`)
+        - CLI usage
+        - MCP integration (Claude Code, Claude Desktop, IDE)
+        - LLM provider / BYOK
+        - Ingestion / file watching behavior
+        - Wiki structure / page rendering
+        - Provenance / audit / compliance
+        - Self-hosting / deployment
+        - Performance / cost
+        - Roadmap / "will wotw ever support X?"
+        - Other
+    validations:
+      required: true

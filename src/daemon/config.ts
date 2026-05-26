@@ -5,6 +5,7 @@
 import { cosmiconfig, type CosmiconfigResult } from "cosmiconfig";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
+import { configParseError } from "../utils/actionable-error.js";
 import { resolvePath } from "../utils/fs.js";
 import type { WotwConfig } from "../utils/types.js";
 
@@ -199,7 +200,19 @@ export async function loadConfig(searchFrom?: string): Promise<LoadConfigResult>
     },
   });
 
-  const result: CosmiconfigResult = await explorer.search(searchFrom ?? process.cwd());
+  let result: CosmiconfigResult;
+  try {
+    result = await explorer.search(searchFrom ?? process.cwd());
+  } catch (err) {
+    // cosmiconfig parser errors (malformed YAML/JSON in a discovered config
+    // file) surface here. Wrap as ActionableError so the CLI handler
+    // renders the path + next-step suggestions instead of a stack trace.
+    const hintPath =
+      err instanceof Error && (err as { filepath?: string }).filepath
+        ? ((err as { filepath?: string }).filepath as string)
+        : (searchFrom ?? process.cwd());
+    throw configParseError(hintPath, err);
+  }
   const defaults = defaultConfig();
   let merged: WotwConfig;
   let path: string | null = null;
