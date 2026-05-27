@@ -86,7 +86,16 @@ export async function spawnDaemon(opts: SpawnDaemonOptions): Promise<{ pid: numb
       return { pid: child.pid };
     }
     if (child.exitCode !== null) {
-      throw new Error(`Daemon child exited prematurely with code ${child.exitCode}`);
+      throw new Error(
+        `Daemon child exited prematurely with code ${child.exitCode}. ` +
+          `Early-init errors (config validation, native-binding load, ` +
+          `permission denied on wiki_root/raw_path) land in the daemon ` +
+          `log file, not on stdout. Check it for the actual cause:\n` +
+          `  cat ${opts.logFile}\n` +
+          `If the log is empty or missing, the child crashed before ` +
+          `logger initialization — re-run with \`wotw start --foreground\` ` +
+          `to see the error directly on your terminal.`,
+      );
     }
     await new Promise((r) => setTimeout(r, 100));
   }
@@ -96,5 +105,9 @@ export async function spawnDaemon(opts: SpawnDaemonOptions): Promise<{ pid: numb
   } catch {
     /* ignore */
   }
-  throw new Error(`Daemon did not initialize within ${timeoutMs}ms`);
+  throw new Error(
+    `Daemon did not initialize within ${timeoutMs}ms. ` +
+      `If the daemon is still alive but slow to bind, check ${opts.logFile} ` +
+      `for progress logs and increase startup timeout if needed.`,
+  );
 }

@@ -190,6 +190,12 @@ export async function loadConfig(searchFrom?: string): Promise<LoadConfigResult>
       `.${MODULE_NAME}rc.json`,
       `.${MODULE_NAME}rc.yaml`,
       `.${MODULE_NAME}rc.yml`,
+      // `wotw.yaml` / `wotw.yml` are what the `wotw init` wizard writes
+      // (see src/cli/commands/init.ts:CONFIG_CANDIDATES). They must be in
+      // searchPlaces or every fresh-init vault runs with all-defaults.
+      // Finding #12 from PASS-023 dogfood pass.
+      `${MODULE_NAME}.yaml`,
+      `${MODULE_NAME}.yml`,
       `${MODULE_NAME}.config.json`,
       `${MODULE_NAME}.config.yaml`,
       `${MODULE_NAME}.config.yml`,

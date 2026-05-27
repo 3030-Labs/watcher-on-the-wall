@@ -217,6 +217,27 @@ describe("loadConfig", () => {
     expect(result.config.server.host).toBe(defaults.server.host);
     expect(result.config.cost.max_daily_usd).toBe(defaults.cost.max_daily_usd);
   });
+
+  // PASS-023 dogfood finding #12 — every fresh `wotw init` writes
+  // `wotw.yaml`, but the searchPlaces list previously only included
+  // `wotw.config.yaml`. The two sides must agree.
+  it("picks up `wotw.yaml` written by the init wizard (finding #12)", async () => {
+    const dir = tmp();
+    writeFileSync(join(dir, "wotw.yaml"), "server:\n  port: 4444\n");
+    const result = await loadConfig(dir);
+    expect(result.path).not.toBeNull();
+    expect(result.path).toContain("wotw.yaml");
+    expect(result.config.server.port).toBe(4444);
+  });
+
+  it("picks up `wotw.yml` (short extension) too", async () => {
+    const dir = tmp();
+    writeFileSync(join(dir, "wotw.yml"), "server:\n  port: 5555\n");
+    const result = await loadConfig(dir);
+    expect(result.path).not.toBeNull();
+    expect(result.path).toContain("wotw.yml");
+    expect(result.config.server.port).toBe(5555);
+  });
 });
 
 // ---------------------------------------------------------------------------
