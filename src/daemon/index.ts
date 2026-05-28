@@ -66,8 +66,13 @@ export class Daemon {
     const loaded = await loadConfig(this.opts.workingDir);
     this.config = resolveConfigPaths(loaded.config, this.opts.workingDir);
 
-    // Initialize logger against the resolved log file
-    initLogger(this.config.daemon.log_level, this.config.daemon.log_file);
+    // Initialize logger against the resolved log file. Foreground runs set
+    // WOTW_LOG_STDOUT=1 so logs stream (pretty) to the inherited terminal
+    // instead of disappearing into the log file — otherwise `wotw start
+    // --foreground` looks silent (PASS-023 dogfood finding #18).
+    const logToStdout =
+      process.env.WOTW_LOG_STDOUT === "1" || process.env.WOTW_LOG_STDOUT === "true";
+    initLogger(this.config.daemon.log_level, logToStdout ? undefined : this.config.daemon.log_file);
     const log = getLogger("daemon");
     log.info(
       {

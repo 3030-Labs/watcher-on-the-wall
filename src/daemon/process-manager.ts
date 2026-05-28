@@ -111,3 +111,81 @@ export async function spawnDaemon(opts: SpawnDaemonOptions): Promise<{ pid: numb
       `for progress logs and increase startup timeout if needed.`,
   );
 }
+
+export interface RunForegroundOptions {
+  configPath: string | null;
+  pidFile: string;
+  logFile: string;
+  workingDir: string;
+  entrypoint?: string;
+}
+
+/**
+ * Run the daemon in the FOREGROUND by spawning the same fully-wired
+ * `entry.js` the detached path uses — but attached to this terminal
+ * (`stdio: "inherit"`, no detach). Resolves when the child exits with the
+ * child's exit code.
+ *
+ * Why spawn rather than run in-process: `entry.js` wires every subsystem
+ * (ingestion, watcher, MCP server, fact store) via a module-level
+ * `void main()` side effect. Importing it into the CLI process would be
+ * fragile; spawning the identical entrypoint reuses the validated path
+ * verbatim. This closes PASS-023 dogfood finding #18 — previously the
+ * foreground branch ran a bare `new Daemon()` with ZERO subsystems
+ * registered, so `wotw start --foreground` looked like it started but
+ * ingested nothing.
+ *
+ * SIGINT/SIGTERM are forwarded to the child so Ctrl-C stops the daemon
+ * cleanly (the child's own signal handlers run its graceful shutdown).
+ */
+export async function runDaemonForeground(opts: RunForegroundOptions): Promise<number> {
+  const entry = opts.entrypoint ?? resolveDaemonEntrypoint();
+  if (!dirExists(opts.workingDir)) {
+    throw new Error(`runDaemonForeground: working directory does not exist: ${opts.workingDir}`);
+  }
+  if (!existsSync(entry)) {
+    throw new Error(
+      `runDaemonForeground: daemon entrypoint not found at ${entry}. Did you run 'pnpm build'?`,
+    );
+  }
+
+  const args = [entry, "--daemon-child"];
+  if (opts.configPath) args.push("--config", opts.configPath);
+
+  const child = spawn(process.execPath, args, {
+    cwd: opts.workingDir,
+    detached: false,
+    stdio: "inherit",
+    env: {
+      ...process.env,
+      WOTW_DAEMON_CHILD: "1",
+      WOTW_PID_FILE: opts.pidFile,
+      WOTW_LOG_FILE: opts.logFile,
+      // Stream pretty logs to the inherited terminal so the foreground run
+      // isn't silent (the daemon would otherwise write JSON to the log file).
+      WOTW_LOG_STDOUT: "1",
+    },
+  });
+
+  const forward = (signal: NodeJS.Signals): void => {
+    if (child.pid && child.exitCode === null) {
+      try {
+        child.kill(signal);
+      } catch {
+        /* child already gone */
+      }
+    }
+  };
+  process.on("SIGINT", forward);
+  process.on("SIGTERM", forward);
+
+  return await new Promise<number>((resolve, reject) => {
+    child.once("error", reject);
+    child.once("exit", (code, signal) => {
+      process.off("SIGINT", forward);
+      process.off("SIGTERM", forward);
+      // Signal-terminated (e.g. Ctrl-C) is a clean foreground stop → 0.
+      resolve(signal !== null ? 0 : (code ?? 0));
+    });
+  });
+}

@@ -80,18 +80,40 @@
 > - SECURITY.md / CHANGELOG.md / LICENSE-NOTICES.md added to `files`
 >   array so they ship in the tarball
 >
-> **Irreversible-action sequencing (per goal-authorization-scope):**
-> 1. ✅ Commit + push to main
-> 2. ✅ `gh repo edit --visibility public`
-> 3. ✅ Tag v0.8.4 + push
-> 4. 🟡 Operator dogfood pass (next checkpoint)
-> 5. 🟡 npm publish v0.8.4 (held behind dogfood gate)
-> 6. 🟡 install-evidence workflow dispatched + 4 platform artifacts
->    captured + promoted
-> 7. 🟡 Manual macOS arm64 capture committed
+> **Operator dogfood (item 15) — DONE.** Justin walked install → init →
+> start → ingest → approve → audit on an untouched Intel MacBook Air
+> (Node 24 / pnpm 11). 24 findings (`PASS-023-DOGFOOD-FINDINGS.md`).
+> Confirmed the 3030 Labs principle empirically: substrate excellent
+> (30 synthesized pages, 76-record chain, clean audit, first-try once
+> running), every finding in the install/runtime shell.
 >
-> Closure doc: `PASS-023-DAEMON-PUBLIC-READINESS.md`. Pass remains
-> 🟡 substrate-complete until items 4-7 above land.
+> **Dogfood fix batch (landed, tests + 7 gates):** #9 (Escape-cancel on
+> success), #11 (init-walkthrough layout), #12 (cosmiconfig wotw.yaml),
+> #13 (daemon-log pointer), #18 (foreground stub → real daemon),
+> #21 (CLI 401 actionable), #22 (README approval-step), #23 (status
+> record count), #24 (approve/reject candidates/ prefix), #8 (README
+> from-source uses npm not pnpm-link). **Tests: 935** (≥900 held).
+>
+> **DEFERRED to next pass (org-migration-gated):** npm publish v0.8.4,
+> canonical npm-path validation on clean machines, 4-platform
+> install-evidence capture, wotw-verify v0.1.1 re-cut. All under
+> DriftVane → 3030-Labs org move. Bucket A's 13 pnpm-trap findings are
+> 🟡 assumed-NA-pending-npm — believed immune on the canonical
+> `npm install -g` path, unproven until publish.
+>
+> **Irreversible-action sequencing (per goal-authorization-scope):**
+> 1. ✅ Commit + push to main (substrate)
+> 2. ✅ `gh repo edit --visibility public`
+> 3. ✅ Tag v0.8.4 + push (NOTE: tag predates the dogfood-fix batch —
+>    re-cut at publish time)
+> 4. ✅ Operator dogfood pass → 24 findings → 10 fixed this pass
+> 5. ⏳ DEFERRED — npm publish v0.8.4 (gated on org migration)
+> 6. ⏳ DEFERRED — install-evidence workflow + 4-platform artifacts
+> 7. ⏳ DEFERRED — canonical npm-path clean-machine validation
+>
+> Closure doc: `PASS-023-DAEMON-PUBLIC-READINESS.md` — ✅ closed for this
+> pass's scope; publish tail deferred with explicit next-pass entry
+> criteria.
 >
 > ### PASS-019 — G5 Completion (KEK rotation + DEK auto-archive cron) + v0.8.3 ship — 2026-05-25
 >

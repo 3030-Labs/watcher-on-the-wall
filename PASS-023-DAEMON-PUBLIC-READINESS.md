@@ -1,18 +1,23 @@
 # PASS-023 — DAEMON-PUBLIC-READINESS Closure
 
-**Status:** 🟡 Substrate complete; npm publish + dogfood + post-publish evidence pending
+**Status:** ✅ CLOSED for this pass — substrate + onboarding shell + dogfood + dogfood-fix batch all landed. **npm publish + canonical-path validation explicitly DEFERRED to next pass** (gated on the DriftVane → 3030-Labs org migration). See "DEFERRED TO NEXT PASS" below.
 **Date opened:** 2026-05-26
-**Daemon version target:** v0.8.4
-**Implementation HEAD:** (committed at the top of this pass; see `git log --oneline -1`)
-**Closes:** GH-public-launch readiness for DriftVane/watcher-on-the-wall
-**Out of scope:** v0.9.0 emit_event scaffolding, Group C residuals, marketplace-side Pack semantics, public marketing site
+**Date closed:** 2026-05-28
+**Daemon version target:** v0.8.4 (built + committed; NOT published to npm)
+**Closes (this pass):** onboarding-shell gap, error-message audit, opt-in telemetry, Pack-format daemon spec, repo hygiene, and a full operator dogfood with 24 findings — 10 fixed, 13 deferred-pending-npm-validation, 1 not-a-bug.
+**Out of scope:** v0.9.0 emit_event scaffolding, Group C residuals, marketplace-side Pack semantics, public marketing site.
 
 3030 Labs principle: substrate is excellent, onboarding shell is not.
-This pass closes the onboarding-shell gap before we point public
-traffic at the repo. All 14 items completed substantively; npm publish
-is held behind an operator-dogfood gate per the goal-authorization-scope
-discipline (irreversible-ish public actions get their own confirmation
-event even when the goal pre-authorized the outcome).
+This pass closed the onboarding-shell gap. The operator dogfood
+(`PASS-023-DOGFOOD-FINDINGS.md`) **confirmed the principle empirically** —
+once past the install shell, ingestion + compounding + provenance + audit
+all worked first-try with high-quality output; every one of the 24
+findings was in the install/runtime shell, none in the substrate.
+
+The npm publish is **deferred, not abandoned**: the stranger-installs-a-
+broken-package harm can't fire until publish, publish must carry 3030-Labs
+URLs (not DriftVane), and the org migration needs its own context window.
+Deferring is the honest irreducibly-external call.
 
 ---
 
@@ -116,8 +121,9 @@ action and gets its own confirmation event.
 ## Cross-links
 
 - [README.md](README.md) — stranger-facing entry point.
+- [PASS-023-DOGFOOD-FINDINGS.md](PASS-023-DOGFOOD-FINDINGS.md) — the 24-finding operator dogfood.
 - [CHANGELOG.md](CHANGELOG.md) — v0.8.4 entry.
-- [docs/install-evidence/](docs/install-evidence/) — captured platform evidence.
+- [docs/install-evidence/](docs/install-evidence/) — workflow + runbook + 5 fixtures (captured 4-platform logs DEFERRED — need the published package).
 - [docs/pack-format-daemon.md](docs/pack-format-daemon.md) — daemon-side Pack wire format.
 - [BUILD-SUMMARY.md](BUILD-SUMMARY.md) — refreshed with v0.8.4 gate state.
 - `wotw-verify/docs/verification-protocol.md` — verifier-side spec; this pass's pack-format-daemon doc is the daemon-side mirror.
@@ -138,15 +144,101 @@ The following are explicitly out of scope and tracked separately:
 
 ---
 
-## Sign-off
+## Dogfood pass (item 15) — DONE
 
-Pass closes after:
+Operator (Justin) walked install → init → start → ingest → approve →
+audit on an untouched Intel MacBook Air (Node 24 / pnpm 11). Full
+writeup: **`PASS-023-DOGFOOD-FINDINGS.md`** (24 findings).
 
-1. Justin dogfood pass complete → `PASS-023-DOGFOOD-FINDINGS.md` written
-2. Any dogfood fixes integrated
-3. npm publish v0.8.4 authorized + executed
-4. install-evidence workflow dispatched + 4 platform artifacts captured + promoted into `docs/install-evidence/`
-5. Manual macOS arm64 capture done + committed
-6. This file updated with the final closure timestamp and "Status: ✅ Closed"
+- **Confirmed the substrate is excellent:** 5 source notes → 30
+  synthesized candidate pages, correct frontmatter + `[[wiki-links]]`,
+  76-record provenance chain, `model=user` approval attribution. All
+  first-try once the daemon ran.
+- **Confirmed the onboarding shell was the gap:** every finding was in
+  the install/runtime shell (pnpm-11 native-dep traps, CLI auth, config
+  filename, status reporting), none in the substrate.
 
-Until step 6, this file's status remains 🟡 substrate complete.
+### Dogfood fix batch (landed this pass, with tests + 7 gates)
+
+| Finding | Fix |
+|---|---|
+| #12 | cosmiconfig searchPlaces now includes `wotw.yaml` / `.yml` (commit 12dd63d) |
+| #13 | daemon-spawn error names the log file + `--foreground` (commit 12dd63d) |
+| #9 | Escape on the post-scaffold "Open in Obsidian?" prompt = skip, not abort |
+| #18 | `wotw start --foreground` now spawns the fully-wired `entry.js` (was a subsystem-less stub) with `WOTW_LOG_STDOUT=1` live logs |
+| #21 | Claude CLI 401 → loud actionable "run `claude /login`" + dead-letter record |
+| #23 | `wotw status` provenance-record count fixed (was double-prefixing the chain path → silent 0) |
+| #24 | `wotw approve` / `wotw reject` accept the `candidates/` path prefix |
+| #22 | README quickstart shows the candidates → approve → wiki flow |
+| #11 | `docs/init-walkthrough.md` layout corrected (`wotw.yaml` + `CLAUDE.md` at root, `candidates/`) |
+| #8 | README from-source path rewritten to `npm install -g .`, warns against `pnpm link --global` |
+
+Test count after fix batch: **935** (≥900 gate held). All 7 gates green.
+
+---
+
+## DEFERRED TO NEXT PASS
+
+These are real, scoped, and intentionally parked — not abandoned. The
+chain is: canonical-path validation needs the published package; publish
+must carry 3030-Labs URLs; the URLs need the org migration; the migration
+needs its own context window.
+
+**(a) GitHub org migration: DriftVane → 3030-Labs.**
+Move `watcher-on-the-wall` (and siblings `wotw-verify`, `homebrew-tap`)
+from the `DriftVane` org to `3030-Labs`. GitHub auto-redirects the old
+URLs, but `package.json` (`repository`, `bugs`), README links, workflow
+`gh` calls, and the cosign-pubkey references must be updated to the new
+canonical org. This is the gating step for everything below.
+
+**(b) npm publish `@driftvane/wotw@0.8.4` (or re-scoped name).**
+After the org move: decide whether the npm scope stays `@driftvane` or
+moves to `@3030labs`. Update `package.json` `name` + `homepage` +
+`repository` accordingly. Then `npm publish --access public` from a
+clean machine with `npm whoami` authenticated. **Re-cut the git tag**
+(the current `v0.8.4` tag points at e36de03, BEFORE the dogfood-fix
+batch — it must be moved/re-created at the final HEAD, or bumped to
+v0.8.5, at publish time).
+
+**(c) Canonical npm-path validation on a clean machine.**
+The dogfood validated the *from-source* path. Bucket A of
+`PASS-023-DOGFOOD-FINDINGS.md` (13 pnpm-trap findings) is marked
+🟡 ASSUMED-NA-PENDING-NPM — the canonical `npm install -g @driftvane/wotw`
+path is *believed* immune (npm runs postinstalls, no global-store split)
+but is UNPROVEN. Next pass: `npm install -g` on a clean Mac + Linux +
+Windows, confirm `better-sqlite3` + bundled `claude` native bindings
+resolve, run the install-evidence workflow (already written, dispatch-only)
+against the published version, promote the 4-platform artifacts into
+`docs/install-evidence/`.
+
+**(d) wotw-verify v0.1.1 re-cut under 3030-Labs.**
+The verifier binary's cosign signing, Homebrew formula, and embedded
+contract URLs reference `DriftVane`. Re-cut v0.1.1 under the new org so
+the customer-facing verifier and its pubkey mirror line up with the
+migrated daemon repo.
+
+### Next-pass entry criteria (so a fresh goal picks up clean)
+
+1. Org migration **done** — `3030-Labs/watcher-on-the-wall` resolves,
+   old DriftVane URL redirects confirmed.
+2. `npm whoami` authenticated as the publishing account on the operator's
+   machine.
+3. Decision recorded: npm scope (`@driftvane` vs `@3030labs`) + version
+   (re-cut v0.8.4 vs bump v0.8.5).
+4. This repo's HEAD is green on 7 gates (it is, as of this closure).
+
+When (1)-(4) hold, the next `/goal` is: update org URLs → publish →
+re-tag → dispatch install-evidence → promote 4-platform artifacts →
+flip Bucket A findings from 🟡 to ✅-or-reopened → mark this file fully
+✅ including post-publish evidence.
+
+---
+
+## Sign-off (this pass)
+
+✅ **Closed for this pass's scope.** Substrate, onboarding shell,
+error-message audit, telemetry, Pack-format spec, repo hygiene, and a
+full operator dogfood with its fix batch are all landed, committed, and
+green on 7 gates. The publish + canonical-path-validation tail is
+deferred per the org-migration dependency above — tracked with explicit
+entry criteria, not dropped.

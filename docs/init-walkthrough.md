@@ -131,7 +131,7 @@ Possible runtime states:
 | Neither | `none — install Claude Code or set ANTHROPIC_API_KEY` |
 
 **No prompt**: the wizard does not ask you to choose. The active
-runtime is determined at `wotw start` time from `wotw.config.yaml`'s
+runtime is determined at `wotw start` time from `wotw.yaml`'s
 `execution.mode` and `llm.provider` — the wizard scaffolds a config
 that picks the detected runtime as the default and you can edit later.
 
@@ -151,18 +151,30 @@ Creates (idempotent — existing files are not overwritten unless `--force`):
 
 ```
 <target>/
-  .wotw/                       # daemon state directory
-    config.yaml                # editable config (see configuration.md)
+  wotw.yaml                    # editable config at the VAULT ROOT (see configuration.md)
+  CLAUDE.md                    # agent context primer at the VAULT ROOT
+  .gitignore                   # excludes .wotw/ state + secrets
   raw/                         # drop source files here
-  wiki/                        # generated wiki pages land here
+  wiki/                        # APPROVED wiki pages live here
     index.md                   # starter index page
     log.md                     # daemon activity log (templated)
-    CLAUDE.md                  # agent context primer
-  .obsidian/                   # only if fresh vault
+    getting-started.md         # starter page
+    concepts/  entities/  sources/  comparisons/  syntheses/  queries/
+  candidates/                  # generated pages awaiting `wotw approve`
+    rejected/                  # pages you `wotw reject`
+  .wotw/                       # daemon state (facts.db, failed-batches.jsonl, daemon.log)
+  .obsidian/                   # only created for a fresh vault
     app.json
     appearance.json
     workspace.json
 ```
+
+> **Layout note (corrected in v0.8.4):** the config file is `wotw.yaml` at
+> the vault root — NOT `.wotw/config.yaml`. `CLAUDE.md` is at the root, not
+> inside `wiki/`. Generated pages land in `candidates/` (top-level), not
+> `wiki/`, until you `wotw approve` them. Earlier docs described a
+> `.wotw/config.yaml` layout that never matched the scaffold (PASS-023
+> dogfood finding #11).
 
 If scaffold fails (EACCES on the target, disk full, etc.), the spinner
 stops with `Scaffold failed` and the error propagates. The wizard does

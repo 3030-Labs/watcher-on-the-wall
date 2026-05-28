@@ -7,9 +7,8 @@
 import type { Command } from "commander";
 import { errMsg } from "../../utils/errors.js";
 import { loadConfig, resolveConfigPaths } from "../../daemon/config.js";
-import { Daemon } from "../../daemon/index.js";
 import { checkDaemonAlive } from "../../daemon/lifecycle.js";
-import { spawnDaemon } from "../../daemon/process-manager.js";
+import { runDaemonForeground, spawnDaemon } from "../../daemon/process-manager.js";
 import { getLogger } from "../../utils/logger.js";
 import { fail, info, success } from "../output.js";
 
@@ -68,9 +67,17 @@ export async function runStart(opts: StartOptions): Promise<void> {
 
   if (foreground) {
     info("Starting daemon in foreground mode. Press Ctrl-C to stop.");
-    const daemon = new Daemon({ configPath: loaded.path, workingDir: process.cwd() });
-    await daemon.init();
-    await daemon.run();
+    // Spawn the same fully-wired entry.js the detached path uses, attached
+    // to this terminal. Previously this ran a bare `new Daemon()` with no
+    // subsystems registered — it "started" but ingested nothing
+    // (PASS-023 dogfood finding #18).
+    const exitCode = await runDaemonForeground({
+      configPath: loaded.path,
+      pidFile: config.daemon.pid_file,
+      logFile: config.daemon.log_file,
+      workingDir: process.cwd(),
+    });
+    process.exitCode = exitCode;
     return;
   }
 

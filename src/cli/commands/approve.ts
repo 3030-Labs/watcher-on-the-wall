@@ -73,7 +73,17 @@ export async function runApprove(
     return;
   }
 
-  const target = join(store.candidatesDir, filename.endsWith(".md") ? filename : `${filename}.md`);
+  // Accept all of: `sample-1.md`, `sample-1`, `candidates/sample-1.md`,
+  // `./candidates/sample-1.md`. The `wotw candidates` listing and the
+  // `wotw audit` output both show paths with a `candidates/` prefix, so a
+  // user who copy-pastes one would otherwise hit "Candidate not found"
+  // because we'd join candidatesDir + candidates/... (PASS-023 dogfood
+  // finding #24). Strip a leading candidates/ segment before joining.
+  const normalized = filename.replace(/^\.\//, "").replace(/^candidates\//, "");
+  const target = join(
+    store.candidatesDir,
+    normalized.endsWith(".md") ? normalized : `${normalized}.md`,
+  );
   if (!existsSync(target)) {
     fail(`Candidate not found: ${basename(target)}`);
     line(`  Available: ${candidates.map((c) => basename(c)).join(", ") || "(none)"}`);

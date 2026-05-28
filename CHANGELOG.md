@@ -58,11 +58,32 @@ always non-breaking.
   expanded for npm discovery, `SECURITY.md` + `CHANGELOG.md` +
   `LICENSE-NOTICES.md` now ship in the tarball.
 
+### Fixed (operator dogfood batch)
+- **`wotw status` provenance-record count** read 0 against a populated
+  chain (double-prefixed the already-absolute chain path). Now correct.
+- **`wotw start --foreground`** ran a subsystem-less stub daemon; now
+  spawns the same fully-wired daemon as detached mode, with live logs
+  on the terminal.
+- **Claude Code CLI 401** (not logged in) now surfaces a loud, actionable
+  "run `claude /login`" error instead of a silent skipped batch.
+- **`wotw approve` / `wotw reject`** now accept a leading `candidates/`
+  path prefix (matches the `wotw candidates` + `wotw audit` display).
+- **`wotw init`** no longer prints a misleading "Cancelled." when you
+  press Escape on the optional post-scaffold "Open in Obsidian?" prompt.
+- **README + docs** corrected: candidates → approve → wiki flow made
+  explicit; from-source install uses `npm install -g .` (not the broken
+  `pnpm link --global`); init-walkthrough layout matches the real scaffold.
+
 ### Verification
 - 7 build gates green at HEAD.
-- 900+ tests across the unit / integration / e2e tiers.
-- Justin dogfood pass: see `PASS-023-DOGFOOD-FINDINGS.md`.
+- **935 tests** across the unit / integration / e2e tiers.
+- Operator dogfood (24 findings, 10 fixed this pass): see
+  `PASS-023-DOGFOOD-FINDINGS.md`.
 - See `PASS-023-DAEMON-PUBLIC-READINESS.md` for the full closure trail.
+
+> **Not yet on npm.** v0.8.4 is built + committed but publish is deferred
+> to a follow-up pass gated on the DriftVane → 3030-Labs org migration.
+> Install from source per the README until then.
 
 ---
 

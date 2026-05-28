@@ -26,9 +26,22 @@ Requires **Node.js ≥ 20**. macOS arm64 / amd64, Linux amd64, Windows amd64.
 
 > **Note (publish-gap window):** `npm install -g @driftvane/wotw` becomes
 > available with the v0.8.4 publish. If you see a 404 from the registry,
-> the package hasn't shipped yet — try again in a few minutes, or clone
-> the repo + `pnpm install && pnpm build && pnpm link --global` for a
-> local install.
+> the package hasn't shipped yet. To run from source in the meantime:
+>
+> ```bash
+> git clone https://github.com/DriftVane/watcher-on-the-wall.git
+> cd watcher-on-the-wall
+> npm install          # use npm, NOT pnpm — see note below
+> npm run build
+> npm install -g .     # global install from the local checkout
+> ```
+>
+> **Use `npm`, not `pnpm`, for a from-source install.** pnpm 10+ installs
+> dependencies through a global content-addressable store and, with
+> `pnpm link --global`, splits the dependency tree in a way that leaves
+> native addons (`better-sqlite3`, the bundled `claude` binary) unreachable
+> at runtime. `npm install -g .` avoids this entirely. (Tracked in
+> `PASS-023-DOGFOOD-FINDINGS.md`.)
 
 ## 30-second quickstart
 
@@ -46,7 +59,7 @@ $ wotw init
 │  Next steps ─
 │    1. Drop files in ~/Obsidian/research/raw/
 │    2. wotw start
-│    3. Inspect ~/Obsidian/research/wiki/ as files are written
+│    3. wotw candidates  →  wotw approve  →  pages land in wiki/
 │
 └  Done! Your wiki is ready.
 
@@ -54,13 +67,23 @@ $ wotw start
 daemon running (pid 18412). logs: ~/.wotw/daemon.log
 
 $ cp ~/Downloads/meeting-transcript.md ~/Obsidian/research/raw/
-# ingested in ~3s; wiki page appears under wiki/candidates/
+# daemon ingests it + synthesizes related concept pages into candidates/
+
+$ wotw candidates          # list pages awaiting review
+$ wotw approve <page>      # promote a candidate into wiki/
+# (set ingestion.staging: false in wotw.yaml to auto-approve instead)
 ```
 
-Open the vault in Obsidian to see your wiki rendered as linked notes. The
-daemon will batch subsequent file drops, write new pages, refresh stale
-ones, and sign every operation into a provenance chain you can verify with
-`wotw audit`.
+**Generated pages land in `candidates/` first, not directly in `wiki/`.**
+By default `wotw` stages every page for human review — run `wotw candidates`
+to list them and `wotw approve <page>` to promote one into `wiki/`. Approval
+appends a provenance record attributing the decision to you (`model=user`).
+Set `ingestion.staging: false` in `wotw.yaml` to skip review and write
+straight to `wiki/`.
+
+Open the vault in Obsidian to see approved pages rendered as linked notes.
+The daemon batches subsequent file drops, refreshes stale pages, and signs
+every operation into a provenance chain you verify with `wotw audit`.
 
 ## What you get
 

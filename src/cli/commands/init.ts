@@ -276,13 +276,16 @@ export async function runInit(opts: InitOptions): Promise<RunInitResult> {
   }
 
   // --- Step 6: open in Obsidian ------------------------------------------
+  // The scaffold is already complete at this point. This prompt is purely
+  // optional, so a cancel (Escape / Ctrl-C) must NOT abort the wizard with
+  // a misleading "Cancelled." — it means "no, don't open" and we proceed to
+  // the success + next-steps output (PASS-023 dogfood finding #9).
   if (interactive && opts.open !== false) {
-    const shouldOpen = await ask(
-      p.confirm({
-        message: "Open vault in Obsidian now?",
-        initialValue: true,
-      }),
-    );
+    const rawAnswer = await p.confirm({
+      message: "Open vault in Obsidian now? (Esc to skip)",
+      initialValue: true,
+    });
+    const shouldOpen = p.isCancel(rawAnswer) ? false : rawAnswer;
     if (shouldOpen) {
       const ok = await openInObsidian(vaultPath);
       if (!ok) {

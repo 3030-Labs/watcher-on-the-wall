@@ -44,7 +44,12 @@ export async function runStatus(opts: StatusOptions): Promise<void> {
   const pageCount = countMarkdownFiles(join(wikiRoot, "wiki"));
   const orphanedCount = countOrphanedPages(join(wikiRoot, "wiki"));
   const rawCount = countFiles(config.raw_path);
-  const provenanceCount = countProvenanceRecords(join(wikiRoot, config.provenance.chain_file));
+  // `resolveConfigPaths` already resolves chain_file to an absolute path
+  // (against wiki_root). Re-joining with wikiRoot here double-prefixes it
+  // into a nonexistent path, so the count silently read 0 even with a full
+  // chain on disk (PASS-023 dogfood finding #23). Use the resolved path
+  // directly.
+  const provenanceCount = countProvenanceRecords(config.provenance.chain_file);
   // Shared helper from cost-tracker — single source of truth for JSONL
   // parsing (L-CODE-3). Previously `status` re-implemented its own parser
   // which trivially drifted from CostTracker.spentToday().

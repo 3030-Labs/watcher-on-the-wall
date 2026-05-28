@@ -39,7 +39,13 @@ export async function runReject(filename: string, opts: RejectOptions): Promise<
   }
 
   const candidates = store.listCandidates();
-  const target = join(store.candidatesDir, filename.endsWith(".md") ? filename : `${filename}.md`);
+  // Accept a leading candidates/ prefix (matches the listing + audit output),
+  // same normalization as `wotw approve` (PASS-023 dogfood finding #24).
+  const normalized = filename.replace(/^\.\//, "").replace(/^candidates\//, "");
+  const target = join(
+    store.candidatesDir,
+    normalized.endsWith(".md") ? normalized : `${normalized}.md`,
+  );
 
   if (!existsSync(target)) {
     fail(`Candidate not found: ${basename(target)}`);

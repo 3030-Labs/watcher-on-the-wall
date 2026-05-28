@@ -205,6 +205,45 @@ export function invalidApiKeyError(
 }
 
 /**
+ * Detect a Claude Code CLI authentication failure in the CLI's output.
+ * In CLI (subscription) runtime, a 401 surfaces in the agent's stdout as
+ * an "API Error: 401 ... authentication_error ... Please run /login"
+ * string rather than as an HTTP status the daemon can branch on
+ * (PASS-023 dogfood finding #21).
+ */
+export function looksLikeCliAuthFailure(text: string): boolean {
+  return (
+    /API Error:\s*401/i.test(text) ||
+    /authentication_error/i.test(text) ||
+    /invalid authentication credentials/i.test(text) ||
+    /please run \/login/i.test(text) ||
+    /not (logged in|authenticated)/i.test(text)
+  );
+}
+
+/**
+ * Build an ActionableError for a Claude Code CLI auth failure (item 4,
+ * CLI-runtime variant). Distinct remediation from the env-var API-key
+ * path: the fix is `claude /login`, not rotating an env var.
+ */
+export function cliAuthError(cause?: unknown): ActionableError {
+  return new ActionableError({
+    code: "INVALID_API_KEY",
+    summary:
+      "The Claude Code CLI is not authenticated (got 401 from the model API). " +
+      "wotw is in CLI runtime mode and the `claude` binary has no valid session.",
+    suggestions: [
+      "Run `claude` to open the interactive shell, then type `/login` and complete the browser auth flow.",
+      'Verify auth worked: `echo "hi" | claude -p` should print a reply, not a 401.',
+      "Then restart the daemon: `wotw stop && wotw start`.",
+      "If you intended to use an API key instead of the subscription CLI, set `execution.mode: api` + `ANTHROPIC_API_KEY` in your config — see docs/self-hosted-byok.md.",
+    ],
+    docs: "docs/self-hosted-byok.md",
+    cause,
+  });
+}
+
+/**
  * Build an ActionableError for the rate-limited path (item 5).
  */
 export function rateLimitedError(

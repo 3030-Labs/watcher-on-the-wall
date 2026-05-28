@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   ActionableError,
+  cliAuthError,
   configParseError,
   daemonAlreadyRunningError,
   initTargetNotEmptyError,
   invalidApiKeyError,
   isActionableError,
+  looksLikeCliAuthFailure,
   looksLikeFileLock,
   looksLikeNativeBindingFailure,
   looksLikePermissionDenied,
@@ -135,6 +137,36 @@ describe("path 4 — invalidApiKeyError", () => {
   it("handles each provider name", () => {
     expect(invalidApiKeyError("openai", "OPENAI_API_KEY").summary).toContain("openai");
     expect(invalidApiKeyError("gemini", "GOOGLE_API_KEY").summary).toContain("gemini");
+  });
+});
+
+describe("path 4 (CLI variant) — cliAuthError + looksLikeCliAuthFailure (dogfood #21)", () => {
+  it("matches the real CLI 401 stdout signature", () => {
+    const real =
+      'API Error: 401 {"type":"error","error":{"type":"authentication_error","message":"Invalid authentication credentials"},"request_id":"req_011"} · Please run /login';
+    expect(looksLikeCliAuthFailure(real)).toBe(true);
+  });
+
+  it("matches each auth-failure phrasing variant", () => {
+    expect(looksLikeCliAuthFailure("API Error: 401 unauthorized")).toBe(true);
+    expect(looksLikeCliAuthFailure("authentication_error occurred")).toBe(true);
+    expect(looksLikeCliAuthFailure("Invalid authentication credentials")).toBe(true);
+    expect(looksLikeCliAuthFailure("Please run /login")).toBe(true);
+    expect(looksLikeCliAuthFailure("you are not logged in")).toBe(true);
+  });
+
+  it("does not match valid JSON edit output", () => {
+    expect(looksLikeCliAuthFailure('[{"path":"wiki/x.md","content":"..."}]')).toBe(false);
+    expect(looksLikeCliAuthFailure("here is your wiki page")).toBe(false);
+  });
+
+  it("cliAuthError points at `claude /login`, not env-var rotation", () => {
+    const e = cliAuthError();
+    expect(e.code).toBe("INVALID_API_KEY");
+    expect(e.summary).toMatch(/Claude Code CLI is not authenticated/);
+    expect(e.message).toMatch(/\/login/);
+    expect(e.message).toMatch(/wotw stop && wotw start/);
+    expect(e.docs).toMatch(/byok/);
   });
 });
 

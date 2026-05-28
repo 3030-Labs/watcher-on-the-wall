@@ -17,6 +17,7 @@
  */
 import { relative, resolve } from "node:path";
 import PQueue from "p-queue";
+import { cliAuthError, looksLikeCliAuthFailure } from "../utils/actionable-error.js";
 import { errMsg } from "../utils/errors.js";
 import { getLogger } from "../utils/logger.js";
 import type { RuntimeMode, WotwConfig } from "../utils/types.js";
@@ -399,15 +400,27 @@ export class IngestionQueue implements DaemonSubsystem {
           }
         }
       } else if (completeResult.text.trim().length > 0) {
-        log.warn(
-          {
-            batchId: batch.id,
-            textLen: completeResult.text.length,
-            sample: completeResult.text.slice(0, 200),
-            tailSample: completeResult.text.slice(-200),
-          },
-          "ingestion response was not valid JSON edits",
-        );
+        // PASS-023 dogfood finding #21: a Claude Code CLI auth failure (401)
+        // surfaces here as the agent's stdout rather than an HTTP status.
+        // Detect it and emit a loud, actionable message instead of the
+        // generic "not valid JSON edits" → silent skip.
+        if (looksLikeCliAuthFailure(completeResult.text)) {
+          const authErr = cliAuthError();
+          log.error({ batchId: batch.id, code: authErr.code }, authErr.message);
+          if (this.opts.deadLetter) {
+            await this.opts.deadLetter.record(batch, authErr, "add");
+          }
+        } else {
+          log.warn(
+            {
+              batchId: batch.id,
+              textLen: completeResult.text.length,
+              sample: completeResult.text.slice(0, 200),
+              tailSample: completeResult.text.slice(-200),
+            },
+            "ingestion response was not valid JSON edits",
+          );
+        }
       }
 
       invokeResult = {
