@@ -29,7 +29,7 @@ Requires **Node.js ≥ 20**. macOS arm64 / amd64, Linux amd64, Windows amd64.
 > the package hasn't shipped yet. To run from source in the meantime:
 >
 > ```bash
-> git clone https://github.com/DriftVane/watcher-on-the-wall.git
+> git clone https://github.com/3030-Labs/watcher-on-the-wall.git
 > cd watcher-on-the-wall
 > npm install          # use npm, NOT pnpm — see note below
 > npm run build
@@ -104,7 +104,7 @@ every operation into a provenance chain you verify with `wotw audit`.
   Pure BM25, no embeddings.
 - **Audit-ready.** Compliance Pack export (CT4.01) bundles your chain
   with encrypted DEKs for offline verification via the separately
-  distributed [wotw-verify](https://github.com/DriftVane/wotw-verify) Go
+  distributed [wotw-verify](https://github.com/3030-Labs/wotw-verify) Go
   binary. Single statically-linked customer-side verifier, no daemon needed.
 
 ## Documentation
@@ -143,6 +143,6 @@ service offering must comply, what competitors can fork).
 
 - Reporting a vulnerability: [SECURITY.md](SECURITY.md)
 - Contributing: [CONTRIBUTING.md](CONTRIBUTING.md)
-- Verifier binary: [DriftVane/wotw-verify](https://github.com/DriftVane/wotw-verify)
+- Verifier binary: [3030-Labs/wotw-verify](https://github.com/3030-Labs/wotw-verify)
 - Marketing + docs site: [wotw.dev](https://wotw.dev)
 - Maintainer: [3030 Labs LLC](https://3030labs.io)

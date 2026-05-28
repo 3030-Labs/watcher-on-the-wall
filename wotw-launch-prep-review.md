@@ -53,9 +53,9 @@
   "files": ["dist", "src/wiki/templates", "LICENSE", "README.md"],
   "keywords": ["llm-wiki", "knowledge-base", "obsidian", "mcp", "provenance", "ai-daemon", "knowledge-management", "claude", "markdown-wiki"],
   "author": "3030 Labs LLC <support@3030labs.io>",
-  "homepage": "https://github.com/DriftVane/watcher-on-the-wall",
-  "repository": { "type": "git", "url": "https://github.com/DriftVane/watcher-on-the-wall.git" },
-  "bugs": { "url": "https://github.com/DriftVane/watcher-on-the-wall/issues" },
+  "homepage": "https://github.com/3030-Labs/watcher-on-the-wall",
+  "repository": { "type": "git", "url": "https://github.com/3030-Labs/watcher-on-the-wall.git" },
+  "bugs": { "url": "https://github.com/3030-Labs/watcher-on-the-wall/issues" },
   "engines": { "node": ">=20" },
   "lint-staged": {
     "src/**/*.ts": ["prettier --write", "eslint --fix"],
@@ -274,7 +274,7 @@ npm publish --access public
 
 1. **Package name `@driftvane/wotw`** — requires the `@driftvane` npm org to exist. If not created yet, you'll need `npm org create driftvane` or publish unscoped as `wotw`.
 
-2. **CODEOWNERS uses `@OptionsIQ`** — confirmed this is your GitHub username on the DriftVane org.
+2. **CODEOWNERS uses `@OptionsIQ`** — confirmed this is your GitHub username on the 3030 Labs org.
 
 3. **`watcher-on-the-wall` binary alias removed** — only `wotw` is exposed. The old name was redundant.
 

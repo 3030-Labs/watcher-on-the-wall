@@ -15,7 +15,7 @@ Requirements:
   will create a lockfile drift)
 
 ```bash
-git clone https://github.com/DriftVane/watcher-on-the-wall.git
+git clone https://github.com/3030-Labs/watcher-on-the-wall.git
 cd watcher-on-the-wall
 pnpm install
 pnpm build

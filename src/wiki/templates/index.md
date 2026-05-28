@@ -6,7 +6,7 @@ updated: __WOTW_UPDATED_ISO__
 # Wiki Index
 
 Welcome to your knowledge base. This index is automatically maintained by
-[watcher-on-the-wall](https://github.com/DriftVane/watcher-on-the-wall).
+[watcher-on-the-wall](https://github.com/3030-Labs/watcher-on-the-wall).
 
 ## Getting Started
 

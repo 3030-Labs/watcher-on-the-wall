@@ -59,10 +59,10 @@
   "homepage": "https://wotw.dev",
   "repository": {
     "type": "git",
-    "url": "https://github.com/DriftVane/watcher-on-the-wall.git"
+    "url": "https://github.com/3030-Labs/watcher-on-the-wall.git"
   },
   "bugs": {
-    "url": "https://github.com/DriftVane/watcher-on-the-wall/issues"
+    "url": "https://github.com/3030-Labs/watcher-on-the-wall/issues"
   },
   "engines": {
     "node": ">=20"

@@ -30,7 +30,7 @@ always non-breaking.
   with the config override (`fact_extraction.force_enabled`).
 - **`docs/pack-format-daemon.md`** — daemon-side wire format for the
   Compliance Pack consumed by the customer-side
-  [`wotw-verify`](https://github.com/DriftVane/wotw-verify) binary.
+  [`wotw-verify`](https://github.com/3030-Labs/wotw-verify) binary.
   Marketplace semantics explicitly out of scope.
 - **`docs/telemetry.md`** + opt-in BYO-DSN Sentry breadcrumbs on `wotw init`
   failures. **Disabled by default.** No 3030 Labs DSN embedded; users

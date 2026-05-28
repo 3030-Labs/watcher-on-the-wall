@@ -2,7 +2,7 @@
 
 > **Scope:** this document describes the **bytes** a Compliance Pack
 > contains, what guarantees the daemon makes when writing them, and how
-> the customer-side [`wotw-verify`](https://github.com/DriftVane/wotw-verify)
+> the customer-side [`wotw-verify`](https://github.com/3030-Labs/wotw-verify)
 > Go binary parses them. **Daemon-side wire format only.**
 >
 > **Out of scope:** marketplace semantics — Pack as a tradeable artifact,
@@ -235,7 +235,7 @@ The wire format is locked at v1. Practical consequences:
   frozen verifier contract.
 - [`PASS-019-G5-COMPLETION.md`](../PASS-019-G5-COMPLETION.md) — KEK
   rotation + DEK auto-archive operational completeness.
-- [`wotw-verify/docs/verification-protocol.md`](https://github.com/DriftVane/wotw-verify/blob/main/docs/verification-protocol.md) —
+- [`wotw-verify/docs/verification-protocol.md`](https://github.com/3030-Labs/wotw-verify/blob/main/docs/verification-protocol.md) —
   the canonical spec on the verifier side. **If this daemon-side doc
   and the verifier-side doc disagree, the verifier-side doc wins.**
 - `wotw-artifact-layer-prd.md` — marketplace semantics (separate scope).
