@@ -1,10 +1,10 @@
 # PASS-026 — GitHub Org Migration (DriftVane → 3030-Labs) Closure
 
-**Status:** ✅ Substantially closed. All 4 repos migrated + swept + CI
-re-verified; wotw-verify v0.1.1 cut, cosign-signed, published, trust-chain
-proven. **One external gate pending:** live `brew install` --self-test on
-darwin (needs a Mac / macOS CI runner — component-verified here).
-**Date:** 2026-05-28.
+**Status:** ✅ CLOSED. All 4 repos migrated + swept + CI re-verified;
+wotw-verify v0.1.1 cut, cosign-signed, published, trust-chain proven; live
+`brew install` --self-test 5/5 confirmed on darwin (operator's Mac).
+**Date:** 2026-05-28. (Sole residual: wotw-cloud's pre-existing typecheck,
+ruled out-of-scope — see finding.)
 **Out of scope (→ PASS-027):** npm publish v0.8.4, canonical npm-path
 validation. **Out of scope (separate pass):** Fly.io org migration,
 wotw-cloud Supabase-typing fix.
@@ -96,12 +96,12 @@ email sigs → The 3030 Labs team, marketing → 3030 Labs' Compliance tier,
 - **v0.1.0 left untouched** as the historical DriftVane-era release (not
   deleted, not modified) — its signatures still verify under the same key.
 
-**Pending (irreducibly external):** live `brew tap 3030-Labs/tap && brew
-install wotw-verify && wotw-verify --self-test` on darwin. This machine is
-linux/WSL with no `brew`. Every component brew checks is independently
-verified (URL resolves, SHA-256 matches artifact, binary self-tests 5/5);
-the live darwin install needs a Mac or a macos-14 CI runner. Same class as
-PASS-023 platform evidence.
+- **Live Homebrew install --self-test: ✅ confirmed on darwin** (operator's
+  Mac, 2026-05-28): `brew tap 3030-Labs/tap` → `brew install wotw-verify`
+  (brew reported "Formula wotw-verify (0.1.1) Verified" — re-checked the
+  SHA-256 against the formula, matched) → `wotw-verify --version` = 0.1.1
+  → `wotw-verify --self-test` = 5/5 green. Full darwin tap→install→self-test
+  path works end-to-end.
 
 ---
 
@@ -114,7 +114,7 @@ PASS-023 platform evidence.
 | wotw-cloud 5 gates green post-sweep | 🟡 4/5 — typecheck pre-existing-red (Supabase smoke script, unrelated; documented) |
 | watcher-on-the-wall 7 gates green post-sweep | ✅ (935 tests) |
 | chain-hash-sync + llm-types-sync byte-identical | ✅ (both directions) |
-| wotw-verify v0.1.1 cosign-signed + published + Homebrew --self-test 5/5 | 🟡 cosign+publish+binary-self-test ✅; live darwin brew install pending (component-verified) |
+| wotw-verify v0.1.1 cosign-signed + published + Homebrew --self-test 5/5 | ✅ cosign+publish+trust-chain+binary-self-test + LIVE darwin `brew install` --self-test 5/5 (operator's Mac) |
 | npm package NOT published | ✅ (deferred to PASS-027) |
 
 ---
