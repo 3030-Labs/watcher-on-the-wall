@@ -204,7 +204,7 @@ interface SentryShim {
 async function loadSentry(): Promise<SentryShim | null> {
   try {
     // @sentry/node is an OPTIONAL peer dependency. The default install of
-    // @driftvane/wotw does NOT pull it in — users who opt in to
+    // @3030-labs/wotw does NOT pull it in — users who opt in to
     // telemetry install it explicitly (`npm install @sentry/node`).
     // Use a dynamic specifier so TypeScript doesn't require its types
     // to be present at typecheck time.

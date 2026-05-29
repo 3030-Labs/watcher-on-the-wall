@@ -17,16 +17,15 @@ memory tier.
 ## Install
 
 ```bash
-npm install -g @driftvane/wotw
+npm install -g @3030-labs/wotw
 wotw init        # interactive: pick a vault, configure runtime
 wotw start       # daemon goes to the background
 ```
 
 Requires **Node.js ≥ 20**. macOS arm64 / amd64, Linux amd64, Windows amd64.
 
-> **Note (publish-gap window):** `npm install -g @driftvane/wotw` becomes
-> available with the v0.8.4 publish. If you see a 404 from the registry,
-> the package hasn't shipped yet. To run from source in the meantime:
+> **Run from source** (for contributors, or to run an unreleased change
+> before it lands on npm):
 >
 > ```bash
 > git clone https://github.com/3030-Labs/watcher-on-the-wall.git
@@ -130,7 +129,7 @@ every operation into a provenance chain you verify with `wotw audit`.
 
 `wotw` is pre-1.0. The substrate (ingestion, provenance, MCP, Compliance
 Pack format) is stable and exercised by 900+ tests across 7 build gates;
-the npm package is `@driftvane/wotw`. Breaking changes are possible at
+the npm package is `@3030-labs/wotw`. Breaking changes are possible at
 minor-version bumps until 1.0; see [CHANGELOG.md](CHANGELOG.md).
 
 ## License

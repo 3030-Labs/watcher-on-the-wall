@@ -1,6 +1,6 @@
 # Install evidence
 
-Captures of the canonical `npm install -g @driftvane/wotw` flow on
+Captures of the canonical `npm install -g @3030-labs/wotw` flow on
 each supported platform. **One file per platform-tier per release.**
 
 | Platform | Tier | Captured by | Current evidence |
@@ -58,7 +58,7 @@ Each `<platform>.md` file follows the same template:
 **Shell:** <bash / zsh / pwsh>
 **Node:** <output of `node --version`>
 **Date (UTC):** <iso 8601>
-**Package version:** @driftvane/wotw@<version>
+**Package version:** @3030-labs/wotw@<version>
 
 ## npm install
 ```

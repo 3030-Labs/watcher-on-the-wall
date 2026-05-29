@@ -30,7 +30,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Specific @driftvane/wotw version to test (e.g. 0.8.4)"
+        description: "Specific @3030-labs/wotw version to test (e.g. 0.8.4)"
         required: true
         default: "latest"
 
@@ -46,22 +46,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - label: macos-arm64
-            runner: macos-14
-            shell: bash
-            install_cmd: npm install -g @driftvane/wotw@${{ inputs.version || 'latest' }}
           - label: macos-amd64
-            runner: macos-13
-            shell: bash
-            install_cmd: npm install -g @driftvane/wotw@${{ inputs.version || 'latest' }}
+            runner: macos-15-intel
+            install_cmd: npm install -g @3030-labs/wotw@${{ inputs.version || 'latest' }}
           - label: linux-amd64
             runner: ubuntu-22.04
-            shell: bash
-            install_cmd: npm install -g @driftvane/wotw@${{ inputs.version || 'latest' }}
+            install_cmd: npm install -g @3030-labs/wotw@${{ inputs.version || 'latest' }}
           - label: windows-amd64
             runner: windows-2022
-            shell: pwsh
-            install_cmd: npm install -g "@driftvane/wotw@${{ inputs.version || 'latest' }}"
+            install_cmd: npm install -g @3030-labs/wotw@${{ inputs.version || 'latest' }}
 
     steps:
       - name: Checkout (for evidence-script + 5 sample markdown files)
@@ -78,24 +71,24 @@ jobs:
         run: |
           VERSION="${{ inputs.version }}"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Testing @driftvane/wotw@${VERSION} on ${{ matrix.label }}"
+          echo "Testing @3030-labs/wotw@${VERSION} on ${{ matrix.label }}"
 
-      - name: Install @driftvane/wotw from npm (canonical user flow)
+      - name: Install @3030-labs/wotw from npm (canonical user flow)
         id: install
-        shell: ${{ matrix.shell }}
+        shell: bash
         run: |
           ${{ matrix.install_cmd }} 2>&1 | tee install.log
           wotw --version
 
       - name: Run wotw init in scratch dir (non-interactive)
         id: init
-        shell: ${{ matrix.shell }}
+        shell: bash
         run: |
           mkdir scratch-vault
           wotw init --path "${{ github.workspace }}/scratch-vault" --yes --no-open 2>&1 | tee init.log
 
       - name: Drop 5 sample markdown files into raw/
-        shell: ${{ matrix.shell }}
+        shell: bash
         run: |
           cp docs/install-evidence/fixtures/sample-1.md scratch-vault/raw/
           cp docs/install-evidence/fixtures/sample-2.md scratch-vault/raw/
@@ -109,7 +102,7 @@ jobs:
         # exercise requires a follow-up local run with an Anthropic key —
         # logged as `cli-ingest-skipped: no_llm_key_in_ci` in the captured
         # evidence.
-        shell: ${{ matrix.shell }}
+        shell: bash
         run: |
           wotw status --json 2>&1 | tee status.log || true
           echo "---" | tee -a status.log
@@ -124,10 +117,10 @@ jobs:
             echo ""
             echo "**Platform:** ${{ matrix.label }}"
             echo "**Runner:** ${{ matrix.runner }}"
-            echo "**Shell:** ${{ matrix.shell }}"
+            echo "**Shell:** bash"
             echo "**Node:** $(node --version)"
             echo "**Date (UTC):** $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            echo "**Package version:** @driftvane/wotw@${{ steps.version.outputs.version }}"
+            echo "**Package version:** @3030-labs/wotw@${{ steps.version.outputs.version }}"
             echo "**Runner image label:** ${{ matrix.runner }}"
             echo ""
             echo "## npm install"

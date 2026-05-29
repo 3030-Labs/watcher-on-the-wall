@@ -1,5 +1,5 @@
 {
-  "name": "@driftvane/wotw",
+  "name": "@3030-labs/wotw",
   "version": "0.8.4",
   "description": "Self-bootstrapping AI knowledge daemon that turns a folder of raw files into a persistent, compounding LLM wiki with provenance signing, MCP serving, and zero manual maintenance.",
   "type": "module",

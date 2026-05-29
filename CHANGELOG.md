@@ -1,6 +1,6 @@
 # Changelog
 
-All notable, user-visible changes to `@driftvane/wotw` are documented in this
+All notable, user-visible changes to `@3030-labs/wotw` are documented in this
 file. Internal closure documents (`PASS-*.md`, `SHIP-V*.md`, `REVIEW-*.md`)
 are referenced for traceability but not enumerated here.
 

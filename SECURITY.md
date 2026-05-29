@@ -55,7 +55,7 @@ who, in good faith, report vulnerabilities to `security@3030labs.io`
 under the following conditions:
 
 1. **Scope discipline.** Testing is limited to `wotw` daemon code,
-   official `@driftvane/wotw` npm artifacts, the `3030-Labs/wotw-verify`
+   official `@3030-labs/wotw` npm artifacts, the `3030-Labs/wotw-verify`
    binary, and infrastructure you control (your own laptop, your own
    VMs). Testing against **other people's hosted wotw deployments,
    3030 Labs' production infrastructure, or `wotw-cloud` tenants you

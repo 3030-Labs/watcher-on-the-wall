@@ -55,7 +55,7 @@ The practical answer:
   you rebuilt the daemon with different defaults, you forked the repo
   and renamed it.
 - **Definitely derivative**: you wrote a wrapper that statically
-  imports `@driftvane/wotw` as an npm dependency and ships the result.
+  imports `@3030-labs/wotw` as an npm dependency and ships the result.
 - **Likely derivative**: your service spawns the `wotw` binary as a
   subprocess and depends on its specific output format, and you
   modified that format.
@@ -132,7 +132,7 @@ by 3030 Labs' commercial offering. The licence is symmetric.
 - Relicense `wotw` source to MIT / BSD / proprietary terms.
 - Strip the AGPL notices from files you redistribute.
 - Use the `wotw` or `watcher-on-the-wall` name, the wotw.dev
-  domain, or the `@driftvane/wotw` npm scope to imply 3030 Labs
+  domain, or the `@3030-labs/wotw` npm scope to imply 3030 Labs
   endorsement of your fork (trademark, not copyright — but the same
   obligation applies).
 

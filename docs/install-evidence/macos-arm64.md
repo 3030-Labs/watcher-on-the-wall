@@ -9,7 +9,7 @@ keyless CI runs cannot.
 
 ## How to capture (operator runbook)
 
-On a clean machine — or after `npm uninstall -g @driftvane/wotw` to
+On a clean machine — or after `npm uninstall -g @3030-labs/wotw` to
 make this clean — paste the block below. The script captures stdout
 to `evidence.log` for committing.
 
@@ -23,7 +23,7 @@ echo "" >> evidence.log
 
 # 2. Install
 echo "## npm install ##" >> evidence.log
-npm install -g @driftvane/wotw 2>&1 | tee -a evidence.log
+npm install -g @3030-labs/wotw 2>&1 | tee -a evidence.log
 echo "" >> evidence.log
 echo "wotw --version:" >> evidence.log
 wotw --version 2>&1 | tee -a evidence.log
@@ -105,7 +105,7 @@ in on first run)
 **Shell:** `zsh`
 **Node:** `<to-be-filled>`
 **Date (UTC):** `<to-be-filled>`
-**Package version:** `@driftvane/wotw@0.8.4`
+**Package version:** `@3030-labs/wotw@0.8.4`
 
 > **STATUS: pending operator's first manual capture after v0.8.4 publishes
 > to npm.** The runbook above is the script to use. Until then, this

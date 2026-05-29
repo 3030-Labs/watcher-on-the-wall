@@ -175,7 +175,7 @@ export function nativeBindingLoadError(module: string, cause: unknown): Actionab
       "Verify Node.js >= 20 is installed (`node --version`).",
       "Confirm your platform matches one of: macOS arm64, macOS amd64, Linux amd64, Windows amd64.",
       "If running under Docker, ensure the image was built for the runtime arch (not host arch).",
-      "Reinstall: `npm uninstall -g @driftvane/wotw && npm install -g @driftvane/wotw`.",
+      "Reinstall: `npm uninstall -g @3030-labs/wotw && npm install -g @3030-labs/wotw`.",
     ],
     docs: "docs/install-evidence/",
     cause,
