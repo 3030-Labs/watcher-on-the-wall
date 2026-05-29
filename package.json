@@ -59,7 +59,7 @@
   "homepage": "https://wotw.dev",
   "repository": {
     "type": "git",
-    "url": "https://github.com/3030-Labs/watcher-on-the-wall.git"
+    "url": "git+https://github.com/3030-Labs/watcher-on-the-wall.git"
   },
   "bugs": {
     "url": "https://github.com/3030-Labs/watcher-on-the-wall/issues"
