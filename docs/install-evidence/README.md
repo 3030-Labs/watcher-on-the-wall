@@ -5,10 +5,11 @@ each supported platform. **One file per platform-tier per release.**
 
 | Platform | Tier | Captured by | Current evidence |
 |---|---|---|---|
-| macOS arm64 (Apple Silicon) | Primary | Manual run on operator's Mac | [`macos-arm64.md`](./macos-arm64.md) |
-| macOS amd64 (Intel) | Primary | GH Actions `install-evidence.yml` | [`macos-amd64.md`](./macos-amd64.md) |
+| macOS arm64 (Apple Silicon) | Primary | Manual run on operator's Mac | runbook in [`macos-arm64.md`](./macos-arm64.md) — manual capture pending Apple Silicon hardware (operator's first Mac was Intel; see PASS-027 F7) |
+| macOS amd64 (Intel) — CI smoke | Primary | GH Actions `install-evidence.yml` | [`macos-amd64.md`](./macos-amd64.md) |
+| **macOS amd64 (Intel) — manual, real-LLM** | **Primary** | **Operator on personal MacBook Air** | **[`macos-amd64-manual.md`](./macos-amd64-manual.md)** |
 | Linux amd64 | Primary | GH Actions `install-evidence.yml` | [`linux-amd64.md`](./linux-amd64.md) |
-| Windows amd64 | Primary | GH Actions `install-evidence.yml` (PowerShell) | [`windows-amd64.md`](./windows-amd64.md) |
+| Windows amd64 | Primary | GH Actions `install-evidence.yml` | [`windows-amd64.md`](./windows-amd64.md) |
 
 `fixtures/sample-1.md` through `fixtures/sample-5.md` are the 5
 markdown files dropped into `raw/` to exercise the ingestion pipeline.

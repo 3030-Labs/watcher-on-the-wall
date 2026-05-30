@@ -107,10 +107,13 @@ in on first run)
 **Date (UTC):** `<to-be-filled>`
 **Package version:** `@3030-labs/wotw@0.8.4`
 
-> **STATUS: pending operator's first manual capture after v0.8.4 publishes
-> to npm.** The runbook above is the script to use. Until then, this
-> section is a placeholder and the GH-hosted `macos-14` arm64 evidence
-> from the install-evidence workflow stands in.
+> **STATUS: still pending Apple Silicon hardware.** The first operator
+> manual capture (PASS-027, 2026-05-30, post v0.8.4 publish) was on an
+> Intel MacBook Air (`x86_64`) and went to
+> [`macos-amd64-manual.md`](./macos-amd64-manual.md) instead — see
+> PASS-027 F7 for the deviation. This runbook + placeholder is
+> retained for a future arm64 manual capture when Apple Silicon
+> hardware is in scope.
 
 ### npm install
 
