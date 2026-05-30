@@ -391,7 +391,7 @@ future CI publishes.
 | v0.8.4 tag re-cut at HEAD carrying fixes | ✅ annotated @ `8adedad` |
 | npm publish succeeds | ✅ |
 | `npm view` confirms | ✅ via version endpoint; packument propagating (F5) |
-| Canonical path green on Justin's clean Mac (Bucket A tested) | 🟡 PENDING |
+| Canonical path green on Justin's clean Mac (Bucket-A tested) | ✅ (all 6 goal-step-10 checks green; transcript at `docs/install-evidence/macos-amd64-manual.md`) |
 | install-evidence 3 CI green + committed | ✅ (run 26662488039; artifacts under `docs/install-evidence/`) |
 | install-evidence 1 human-Mac (Part D) | ✅ (Intel Mac instead of arm64 — see F7) |
 
