@@ -1,0 +1,68 @@
+name: Multi-LLM drift (scheduled live)
+
+# Phase 4 of the Multi-LLM verify-and-harness arc.
+#
+# This is the SCHEDULED, NON-PR-GATING live drift check. The PR gate itself is
+# the offline cassette replay test (test/harness/replay-gate.test.ts), which runs
+# in the normal `pnpm test` job on every push/PR with zero external API calls — a
+# flaky provider can never block a merge.
+#
+# This workflow instead re-runs the SHIPPED extractor LIVE against the gold
+# corpus and compares to the recorded baseline, to catch real model/provider
+# drift over time. It is key-gated: with no provider key configured it skips
+# gracefully (exit 0) rather than failing (Phase A/B precedent — keys are often
+# absent). A regression here turns the scheduled run red as an ALERT; it does not
+# block PRs.
+#
+# Note: the committed baselines were recorded via the CLI extraction path
+# (subscription, key-free). CI has no `claude` binary, so this runs the API path
+# (AnthropicProvider, Messages API). The first live API run may surface benign
+# CLI-vs-API path differences for an operator to triage / re-baseline.
+
+on:
+  schedule:
+    # Mondays 06:00 UTC, weekly.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "check (alert on regression) or record (refresh API baselines)"
+        required: false
+        default: "check"
+
+concurrency:
+  group: multi-llm-drift
+  cancel-in-progress: true
+
+jobs:
+  drift:
+    name: live drift (anthropic, api)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Live drift check (key-gated)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          HARNESS_MODE: ${{ github.event.inputs.mode || 'check' }}
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "::notice::ANTHROPIC_API_KEY not configured — skipping live drift check (Phase A/B precedent: keys often absent). PR gate is the offline cassette replay test."
+            exit 0
+          fi
+          echo "Running live drift ${HARNESS_MODE} for anthropic (api mode)..."
+          npx tsx test/harness/run-harness.ts \
+            --provider anthropic --runtime api --model claude-sonnet-4-5 \
+            --mode "$HARNESS_MODE" --concurrency 4
