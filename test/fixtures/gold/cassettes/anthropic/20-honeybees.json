@@ -1,0 +1,98 @@
+{
+  "provider": "anthropic",
+  "fixtureId": "20-honeybees",
+  "model": "claude-sonnet-4-5",
+  "facts": [
+    {
+      "entity": "Honeybees",
+      "statement": "Honeybees are social insects that live in colonies of tens of thousands.",
+      "questions": [
+        "What type of insects are honeybees?",
+        "How many honeybees live in a colony?",
+        "Do honeybees live alone or in groups?"
+      ]
+    },
+    {
+      "entity": "Honeybee colony",
+      "statement": "A honeybee colony has a single queen.",
+      "questions": [
+        "How many queens are in a honeybee colony?",
+        "Does a honeybee colony have multiple queens?",
+        "What is the structure of a honeybee colony?"
+      ]
+    },
+    {
+      "entity": "Honeybee workers",
+      "statement": "Honeybee workers are female and present in large numbers in a colony.",
+      "questions": [
+        "What are female honeybees called?",
+        "How many workers does a honeybee colony have?",
+        "What makes up the majority of a honeybee colony?"
+      ]
+    },
+    {
+      "entity": "Honeybee drones",
+      "statement": "Honeybee drones are male and present seasonally in a colony.",
+      "questions": [
+        "What are male honeybees called?",
+        "When are drones present in a honeybee colony?",
+        "Are male honeybees always in the hive?"
+      ]
+    },
+    {
+      "entity": "Waggle dance",
+      "statement": "The waggle dance is a movement honeybee workers use to communicate the location of food.",
+      "questions": [
+        "How do honeybee workers communicate food locations?",
+        "What is the waggle dance?",
+        "How do honeybees tell each other where to find food?"
+      ]
+    },
+    {
+      "entity": "Honey",
+      "statement": "Honeybees produce honey from flower nectar.",
+      "questions": [
+        "What do honeybees produce from flower nectar?",
+        "How do honeybees make honey?",
+        "What is the source material for honey?"
+      ]
+    },
+    {
+      "entity": "Honey storage",
+      "statement": "Honeybees store honey for winter.",
+      "questions": [
+        "Why do honeybees store honey?",
+        "What do honeybees do with the honey they produce?",
+        "How do honeybees prepare for winter?"
+      ]
+    },
+    {
+      "entity": "Honeybee pollination",
+      "statement": "Honeybees pollinate plants as they gather nectar.",
+      "questions": [
+        "How do honeybees pollinate plants?",
+        "What happens when honeybees gather nectar?",
+        "Do honeybees pollinate flowers?"
+      ]
+    },
+    {
+      "entity": "Honeybees",
+      "statement": "Honeybees are vital to agriculture because they pollinate plants.",
+      "questions": [
+        "Why are honeybees important to agriculture?",
+        "Are honeybees essential for farming?",
+        "What role do honeybees play in food production?"
+      ]
+    },
+    {
+      "entity": "Honeybee queen",
+      "statement": "The honeybee queen is the only bee that lays fertilized eggs.",
+      "questions": [
+        "Which bee lays fertilized eggs in a colony?",
+        "Does the queen bee lay eggs?",
+        "Who reproduces in a honeybee colony?"
+      ]
+    }
+  ],
+  "recordedAt": "2026-05-31T06:55:53.066Z"
+}

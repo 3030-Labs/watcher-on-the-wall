@@ -1,0 +1,27 @@
+{
+  "title": "Roman Aqueducts",
+  "format": "pdf-text",
+  "source": "source.pdf.txt",
+  "goldFacts": [
+    {
+      "entity": "Roman aqueducts",
+      "statement": "carried water into cities using gravity alone"
+    },
+    {
+      "entity": "Roman aqueducts",
+      "statement": "moved water down a gradual slope along stone and concrete channels"
+    },
+    {
+      "entity": "Aqua Appia",
+      "statement": "was the first Roman aqueduct, built in 312 BCE"
+    },
+    {
+      "entity": "Roman aqueducts",
+      "statement": "used arched bridges to cross valleys at the correct gradient"
+    },
+    {
+      "entity": "Rome",
+      "statement": "was served by eleven aqueducts at its height"
+    }
+  ]
+}

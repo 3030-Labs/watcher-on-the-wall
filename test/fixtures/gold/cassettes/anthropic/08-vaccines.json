@@ -1,0 +1,62 @@
+{
+  "provider": "anthropic",
+  "fixtureId": "08-vaccines",
+  "model": "claude-sonnet-4-5",
+  "facts": [
+    {
+      "entity": "Vaccines",
+      "statement": "A vaccine trains the immune system to recognize a pathogen without causing the disease.",
+      "questions": [
+        "What does a vaccine do to the immune system?",
+        "How do vaccines help the body recognize pathogens?",
+        "Do vaccines cause disease while training immunity?"
+      ]
+    },
+    {
+      "entity": "The first vaccine",
+      "statement": "The first vaccine was developed by Edward Jenner in 1796.",
+      "questions": [
+        "Who developed the first vaccine?",
+        "When was the first vaccine developed?",
+        "What year did Edward Jenner create the first vaccine?"
+      ]
+    },
+    {
+      "entity": "Edward Jenner's vaccine",
+      "statement": "Edward Jenner used cowpox to protect against smallpox.",
+      "questions": [
+        "What did Edward Jenner use to protect against smallpox?",
+        "How did Edward Jenner's vaccine work?",
+        "What disease did cowpox vaccination prevent?"
+      ]
+    },
+    {
+      "entity": "Vaccine mechanism",
+      "statement": "Vaccines work by exposing the body to an antigen, prompting it to produce antibodies and memory cells.",
+      "questions": [
+        "How do vaccines work in the body?",
+        "What do vaccines expose the body to?",
+        "What does the body produce in response to vaccine antigens?"
+      ]
+    },
+    {
+      "entity": "Smallpox eradication",
+      "statement": "Widespread vaccination led to the global eradication of smallpox, declared in 1980.",
+      "questions": [
+        "When was smallpox eradicated globally?",
+        "What led to the global eradication of smallpox?",
+        "In what year was smallpox eradication declared?"
+      ]
+    },
+    {
+      "entity": "Herd immunity",
+      "statement": "Herd immunity occurs when enough of a population is immune to slow disease spread.",
+      "questions": [
+        "What is herd immunity?",
+        "How does herd immunity work?",
+        "What happens when enough people in a population are immune to a disease?"
+      ]
+    }
+  ],
+  "recordedAt": "2026-05-31T06:55:53.066Z"
+}

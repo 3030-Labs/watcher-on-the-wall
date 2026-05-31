@@ -1,0 +1,62 @@
+{
+  "provider": "anthropic",
+  "fixtureId": "07-black-holes",
+  "model": "claude-sonnet-4-5",
+  "facts": [
+    {
+      "entity": "black hole",
+      "statement": "A black hole is a region of spacetime where gravity is so strong that nothing, not even light, can escape.",
+      "questions": [
+        "What is a black hole?",
+        "Can light escape from a black hole?",
+        "What happens when gravity becomes extremely strong in spacetime?"
+      ]
+    },
+    {
+      "entity": "event horizon",
+      "statement": "The event horizon is the boundary beyond which escape from a black hole is impossible.",
+      "questions": [
+        "What is the event horizon?",
+        "What is the boundary of a black hole called?",
+        "Beyond what point can nothing escape a black hole?"
+      ]
+    },
+    {
+      "entity": "black holes",
+      "statement": "Black holes form when massive stars collapse at the end of their lives.",
+      "questions": [
+        "How do black holes form?",
+        "What happens when massive stars collapse?",
+        "What astronomical event creates a black hole?"
+      ]
+    },
+    {
+      "entity": "singularity",
+      "statement": "The singularity is the point of infinite density at the center of a black hole.",
+      "questions": [
+        "What is the singularity in a black hole?",
+        "What is at the center of a black hole?",
+        "What part of a black hole has infinite density?"
+      ]
+    },
+    {
+      "entity": "Event Horizon Telescope",
+      "statement": "In 2019 the Event Horizon Telescope produced the first image of a black hole.",
+      "questions": [
+        "When was the first image of a black hole taken?",
+        "What telescope produced the first black hole image?",
+        "What did the Event Horizon Telescope accomplish in 2019?"
+      ]
+    },
+    {
+      "entity": "M87 black hole",
+      "statement": "The first black hole image was of a black hole in the galaxy M87.",
+      "questions": [
+        "Which black hole was photographed first?",
+        "In which galaxy is the first imaged black hole located?",
+        "What galaxy contains the first black hole ever photographed?"
+      ]
+    }
+  ],
+  "recordedAt": "2026-05-31T06:55:53.066Z"
+}

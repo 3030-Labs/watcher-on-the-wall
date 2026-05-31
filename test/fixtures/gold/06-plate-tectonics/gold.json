@@ -1,0 +1,27 @@
+{
+  "title": "Plate Tectonics",
+  "format": "markdown",
+  "source": "source.md",
+  "goldFacts": [
+    {
+      "entity": "Plate tectonics",
+      "statement": "holds that Earth's outer shell is divided into moving plates"
+    },
+    {
+      "entity": "Plate tectonics",
+      "statement": "developed in the 1960s from Wegener's continental drift idea"
+    },
+    {
+      "entity": "Plate boundaries",
+      "statement": "can be divergent, convergent, or transform"
+    },
+    {
+      "entity": "San Andreas Fault",
+      "statement": "is a transform boundary"
+    },
+    {
+      "entity": "Plate boundaries",
+      "statement": "are where most earthquakes and volcanoes occur"
+    }
+  ]
+}

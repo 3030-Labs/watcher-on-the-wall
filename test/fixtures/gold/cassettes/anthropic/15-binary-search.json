@@ -1,0 +1,80 @@
+{
+  "provider": "anthropic",
+  "fixtureId": "15-binary-search",
+  "model": "claude-sonnet-4-5",
+  "facts": [
+    {
+      "entity": "Binary search",
+      "statement": "Binary search finds a target in a sorted array.",
+      "questions": [
+        "What does binary search do?",
+        "How does binary search work?",
+        "What is the purpose of binary search?"
+      ]
+    },
+    {
+      "entity": "Binary search time complexity",
+      "statement": "Binary search has O(log n) time complexity.",
+      "questions": [
+        "What is the time complexity of binary search?",
+        "How fast is binary search?",
+        "What is the Big O notation for binary search?"
+      ]
+    },
+    {
+      "entity": "Binary search input requirement",
+      "statement": "Binary search requires the input array to be sorted.",
+      "questions": [
+        "What are the requirements for binary search?",
+        "Does binary search work on unsorted arrays?",
+        "What type of array does binary search need?"
+      ]
+    },
+    {
+      "entity": "Binary search return value",
+      "statement": "Binary search returns the index of the target element when found.",
+      "questions": [
+        "What does binary search return when it finds the target?",
+        "What is the return value of binary search on success?",
+        "How does binary search indicate a match?"
+      ]
+    },
+    {
+      "entity": "Binary search not found case",
+      "statement": "Binary search returns -1 when the target is not found.",
+      "questions": [
+        "What does binary search return when the target is not found?",
+        "What happens if binary search cannot find the element?",
+        "How does binary search indicate failure?"
+      ]
+    },
+    {
+      "entity": "Binary search midpoint calculation",
+      "statement": "Binary search calculates the midpoint using (lo + hi) >> 1.",
+      "questions": [
+        "How does binary search calculate the midpoint?",
+        "What formula is used to find the middle element in binary search?",
+        "How is the mid index computed in binary search?"
+      ]
+    },
+    {
+      "entity": "Binary search right half",
+      "statement": "Binary search moves to the right half when the middle element is less than the target.",
+      "questions": [
+        "When does binary search search the right half?",
+        "How does binary search decide to move right?",
+        "What happens when arr[mid] is less than the target?"
+      ]
+    },
+    {
+      "entity": "Binary search left half",
+      "statement": "Binary search moves to the left half when the middle element is greater than the target.",
+      "questions": [
+        "When does binary search search the left half?",
+        "How does binary search decide to move left?",
+        "What happens when arr[mid] is greater than the target?"
+      ]
+    }
+  ],
+  "recordedAt": "2026-05-31T06:55:53.066Z"
+}

@@ -1,0 +1,71 @@
+{
+  "provider": "anthropic",
+  "fixtureId": "03-cellular-respiration",
+  "model": "claude-sonnet-4-5",
+  "facts": [
+    {
+      "entity": "Cellular respiration",
+      "statement": "Cellular respiration converts the chemical energy in nutrients into ATP.",
+      "questions": [
+        "What process converts chemical energy in nutrients into ATP?",
+        "How does cellular respiration produce energy?",
+        "What is the function of cellular respiration?"
+      ]
+    },
+    {
+      "entity": "Aerobic respiration",
+      "statement": "Aerobic respiration has three stages: glycolysis, the citric acid cycle, and oxidative phosphorylation.",
+      "questions": [
+        "What are the three stages of aerobic respiration?",
+        "How many stages does aerobic respiration have?",
+        "What processes make up aerobic respiration?"
+      ]
+    },
+    {
+      "entity": "Glycolysis",
+      "statement": "Glycolysis occurs in the cytoplasm.",
+      "questions": [
+        "Where does glycolysis occur?",
+        "What is the cellular location of glycolysis?",
+        "Which stage of respiration happens in the cytoplasm?"
+      ]
+    },
+    {
+      "entity": "Citric acid cycle",
+      "statement": "The citric acid cycle occurs in the mitochondria.",
+      "questions": [
+        "Where does the citric acid cycle occur?",
+        "What organelle contains the citric acid cycle?",
+        "In which cellular compartment does the citric acid cycle take place?"
+      ]
+    },
+    {
+      "entity": "Oxidative phosphorylation",
+      "statement": "Oxidative phosphorylation occurs in the mitochondria.",
+      "questions": [
+        "Where does oxidative phosphorylation occur?",
+        "What is the cellular location of oxidative phosphorylation?",
+        "Which organelle houses oxidative phosphorylation?"
+      ]
+    },
+    {
+      "entity": "Glucose aerobic respiration",
+      "statement": "The complete aerobic respiration of one glucose molecule yields roughly 30 to 32 ATP.",
+      "questions": [
+        "How much ATP does aerobic respiration of glucose produce?",
+        "What is the ATP yield from one glucose molecule?",
+        "How many ATP molecules are generated from complete glucose oxidation?"
+      ]
+    },
+    {
+      "entity": "Oxygen in electron transport",
+      "statement": "Oxygen is the final electron acceptor in the electron transport chain.",
+      "questions": [
+        "What is the final electron acceptor in the electron transport chain?",
+        "What role does oxygen play in the electron transport chain?",
+        "What molecule accepts electrons at the end of cellular respiration?"
+      ]
+    }
+  ],
+  "recordedAt": "2026-05-31T06:55:53.066Z"
+}

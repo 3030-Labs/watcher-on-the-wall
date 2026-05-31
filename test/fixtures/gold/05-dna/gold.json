@@ -1,0 +1,30 @@
+{
+  "title": "DNA",
+  "format": "markdown",
+  "source": "source.md",
+  "goldFacts": [
+    {
+      "entity": "DNA",
+      "statement": "carries genetic instructions in living organisms",
+      "aliases": [
+        "Deoxyribonucleic acid"
+      ]
+    },
+    {
+      "entity": "DNA",
+      "statement": "has a double-helix structure described by Watson and Crick in 1953"
+    },
+    {
+      "entity": "DNA",
+      "statement": "built on the X-ray diffraction work of Rosalind Franklin"
+    },
+    {
+      "entity": "DNA",
+      "statement": "is made of four bases: adenine, thymine, guanine, cytosine"
+    },
+    {
+      "entity": "DNA",
+      "statement": "adenine pairs with thymine and guanine pairs with cytosine"
+    }
+  ]
+}

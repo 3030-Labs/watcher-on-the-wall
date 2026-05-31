@@ -1,0 +1,89 @@
+{
+  "provider": "anthropic",
+  "fixtureId": "06-plate-tectonics",
+  "model": "claude-sonnet-4-5",
+  "facts": [
+    {
+      "entity": "Plate tectonics",
+      "statement": "Plate tectonics is the theory that Earth's outer shell is divided into large plates that move over the mantle.",
+      "questions": [
+        "What is plate tectonics?",
+        "What does plate tectonics theory explain about Earth's structure?",
+        "How is Earth's outer shell organized according to plate tectonics?"
+      ]
+    },
+    {
+      "entity": "Plate tectonics theory",
+      "statement": "The plate tectonics theory was developed in the 1960s.",
+      "questions": [
+        "When was plate tectonics theory developed?",
+        "What decade did plate tectonics emerge as a theory?",
+        "In what time period was the theory of plate tectonics established?"
+      ]
+    },
+    {
+      "entity": "Plate tectonics theory",
+      "statement": "Plate tectonics theory builds on Alfred Wegener's earlier idea of continental drift.",
+      "questions": [
+        "What earlier theory did plate tectonics build upon?",
+        "Who proposed the idea of continental drift that influenced plate tectonics?",
+        "How does plate tectonics relate to continental drift?"
+      ]
+    },
+    {
+      "entity": "Divergent boundaries",
+      "statement": "Plates can move apart at divergent boundaries.",
+      "questions": [
+        "What happens at divergent boundaries?",
+        "Where do plates move apart from each other?",
+        "What type of boundary features plates moving apart?"
+      ]
+    },
+    {
+      "entity": "Convergent boundaries",
+      "statement": "Plates can collide at convergent boundaries.",
+      "questions": [
+        "What happens at convergent boundaries?",
+        "Where do tectonic plates collide?",
+        "What type of boundary involves plate collision?"
+      ]
+    },
+    {
+      "entity": "Transform boundaries",
+      "statement": "Plates can slide past one another at transform boundaries.",
+      "questions": [
+        "What happens at transform boundaries?",
+        "Where do plates slide past each other?",
+        "What type of boundary features plates sliding laterally?"
+      ]
+    },
+    {
+      "entity": "San Andreas Fault",
+      "statement": "The San Andreas Fault is a transform boundary.",
+      "questions": [
+        "What type of plate boundary is the San Andreas Fault?",
+        "Is the San Andreas Fault a transform boundary?",
+        "What is an example of a transform boundary?"
+      ]
+    },
+    {
+      "entity": "Earthquakes",
+      "statement": "Most earthquakes occur along plate boundaries.",
+      "questions": [
+        "Where do most earthquakes occur?",
+        "Why do earthquakes happen at plate boundaries?",
+        "What is the relationship between plate boundaries and earthquakes?"
+      ]
+    },
+    {
+      "entity": "Volcanoes",
+      "statement": "Most volcanoes occur along plate boundaries.",
+      "questions": [
+        "Where do most volcanoes occur?",
+        "Why are volcanoes found at plate boundaries?",
+        "What is the relationship between plate boundaries and volcanoes?"
+      ]
+    }
+  ],
+  "recordedAt": "2026-05-31T06:55:53.066Z"
+}

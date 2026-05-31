@@ -1,0 +1,124 @@
+{
+  "anthropic": {
+    "01-tardigrades": {
+      "precision": 0.5,
+      "recall": 1,
+      "model": "claude-sonnet-4-5",
+      "recordedAt": "2026-05-31T07:02:45.453Z"
+    },
+    "02-mitochondria": {
+      "precision": 0.625,
+      "recall": 0.8333333333333334,
+      "model": "claude-sonnet-4-5",
+      "recordedAt": "2026-05-31T07:02:45.453Z"
+    },
+    "03-cellular-respiration": {
+      "precision": 0.7142857142857143,
+      "recall": 1,
+      "model": "claude-sonnet-4-5",
+      "recordedAt": "2026-05-31T07:02:45.453Z"
+    },
+    "04-photosynthesis": {
+      "precision": 0.8571428571428571,
+      "recall": 1,
+      "model": "claude-sonnet-4-5",
+      "recordedAt": "2026-05-31T07:02:45.453Z"
+    },
+    "05-dna": {
+      "precision": 0.7142857142857143,
+      "recall": 1,
+      "model": "claude-sonnet-4-5",
+      "recordedAt": "2026-05-31T07:02:45.453Z"
+    },
+    "06-plate-tectonics": {
+      "precision": 0.4444444444444444,
+      "recall": 0.8,
+      "model": "claude-sonnet-4-5",
+      "recordedAt": "2026-05-31T07:02:45.453Z"
+    },
+    "07-black-holes": {
+      "precision": 0.8333333333333334,
+      "recall": 1,
+      "model": "claude-sonnet-4-5",
+      "recordedAt": "2026-05-31T07:02:45.453Z"
+    },
+    "08-vaccines": {
+      "precision": 0.8333333333333334,
+      "recall": 1,
+      "model": "claude-sonnet-4-5",
+      "recordedAt": "2026-05-31T07:02:45.453Z"
+    },
+    "09-roman-aqueducts": {
+      "precision": 0.7142857142857143,
+      "recall": 1,
+      "model": "claude-sonnet-4-5",
+      "recordedAt": "2026-05-31T07:02:45.453Z"
+    },
+    "10-printing-press": {
+      "precision": 0.5555555555555556,
+      "recall": 1,
+      "model": "claude-sonnet-4-5",
+      "recordedAt": "2026-05-31T07:02:45.453Z"
+    },
+    "11-apollo-11": {
+      "precision": 0.625,
+      "recall": 1,
+      "model": "claude-sonnet-4-5",
+      "recordedAt": "2026-05-31T07:02:45.453Z"
+    },
+    "12-http-status-codes": {
+      "precision": 0.3125,
+      "recall": 1,
+      "model": "claude-sonnet-4-5",
+      "recordedAt": "2026-05-31T07:02:45.453Z"
+    },
+    "13-git-basics": {
+      "precision": 0.6666666666666666,
+      "recall": 1,
+      "model": "claude-sonnet-4-5",
+      "recordedAt": "2026-05-31T07:02:45.453Z"
+    },
+    "14-tcp-handshake": {
+      "precision": 0.8571428571428571,
+      "recall": 1,
+      "model": "claude-sonnet-4-5",
+      "recordedAt": "2026-05-31T07:02:45.453Z"
+    },
+    "15-binary-search": {
+      "precision": 0.5,
+      "recall": 0.8,
+      "model": "claude-sonnet-4-5",
+      "recordedAt": "2026-05-31T07:02:45.453Z"
+    },
+    "16-stoicism": {
+      "precision": 0.5555555555555556,
+      "recall": 1,
+      "model": "claude-sonnet-4-5",
+      "recordedAt": "2026-05-31T07:02:45.453Z"
+    },
+    "17-utilitarianism": {
+      "precision": 0.5714285714285714,
+      "recall": 1,
+      "model": "claude-sonnet-4-5",
+      "recordedAt": "2026-05-31T07:02:45.453Z"
+    },
+    "18-amazon-river": {
+      "precision": 0.5,
+      "recall": 1,
+      "model": "claude-sonnet-4-5",
+      "recordedAt": "2026-05-31T07:02:45.453Z"
+    },
+    "19-mount-everest": {
+      "precision": 0.625,
+      "recall": 1,
+      "model": "claude-sonnet-4-5",
+      "recordedAt": "2026-05-31T07:02:45.453Z"
+    },
+    "20-honeybees": {
+      "precision": 0.5,
+      "recall": 0.8333333333333334,
+      "model": "claude-sonnet-4-5",
+      "recordedAt": "2026-05-31T07:02:45.453Z"
+    }
+  }
+}

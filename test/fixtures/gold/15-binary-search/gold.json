@@ -1,0 +1,27 @@
+{
+  "title": "Binary Search",
+  "format": "code",
+  "source": "source.code.txt",
+  "goldFacts": [
+    {
+      "entity": "Binary search",
+      "statement": "finds a target in a sorted array"
+    },
+    {
+      "entity": "Binary search",
+      "statement": "runs in O(log n) time"
+    },
+    {
+      "entity": "Binary search",
+      "statement": "requires the input array to be sorted"
+    },
+    {
+      "entity": "Binary search",
+      "statement": "compares the target to the midpoint and halves the search range"
+    },
+    {
+      "entity": "Binary search",
+      "statement": "returns -1 when the target is not found"
+    }
+  ]
+}

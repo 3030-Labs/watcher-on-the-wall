@@ -1,0 +1,80 @@
+{
+  "provider": "anthropic",
+  "fixtureId": "11-apollo-11",
+  "model": "claude-sonnet-4-5",
+  "facts": [
+    {
+      "entity": "Apollo 11",
+      "statement": "Apollo 11 was the spaceflight that first landed humans on the Moon.",
+      "questions": [
+        "What was the first spaceflight to land humans on the Moon?",
+        "Which mission first landed humans on the Moon?",
+        "What was Apollo 11?"
+      ]
+    },
+    {
+      "entity": "Apollo 11 lunar landing",
+      "statement": "Apollo 11 landed on the Moon on July 20, 1969.",
+      "questions": [
+        "When did Apollo 11 land on the Moon?",
+        "What happened on July 20, 1969?",
+        "On what date did humans first land on the Moon?"
+      ]
+    },
+    {
+      "entity": "Apollo 11 crew",
+      "statement": "Apollo 11 was crewed by Neil Armstrong, Buzz Aldrin, and Michael Collins.",
+      "questions": [
+        "Who were the crew members of Apollo 11?",
+        "Who flew on the Apollo 11 mission?",
+        "What astronauts were on Apollo 11?"
+      ]
+    },
+    {
+      "entity": "Neil Armstrong",
+      "statement": "Neil Armstrong became the first person to walk on the Moon.",
+      "questions": [
+        "Who was the first person to walk on the Moon?",
+        "What did Neil Armstrong accomplish on Apollo 11?",
+        "Which astronaut first stepped on the lunar surface?"
+      ]
+    },
+    {
+      "entity": "Buzz Aldrin",
+      "statement": "Buzz Aldrin walked on the Moon after Neil Armstrong.",
+      "questions": [
+        "Who was the second person to walk on the Moon?",
+        "Which astronaut walked on the Moon after Neil Armstrong?",
+        "Did Buzz Aldrin walk on the Moon?"
+      ]
+    },
+    {
+      "entity": "Michael Collins",
+      "statement": "Michael Collins remained in orbit aboard the command module during the Apollo 11 mission.",
+      "questions": [
+        "What did Michael Collins do during Apollo 11?",
+        "Did Michael Collins land on the Moon?",
+        "Who stayed in orbit during the Apollo 11 lunar landing?"
+      ]
+    },
+    {
+      "entity": "Apollo 11 lunar module",
+      "statement": "The Apollo 11 lunar module was named Eagle.",
+      "questions": [
+        "What was the name of the Apollo 11 lunar module?",
+        "What was Eagle?",
+        "What was the lunar module called on Apollo 11?"
+      ]
+    },
+    {
+      "entity": "Apollo 11 lunar samples",
+      "statement": "The Apollo 11 astronauts collected about 21.5 kilograms of lunar material to return to Earth.",
+      "questions": [
+        "How much lunar material did Apollo 11 collect?",
+        "What did the Apollo 11 astronauts bring back from the Moon?",
+        "How many kilograms of Moon rocks did Apollo 11 return?"
+      ]
+    }
+  ],
+  "recordedAt": "2026-05-31T06:55:53.066Z"
+}

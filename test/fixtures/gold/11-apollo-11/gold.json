@@ -1,0 +1,27 @@
+{
+  "title": "Apollo 11",
+  "format": "pdf-text",
+  "source": "source.pdf.txt",
+  "goldFacts": [
+    {
+      "entity": "Apollo 11",
+      "statement": "first landed humans on the Moon on July 20, 1969"
+    },
+    {
+      "entity": "Apollo 11",
+      "statement": "was crewed by Neil Armstrong, Buzz Aldrin, and Michael Collins"
+    },
+    {
+      "entity": "Neil Armstrong",
+      "statement": "was the first person to walk on the Moon"
+    },
+    {
+      "entity": "Michael Collins",
+      "statement": "remained in orbit aboard the command module"
+    },
+    {
+      "entity": "Apollo 11",
+      "statement": "lunar module was named Eagle"
+    }
+  ]
+}

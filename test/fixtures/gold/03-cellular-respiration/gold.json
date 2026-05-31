@@ -1,0 +1,27 @@
+{
+  "title": "Cellular Respiration",
+  "format": "markdown",
+  "source": "source.md",
+  "goldFacts": [
+    {
+      "entity": "Cellular respiration",
+      "statement": "converts nutrient chemical energy into ATP"
+    },
+    {
+      "entity": "Cellular respiration",
+      "statement": "has three stages: glycolysis, citric acid cycle, oxidative phosphorylation"
+    },
+    {
+      "entity": "Glycolysis",
+      "statement": "occurs in the cytoplasm"
+    },
+    {
+      "entity": "Cellular respiration",
+      "statement": "yields roughly 30 to 32 ATP per glucose molecule"
+    },
+    {
+      "entity": "Electron transport chain",
+      "statement": "uses oxygen as the final electron acceptor"
+    }
+  ]
+}

@@ -1,0 +1,80 @@
+{
+  "provider": "anthropic",
+  "fixtureId": "19-mount-everest",
+  "model": "claude-sonnet-4-5",
+  "facts": [
+    {
+      "entity": "Mount Everest",
+      "statement": "Mount Everest is the highest mountain on Earth above sea level.",
+      "questions": [
+        "What is the highest mountain on Earth above sea level?",
+        "Which mountain has the highest elevation on Earth?",
+        "What mountain holds the record for the tallest peak above sea level?"
+      ]
+    },
+    {
+      "entity": "Mount Everest summit",
+      "statement": "The summit of Mount Everest is at about 8,849 meters.",
+      "questions": [
+        "What is the elevation of Mount Everest's summit?",
+        "How high is Mount Everest in meters?",
+        "What is the height of the peak of Mount Everest?"
+      ]
+    },
+    {
+      "entity": "Mount Everest",
+      "statement": "Mount Everest lies in the Himalayas.",
+      "questions": [
+        "In which mountain range is Mount Everest located?",
+        "What mountain range contains Mount Everest?",
+        "Where is Mount Everest situated geographically?"
+      ]
+    },
+    {
+      "entity": "Mount Everest",
+      "statement": "Mount Everest is on the border between Nepal and the Tibet region of China.",
+      "questions": [
+        "What countries does Mount Everest lie between?",
+        "Where is the border location of Mount Everest?",
+        "Which two regions share Mount Everest on their border?"
+      ]
+    },
+    {
+      "entity": "Mount Everest first ascent",
+      "statement": "The first confirmed ascent of Mount Everest was made in 1953 by Edmund Hillary and Tenzing Norgay.",
+      "questions": [
+        "When was Mount Everest first climbed successfully?",
+        "Who made the first confirmed ascent of Mount Everest?",
+        "In what year did Edmund Hillary and Tenzing Norgay reach the summit of Everest?"
+      ]
+    },
+    {
+      "entity": "Sagarmatha",
+      "statement": "Mount Everest is known in Nepali as Sagarmatha.",
+      "questions": [
+        "What is Mount Everest called in Nepali?",
+        "What is the Nepali name for Mount Everest?",
+        "What mountain does Sagarmatha refer to?"
+      ]
+    },
+    {
+      "entity": "Chomolungma",
+      "statement": "Mount Everest is known in Tibetan as Chomolungma.",
+      "questions": [
+        "What is Mount Everest called in Tibetan?",
+        "What is the Tibetan name for Mount Everest?",
+        "What mountain does Chomolungma refer to?"
+      ]
+    },
+    {
+      "entity": "death zone",
+      "statement": "The thin air above 8,000 meters is called the death zone.",
+      "questions": [
+        "What is the death zone in mountaineering?",
+        "At what altitude does the death zone begin?",
+        "What is the thin air above 8,000 meters called?"
+      ]
+    }
+  ],
+  "recordedAt": "2026-05-31T06:55:53.066Z"
+}

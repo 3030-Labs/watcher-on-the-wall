@@ -1,0 +1,11 @@
+# Git basics
+
+git init        # create a new repository in the current directory
+git add <file>  # stage changes for the next commit
+git commit -m   # record staged changes as a new commit with a message
+git branch      # list or create branches
+git merge       # combine another branch's history into the current branch
+git clone <url> # copy a remote repository, including its full history
+
+# A commit is identified by a SHA-1 hash. Branches are movable pointers to
+# commits. The staging area (index) holds changes before they are committed.

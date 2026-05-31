@@ -1,0 +1,27 @@
+{
+  "title": "HTTP Status Codes",
+  "format": "code",
+  "source": "source.code.txt",
+  "goldFacts": [
+    {
+      "entity": "HTTP status codes",
+      "statement": "2xx indicates success and 5xx indicates server error"
+    },
+    {
+      "entity": "HTTP 404",
+      "statement": "means Not Found — the resource does not exist"
+    },
+    {
+      "entity": "HTTP 401",
+      "statement": "means Unauthorized — authentication is required"
+    },
+    {
+      "entity": "HTTP 429",
+      "statement": "means Too Many Requests — the client is rate limited"
+    },
+    {
+      "entity": "HTTP 500",
+      "statement": "means Internal Server Error — a generic server failure"
+    }
+  ]
+}

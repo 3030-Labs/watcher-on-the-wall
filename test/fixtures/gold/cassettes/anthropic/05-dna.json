@@ -1,0 +1,71 @@
+{
+  "provider": "anthropic",
+  "fixtureId": "05-dna",
+  "model": "claude-sonnet-4-5",
+  "facts": [
+    {
+      "entity": "DNA",
+      "statement": "DNA (deoxyribonucleic acid) is the molecule that carries genetic instructions in living organisms.",
+      "questions": [
+        "What molecule carries genetic instructions in living organisms?",
+        "What does DNA stand for?",
+        "What is the function of DNA in living organisms?"
+      ]
+    },
+    {
+      "entity": "DNA structure",
+      "statement": "DNA has a double helix structure.",
+      "questions": [
+        "What is the structure of DNA?",
+        "What shape does DNA have?",
+        "What structural form does DNA take?"
+      ]
+    },
+    {
+      "entity": "DNA double helix discovery",
+      "statement": "The double helix structure of DNA was described by James Watson and Francis Crick in 1953.",
+      "questions": [
+        "Who described the double helix structure of DNA?",
+        "When was the DNA double helix structure described?",
+        "Which scientists are credited with describing DNA structure in 1953?"
+      ]
+    },
+    {
+      "entity": "Rosalind Franklin",
+      "statement": "James Watson and Francis Crick built on the X-ray diffraction work of Rosalind Franklin.",
+      "questions": [
+        "Whose X-ray diffraction work did Watson and Crick build upon?",
+        "What technique did Rosalind Franklin use to study DNA?",
+        "Who contributed X-ray diffraction data to the discovery of DNA structure?"
+      ]
+    },
+    {
+      "entity": "DNA nucleotide bases",
+      "statement": "DNA is made of four nucleotide bases: adenine, thymine, guanine, and cytosine.",
+      "questions": [
+        "What are the four bases in DNA?",
+        "How many nucleotide bases make up DNA?",
+        "What nucleotides comprise DNA?"
+      ]
+    },
+    {
+      "entity": "DNA base pairing",
+      "statement": "In DNA, adenine pairs with thymine and guanine pairs with cytosine.",
+      "questions": [
+        "What base does adenine pair with in DNA?",
+        "How do the DNA bases pair together?",
+        "Which base pairs with guanine in DNA?"
+      ]
+    },
+    {
+      "entity": "DNA base sequence",
+      "statement": "The order of DNA bases encodes genetic information.",
+      "questions": [
+        "How does DNA encode genetic information?",
+        "What determines the genetic information in DNA?",
+        "What role does base order play in DNA?"
+      ]
+    }
+  ],
+  "recordedAt": "2026-05-31T06:55:53.066Z"
+}

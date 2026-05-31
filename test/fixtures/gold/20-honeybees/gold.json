@@ -1,0 +1,31 @@
+{
+  "title": "Honeybees",
+  "format": "markdown",
+  "source": "source.md",
+  "goldFacts": [
+    {
+      "entity": "Honeybees",
+      "statement": "are social insects living in colonies of tens of thousands"
+    },
+    {
+      "entity": "Honeybee colony",
+      "statement": "has one queen, many female workers, and male drones"
+    },
+    {
+      "entity": "Honeybees",
+      "statement": "communicate food location with the waggle dance"
+    },
+    {
+      "entity": "Honeybees",
+      "statement": "produce honey from flower nectar"
+    },
+    {
+      "entity": "Honeybees",
+      "statement": "pollinate plants, making them vital to agriculture"
+    },
+    {
+      "entity": "Honeybee queen",
+      "statement": "is the only bee that lays fertilized eggs"
+    }
+  ]
+}

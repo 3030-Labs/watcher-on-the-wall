@@ -1,0 +1,27 @@
+{
+  "title": "Vaccines",
+  "format": "markdown",
+  "source": "source.md",
+  "goldFacts": [
+    {
+      "entity": "Vaccine",
+      "statement": "trains the immune system to recognize a pathogen without causing disease"
+    },
+    {
+      "entity": "Vaccine",
+      "statement": "first developed by Edward Jenner in 1796 using cowpox against smallpox"
+    },
+    {
+      "entity": "Vaccine",
+      "statement": "exposes the body to an antigen to produce antibodies and memory cells"
+    },
+    {
+      "entity": "Smallpox",
+      "statement": "was globally eradicated, declared in 1980"
+    },
+    {
+      "entity": "Herd immunity",
+      "statement": "occurs when enough of a population is immune to slow spread"
+    }
+  ]
+}

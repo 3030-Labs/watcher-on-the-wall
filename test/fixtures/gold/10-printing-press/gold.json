@@ -1,0 +1,27 @@
+{
+  "title": "The Printing Press",
+  "format": "pdf-text",
+  "source": "source.pdf.txt",
+  "goldFacts": [
+    {
+      "entity": "Johannes Gutenberg",
+      "statement": "introduced movable-type printing to Europe around 1440 in Mainz"
+    },
+    {
+      "entity": "Gutenberg Bible",
+      "statement": "was printed around 1455"
+    },
+    {
+      "entity": "Printing press",
+      "statement": "used rearrangeable reusable metal letters"
+    },
+    {
+      "entity": "Printing press",
+      "statement": "made books cheaper and faster than hand copying"
+    },
+    {
+      "entity": "Printing press",
+      "statement": "is credited with enabling the Reformation and scientific revolution"
+    }
+  ]
+}

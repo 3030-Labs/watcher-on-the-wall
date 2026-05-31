@@ -1,0 +1,89 @@
+{
+  "provider": "anthropic",
+  "fixtureId": "10-printing-press",
+  "model": "claude-sonnet-4-5",
+  "facts": [
+    {
+      "entity": "Johannes Gutenberg",
+      "statement": "Johannes Gutenberg introduced movable-type printing to Europe around 1440 in Mainz.",
+      "questions": [
+        "Who introduced movable-type printing to Europe?",
+        "When did Johannes Gutenberg introduce movable-type printing to Europe?",
+        "Where did Johannes Gutenberg introduce movable-type printing?"
+      ]
+    },
+    {
+      "entity": "The Gutenberg Bible",
+      "statement": "The Gutenberg Bible was printed around 1455.",
+      "questions": [
+        "When was the Gutenberg Bible printed?",
+        "What year was the Gutenberg Bible produced?",
+        "In what year did Gutenberg complete his famous Bible?"
+      ]
+    },
+    {
+      "entity": "The Gutenberg Bible",
+      "statement": "The Gutenberg Bible is Johannes Gutenberg's most famous work.",
+      "questions": [
+        "What is Johannes Gutenberg's most famous work?",
+        "Which work is Johannes Gutenberg best known for?",
+        "What was Gutenberg's most celebrated publication?"
+      ]
+    },
+    {
+      "entity": "Gutenberg's printing press",
+      "statement": "Gutenberg's printing press used individual metal letters that could be rearranged and reused.",
+      "questions": [
+        "How did Gutenberg's printing press work?",
+        "What materials did the Gutenberg printing press use?",
+        "Could the metal letters in Gutenberg's press be reused?"
+      ]
+    },
+    {
+      "entity": "The printing press",
+      "statement": "The printing press made books far cheaper and faster to produce than hand copying.",
+      "questions": [
+        "How did the printing press affect the cost of book production?",
+        "Was the printing press faster than hand copying books?",
+        "What economic impact did the printing press have on book production?"
+      ]
+    },
+    {
+      "entity": "Printing press technology",
+      "statement": "Printing press technology spread rapidly across Europe.",
+      "questions": [
+        "How quickly did printing press technology spread?",
+        "Did the printing press spread slowly or rapidly?",
+        "What was the rate of adoption of printing technology in Europe?"
+      ]
+    },
+    {
+      "entity": "The printing press",
+      "statement": "The printing press is widely credited with enabling the Reformation.",
+      "questions": [
+        "What religious movement did the printing press enable?",
+        "Did the printing press contribute to the Reformation?",
+        "How is the printing press connected to the Reformation?"
+      ]
+    },
+    {
+      "entity": "The printing press",
+      "statement": "The printing press is widely credited with enabling the scientific revolution.",
+      "questions": [
+        "What scientific movement did the printing press enable?",
+        "Did the printing press contribute to the scientific revolution?",
+        "How did the printing press affect the development of modern science?"
+      ]
+    },
+    {
+      "entity": "The printing press",
+      "statement": "The printing press enabled the Reformation and scientific revolution by making information widely available.",
+      "questions": [
+        "How did the printing press enable major historical movements?",
+        "Why was the printing press important for spreading knowledge?",
+        "What mechanism allowed the printing press to transform society?"
+      ]
+    }
+  ],
+  "recordedAt": "2026-05-31T06:55:53.066Z"
+}

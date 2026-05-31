@@ -1,0 +1,71 @@
+{
+  "provider": "anthropic",
+  "fixtureId": "14-tcp-handshake",
+  "model": "claude-sonnet-4-5",
+  "facts": [
+    {
+      "entity": "TCP three-way handshake",
+      "statement": "The TCP three-way handshake establishes a connection before data transfer.",
+      "questions": [
+        "How does TCP establish a connection?",
+        "What is the purpose of the TCP three-way handshake?",
+        "What happens before TCP data transfer begins?"
+      ]
+    },
+    {
+      "entity": "TCP SYN packet",
+      "statement": "In the first step of the TCP handshake, the client sends a SYN packet to the server to request a connection.",
+      "questions": [
+        "What does the client send first in a TCP handshake?",
+        "How does a TCP client initiate a connection?",
+        "What is the first step of the TCP three-way handshake?"
+      ]
+    },
+    {
+      "entity": "TCP SYN-ACK packet",
+      "statement": "In the second step of the TCP handshake, the server sends a SYN-ACK packet to acknowledge the client's request and request a connection back.",
+      "questions": [
+        "What does the server send in response to a SYN packet?",
+        "What is the second step of the TCP three-way handshake?",
+        "How does a TCP server acknowledge a connection request?"
+      ]
+    },
+    {
+      "entity": "TCP ACK packet",
+      "statement": "In the third step of the TCP handshake, the client sends an ACK packet to acknowledge the server's response and open the connection.",
+      "questions": [
+        "What is the final step of the TCP three-way handshake?",
+        "How does the TCP client complete the handshake?",
+        "What packet opens a TCP connection?"
+      ]
+    },
+    {
+      "entity": "TCP protocol",
+      "statement": "TCP is a connection-oriented protocol.",
+      "questions": [
+        "Is TCP connection-oriented or connectionless?",
+        "What type of protocol is TCP?",
+        "Does TCP require a connection to be established?"
+      ]
+    },
+    {
+      "entity": "TCP reliability",
+      "statement": "TCP guarantees ordered, error-checked delivery of a byte stream.",
+      "questions": [
+        "Does TCP guarantee reliable delivery?",
+        "What guarantees does TCP provide?",
+        "Is TCP data delivery ordered or unordered?"
+      ]
+    },
+    {
+      "entity": "TCP connection termination",
+      "statement": "TCP connections are torn down with a FIN exchange.",
+      "questions": [
+        "How are TCP connections closed?",
+        "What is used to terminate a TCP connection?",
+        "How does TCP tear down a connection?"
+      ]
+    }
+  ],
+  "recordedAt": "2026-05-31T06:55:53.066Z"
+}

@@ -1,0 +1,31 @@
+{
+  "title": "Mount Everest",
+  "format": "markdown",
+  "source": "source.md",
+  "goldFacts": [
+    {
+      "entity": "Mount Everest",
+      "statement": "is the highest mountain on Earth above sea level",
+      "aliases": [
+        "Sagarmatha",
+        "Chomolungma"
+      ]
+    },
+    {
+      "entity": "Mount Everest",
+      "statement": "has a summit at about 8,849 meters"
+    },
+    {
+      "entity": "Mount Everest",
+      "statement": "lies on the border between Nepal and Tibet, China"
+    },
+    {
+      "entity": "Mount Everest",
+      "statement": "was first climbed in 1953 by Hillary and Tenzing Norgay"
+    },
+    {
+      "entity": "Death zone",
+      "statement": "is the thin air above 8,000 meters"
+    }
+  ]
+}

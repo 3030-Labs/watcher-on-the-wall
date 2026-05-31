@@ -1,0 +1,23 @@
+{
+  "title": "Utilitarianism",
+  "format": "markdown",
+  "source": "source.md",
+  "goldFacts": [
+    {
+      "entity": "Utilitarianism",
+      "statement": "holds the right action maximizes overall happiness"
+    },
+    {
+      "entity": "Utilitarianism",
+      "statement": "was developed by Jeremy Bentham"
+    },
+    {
+      "entity": "John Stuart Mill",
+      "statement": "refined utilitarianism and distinguished higher from lower pleasures"
+    },
+    {
+      "entity": "Utilitarianism",
+      "statement": "is a form of consequentialism judging actions by results"
+    }
+  ]
+}

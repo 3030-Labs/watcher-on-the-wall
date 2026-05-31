@@ -1,0 +1,27 @@
+{
+  "title": "Amazon River",
+  "format": "markdown",
+  "source": "source.md",
+  "goldFacts": [
+    {
+      "entity": "Amazon River",
+      "statement": "is the largest river in the world by discharge"
+    },
+    {
+      "entity": "Amazon River",
+      "statement": "is roughly 6,400 kilometers long"
+    },
+    {
+      "entity": "Amazon River",
+      "statement": "originates in the Andes of Peru"
+    },
+    {
+      "entity": "Amazon River",
+      "statement": "empties into the Atlantic Ocean in Brazil"
+    },
+    {
+      "entity": "Amazon basin",
+      "statement": "contains the world's largest rainforest"
+    }
+  ]
+}

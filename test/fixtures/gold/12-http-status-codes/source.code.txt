@@ -1,0 +1,15 @@
+// HTTP status code families
+// 1xx informational, 2xx success, 3xx redirection, 4xx client error, 5xx server error
+
+const STATUS = {
+  200: "OK",                    // request succeeded
+  201: "Created",               // resource created
+  301: "Moved Permanently",     // permanent redirect
+  400: "Bad Request",           // malformed request syntax
+  401: "Unauthorized",          // authentication required
+  403: "Forbidden",             // authenticated but not permitted
+  404: "Not Found",             // resource does not exist
+  429: "Too Many Requests",     // rate limited
+  500: "Internal Server Error", // generic server failure
+  503: "Service Unavailable",   // server temporarily overloaded or down
+};
