@@ -1,0 +1,152 @@
+{
+  "provider": "anthropic",
+  "fixtureId": "12-http-status-codes",
+  "model": "claude-sonnet-4-5",
+  "facts": [
+    {
+      "entity": "HTTP status codes",
+      "statement": "HTTP status codes are organized into five families: 1xx informational, 2xx success, 3xx redirection, 4xx client error, and 5xx server error.",
+      "questions": [
+        "How are HTTP status codes organized?",
+        "What are the five families of HTTP status codes?",
+        "What do the different ranges of HTTP status codes represent?"
+      ]
+    },
+    {
+      "entity": "1xx status codes",
+      "statement": "1xx status codes indicate informational responses.",
+      "questions": [
+        "What do 1xx status codes mean?",
+        "What type of response does a 1xx status code represent?",
+        "What is the purpose of status codes in the 100 range?"
+      ]
+    },
+    {
+      "entity": "2xx status codes",
+      "statement": "2xx status codes indicate successful requests.",
+      "questions": [
+        "What do 2xx status codes mean?",
+        "Which status code family indicates success?",
+        "What does a status code in the 200 range represent?"
+      ]
+    },
+    {
+      "entity": "3xx status codes",
+      "statement": "3xx status codes indicate redirection.",
+      "questions": [
+        "What do 3xx status codes mean?",
+        "Which status code range is used for redirects?",
+        "What type of response does a 3xx status code represent?"
+      ]
+    },
+    {
+      "entity": "4xx status codes",
+      "statement": "4xx status codes indicate client errors.",
+      "questions": [
+        "What do 4xx status codes mean?",
+        "Which status code family indicates client-side errors?",
+        "What does a status code in the 400 range represent?"
+      ]
+    },
+    {
+      "entity": "5xx status codes",
+      "statement": "5xx status codes indicate server errors.",
+      "questions": [
+        "What do 5xx status codes mean?",
+        "Which status code range indicates server-side errors?",
+        "What type of error does a 5xx status code represent?"
+      ]
+    },
+    {
+      "entity": "Status code 200",
+      "statement": "Status code 200 means OK and indicates the request succeeded.",
+      "questions": [
+        "What does HTTP status code 200 mean?",
+        "What status code indicates a successful request?",
+        "What does OK status mean in HTTP?"
+      ]
+    },
+    {
+      "entity": "Status code 201",
+      "statement": "Status code 201 means Created and indicates a resource was created.",
+      "questions": [
+        "What does HTTP status code 201 mean?",
+        "What status code indicates a resource was successfully created?",
+        "What is the difference between 200 and 201 status codes?"
+      ]
+    },
+    {
+      "entity": "Status code 301",
+      "statement": "Status code 301 means Moved Permanently and indicates a permanent redirect.",
+      "questions": [
+        "What does HTTP status code 301 mean?",
+        "What status code is used for permanent redirects?",
+        "How do you permanently redirect a URL in HTTP?"
+      ]
+    },
+    {
+      "entity": "Status code 400",
+      "statement": "Status code 400 means Bad Request and indicates malformed request syntax.",
+      "questions": [
+        "What does HTTP status code 400 mean?",
+        "What status code indicates a malformed request?",
+        "Why would I get a 400 Bad Request error?"
+      ]
+    },
+    {
+      "entity": "Status code 401",
+      "statement": "Status code 401 means Unauthorized and indicates authentication is required.",
+      "questions": [
+        "What does HTTP status code 401 mean?",
+        "What status code indicates authentication is needed?",
+        "What is the difference between 401 and 403 status codes?"
+      ]
+    },
+    {
+      "entity": "Status code 403",
+      "statement": "Status code 403 means Forbidden and indicates the user is authenticated but not permitted to access the resource.",
+      "questions": [
+        "What does HTTP status code 403 mean?",
+        "What status code indicates insufficient permissions?",
+        "Why would I get a 403 Forbidden error even though I'm logged in?"
+      ]
+    },
+    {
+      "entity": "Status code 404",
+      "statement": "Status code 404 means Not Found and indicates the resource does not exist.",
+      "questions": [
+        "What does HTTP status code 404 mean?",
+        "What status code indicates a missing resource?",
+        "Why am I getting a 404 error?"
+      ]
+    },
+    {
+      "entity": "Status code 429",
+      "statement": "Status code 429 means Too Many Requests and indicates the client has been rate limited.",
+      "questions": [
+        "What does HTTP status code 429 mean?",
+        "What status code indicates rate limiting?",
+        "Why am I getting a 429 Too Many Requests error?"
+      ]
+    },
+    {
+      "entity": "Status code 500",
+      "statement": "Status code 500 means Internal Server Error and indicates a generic server failure.",
+      "questions": [
+        "What does HTTP status code 500 mean?",
+        "What status code indicates a server error?",
+        "What causes a 500 Internal Server Error?"
+      ]
+    },
+    {
+      "entity": "Status code 503",
+      "statement": "Status code 503 means Service Unavailable and indicates the server is temporarily overloaded or down.",
+      "questions": [
+        "What does HTTP status code 503 mean?",
+        "What status code indicates the server is temporarily unavailable?",
+        "What is the difference between 500 and 503 status codes?"
+      ]
+    }
+  ],
+  "recordedAt": "2026-05-31T06:55:53.066Z"
+}

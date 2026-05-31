@@ -1,0 +1,31 @@
+{
+  "title": "Git Basics",
+  "format": "code",
+  "source": "source.code.txt",
+  "goldFacts": [
+    {
+      "entity": "git init",
+      "statement": "creates a new repository in the current directory"
+    },
+    {
+      "entity": "git add",
+      "statement": "stages changes for the next commit"
+    },
+    {
+      "entity": "git commit",
+      "statement": "records staged changes as a new commit"
+    },
+    {
+      "entity": "git clone",
+      "statement": "copies a remote repository including its full history"
+    },
+    {
+      "entity": "Git commit",
+      "statement": "is identified by a SHA-1 hash"
+    },
+    {
+      "entity": "Git branch",
+      "statement": "is a movable pointer to a commit"
+    }
+  ]
+}

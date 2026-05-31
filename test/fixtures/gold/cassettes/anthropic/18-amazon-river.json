@@ -1,0 +1,98 @@
+{
+  "provider": "anthropic",
+  "fixtureId": "18-amazon-river",
+  "model": "claude-sonnet-4-5",
+  "facts": [
+    {
+      "entity": "Amazon River",
+      "statement": "The Amazon River is located in South America.",
+      "questions": [
+        "Where is the Amazon River located?",
+        "On which continent does the Amazon River flow?",
+        "In what part of the world is the Amazon River?"
+      ]
+    },
+    {
+      "entity": "Amazon River",
+      "statement": "The Amazon River is the largest river in the world by discharge.",
+      "questions": [
+        "What is the largest river in the world by discharge?",
+        "Which river has the highest water discharge globally?",
+        "What river carries the most water by volume?"
+      ]
+    },
+    {
+      "entity": "Amazon River",
+      "statement": "The Amazon River carries more water than the next several largest rivers combined.",
+      "questions": [
+        "How much water does the Amazon River carry compared to other rivers?",
+        "Does the Amazon carry more than multiple large rivers together?",
+        "How does the Amazon's discharge compare to other major rivers combined?"
+      ]
+    },
+    {
+      "entity": "Amazon River",
+      "statement": "The Amazon River is roughly 6,400 kilometers long.",
+      "questions": [
+        "How long is the Amazon River?",
+        "What is the length of the Amazon River in kilometers?",
+        "How many kilometers does the Amazon River span?"
+      ]
+    },
+    {
+      "entity": "Amazon River",
+      "statement": "The Amazon River is among the longest rivers on Earth.",
+      "questions": [
+        "Is the Amazon River one of the longest rivers?",
+        "How does the Amazon rank in terms of river length?",
+        "Is the Amazon among the world's longest rivers?"
+      ]
+    },
+    {
+      "entity": "Amazon River",
+      "statement": "The Amazon River originates in the Andes of Peru.",
+      "questions": [
+        "Where does the Amazon River begin?",
+        "What is the source of the Amazon River?",
+        "In which mountain range does the Amazon originate?"
+      ]
+    },
+    {
+      "entity": "Amazon River",
+      "statement": "The Amazon River empties into the Atlantic Ocean in Brazil.",
+      "questions": [
+        "Where does the Amazon River end?",
+        "What ocean does the Amazon River flow into?",
+        "In which country does the Amazon reach the Atlantic?"
+      ]
+    },
+    {
+      "entity": "Amazon basin",
+      "statement": "The Amazon basin is the drainage basin of the Amazon River.",
+      "questions": [
+        "What is the Amazon basin?",
+        "What is the drainage area of the Amazon River called?",
+        "What basin collects water for the Amazon River?"
+      ]
+    },
+    {
+      "entity": "Amazon basin",
+      "statement": "The Amazon basin contains the world's largest rainforest.",
+      "questions": [
+        "Where is the world's largest rainforest located?",
+        "What does the Amazon basin contain?",
+        "Which basin has the largest rainforest on Earth?"
+      ]
+    },
+    {
+      "entity": "Amazon River",
+      "statement": "The Amazon River has no bridges crossing its main stem.",
+      "questions": [
+        "Are there bridges over the main Amazon River?",
+        "Does the Amazon River have any bridges crossing it?",
+        "How many bridges span the main stem of the Amazon?"
+      ]
+    }
+  ],
+  "recordedAt": "2026-05-31T06:55:53.066Z"
+}

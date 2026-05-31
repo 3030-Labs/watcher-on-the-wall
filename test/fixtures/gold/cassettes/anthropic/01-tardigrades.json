@@ -1,0 +1,116 @@
+{
+  "provider": "anthropic",
+  "fixtureId": "01-tardigrades",
+  "model": "claude-sonnet-4-5",
+  "facts": [
+    {
+      "entity": "Tardigrades",
+      "statement": "Tardigrades are also called water bears.",
+      "questions": [
+        "What are tardigrades also called?",
+        "What is another name for tardigrades?",
+        "What do people call tardigrades besides their scientific name?"
+      ]
+    },
+    {
+      "entity": "Tardigrades",
+      "statement": "Tardigrades are microscopic eight-legged animals.",
+      "questions": [
+        "How many legs do tardigrades have?",
+        "What type of animals are tardigrades?",
+        "Are tardigrades visible to the naked eye?"
+      ]
+    },
+    {
+      "entity": "Tardigrades",
+      "statement": "Tardigrades were first described by Johann August Ephraim Goeze in 1773.",
+      "questions": [
+        "Who first described tardigrades?",
+        "When were tardigrades first described?",
+        "What scientist discovered tardigrades?"
+      ]
+    },
+    {
+      "entity": "Johann August Ephraim Goeze",
+      "statement": "Johann August Ephraim Goeze was a German zoologist.",
+      "questions": [
+        "What was Johann August Ephraim Goeze's profession?",
+        "What nationality was Johann August Ephraim Goeze?",
+        "What field did Johann August Ephraim Goeze work in?"
+      ]
+    },
+    {
+      "entity": "Tardigrades",
+      "statement": "Most tardigrades are between 0.3 and 0.5 millimeters long.",
+      "questions": [
+        "How long are most tardigrades?",
+        "What is the typical size of a tardigrade?",
+        "How big do tardigrades grow?"
+      ]
+    },
+    {
+      "entity": "Tardigrades",
+      "statement": "Tardigrades are extremophiles.",
+      "questions": [
+        "Are tardigrades extremophiles?",
+        "What type of organisms are tardigrades?",
+        "Can tardigrades survive extreme conditions?"
+      ]
+    },
+    {
+      "entity": "Tardigrades",
+      "statement": "Tardigrades can enter a dehydrated state called a tun.",
+      "questions": [
+        "What is the dehydrated state of tardigrades called?",
+        "Can tardigrades enter a state called a tun?",
+        "What survival state can tardigrades enter?"
+      ]
+    },
+    {
+      "entity": "Tardigrade metabolism in tun state",
+      "statement": "In the tun state, tardigrade metabolism drops to less than 0.01 percent of normal.",
+      "questions": [
+        "How much does tardigrade metabolism drop in the tun state?",
+        "What happens to tardigrade metabolism in the tun state?",
+        "How low can tardigrade metabolism go?"
+      ]
+    },
+    {
+      "entity": "Tardigrades in tun state",
+      "statement": "Tardigrades in the tun state have survived temperatures near absolute zero.",
+      "questions": [
+        "What extreme cold temperatures can tardigrades survive?",
+        "Can tardigrades survive near absolute zero?",
+        "How cold can tardigrades withstand?"
+      ]
+    },
+    {
+      "entity": "Tardigrades in tun state",
+      "statement": "Tardigrades in the tun state have survived pressures greater than the deepest ocean trenches.",
+      "questions": [
+        "What extreme pressures can tardigrades survive?",
+        "Can tardigrades survive deep ocean pressures?",
+        "How much pressure can tardigrades withstand?"
+      ]
+    },
+    {
+      "entity": "Tardigrades in tun state",
+      "statement": "Tardigrades in the tun state have survived the vacuum of outer space.",
+      "questions": [
+        "Can tardigrades survive in space?",
+        "Have tardigrades survived the vacuum of space?",
+        "Can tardigrades live in outer space?"
+      ]
+    },
+    {
+      "entity": "Tardigrades",
+      "statement": "In 2007, tardigrades became the first animals known to survive direct exposure to space.",
+      "questions": [
+        "When did tardigrades become the first animals to survive space exposure?",
+        "What was the first animal to survive direct exposure to space?",
+        "Were tardigrades the first animals to survive in space?"
+      ]
+    }
+  ],
+  "recordedAt": "2026-05-31T06:55:53.066Z"
+}

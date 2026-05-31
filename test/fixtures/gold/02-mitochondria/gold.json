@@ -1,0 +1,34 @@
+{
+  "title": "Mitochondria",
+  "format": "markdown",
+  "source": "source.md",
+  "goldFacts": [
+    {
+      "entity": "Mitochondria",
+      "statement": "are membrane-bound organelles in eukaryotic cells"
+    },
+    {
+      "entity": "Mitochondria",
+      "statement": "generate most of the cell's ATP (powerhouse of the cell)"
+    },
+    {
+      "entity": "Mitochondria",
+      "statement": "have folded inner-membrane folds called cristae"
+    },
+    {
+      "entity": "Mitochondria",
+      "statement": "contain their own circular DNA inherited from the mother"
+    },
+    {
+      "entity": "Endosymbiotic theory",
+      "statement": "advanced by Lynn Margulis",
+      "aliases": [
+        "Lynn Margulis"
+      ]
+    },
+    {
+      "entity": "Endosymbiotic theory",
+      "statement": "proposes mitochondria descend from engulfed bacteria"
+    }
+  ]
+}

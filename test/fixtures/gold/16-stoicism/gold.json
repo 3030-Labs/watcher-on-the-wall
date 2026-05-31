@@ -1,0 +1,27 @@
+{
+  "title": "Stoicism",
+  "format": "markdown",
+  "source": "source.md",
+  "goldFacts": [
+    {
+      "entity": "Stoicism",
+      "statement": "was founded in Athens by Zeno of Citium around 300 BCE"
+    },
+    {
+      "entity": "Stoicism",
+      "statement": "holds that virtue is the only true good and sufficient for happiness"
+    },
+    {
+      "entity": "Dichotomy of control",
+      "statement": "distinguishes what is within our power from what is not"
+    },
+    {
+      "entity": "Marcus Aurelius",
+      "statement": "was a Stoic emperor who wrote the Meditations"
+    },
+    {
+      "entity": "Stoicism",
+      "statement": "later proponents include Seneca and Epictetus"
+    }
+  ]
+}

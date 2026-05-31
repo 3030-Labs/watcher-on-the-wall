@@ -1,0 +1,27 @@
+{
+  "title": "Black Holes",
+  "format": "markdown",
+  "source": "source.md",
+  "goldFacts": [
+    {
+      "entity": "Black hole",
+      "statement": "is a region where gravity prevents even light from escaping"
+    },
+    {
+      "entity": "Event horizon",
+      "statement": "is the boundary beyond which escape is impossible"
+    },
+    {
+      "entity": "Black hole",
+      "statement": "forms when a massive star collapses"
+    },
+    {
+      "entity": "Singularity",
+      "statement": "is the point of infinite density at the center"
+    },
+    {
+      "entity": "Event Horizon Telescope",
+      "statement": "produced the first black hole image in 2019, in galaxy M87"
+    }
+  ]
+}

@@ -1,0 +1,71 @@
+{
+  "provider": "anthropic",
+  "fixtureId": "17-utilitarianism",
+  "model": "claude-sonnet-4-5",
+  "facts": [
+    {
+      "entity": "Utilitarianism",
+      "statement": "Utilitarianism is an ethical theory holding that the right action is the one that maximizes overall happiness or well-being.",
+      "questions": [
+        "What is utilitarianism?",
+        "What ethical theory maximizes overall happiness?",
+        "What does utilitarianism say about right actions?"
+      ]
+    },
+    {
+      "entity": "Jeremy Bentham",
+      "statement": "Jeremy Bentham developed utilitarianism.",
+      "questions": [
+        "Who developed utilitarianism?",
+        "What ethical theory did Jeremy Bentham develop?",
+        "Who was the founder of utilitarianism?"
+      ]
+    },
+    {
+      "entity": "John Stuart Mill",
+      "statement": "John Stuart Mill refined utilitarianism in the nineteenth century.",
+      "questions": [
+        "Who refined utilitarianism?",
+        "What did John Stuart Mill contribute to utilitarianism?",
+        "Which philosopher refined Bentham's utilitarianism?"
+      ]
+    },
+    {
+      "entity": "Jeremy Bentham",
+      "statement": "Jeremy Bentham proposed measuring pleasure and pain to compare outcomes.",
+      "questions": [
+        "How did Bentham propose to compare outcomes?",
+        "What method did Bentham use to evaluate actions?",
+        "What did Bentham measure in his utilitarian framework?"
+      ]
+    },
+    {
+      "entity": "John Stuart Mill",
+      "statement": "John Stuart Mill distinguished higher pleasures of the intellect from lower bodily pleasures.",
+      "questions": [
+        "What distinction did Mill make about pleasures?",
+        "How did Mill categorize different types of pleasures?",
+        "What are higher and lower pleasures according to Mill?"
+      ]
+    },
+    {
+      "entity": "Utilitarianism",
+      "statement": "Utilitarianism is a form of consequentialism.",
+      "questions": [
+        "What type of ethical theory is utilitarianism?",
+        "Is utilitarianism a consequentialist theory?",
+        "What broader ethical framework does utilitarianism belong to?"
+      ]
+    },
+    {
+      "entity": "Consequentialism",
+      "statement": "Consequentialism judges actions by their results rather than intentions.",
+      "questions": [
+        "How does consequentialism evaluate actions?",
+        "Does consequentialism focus on intentions or results?",
+        "What criterion does consequentialism use to judge actions?"
+      ]
+    }
+  ],
+  "recordedAt": "2026-05-31T06:55:53.066Z"
+}

@@ -1,0 +1,71 @@
+{
+  "provider": "anthropic",
+  "fixtureId": "09-roman-aqueducts",
+  "model": "claude-sonnet-4-5",
+  "facts": [
+    {
+      "entity": "Roman aqueducts",
+      "statement": "Roman aqueducts carried water from distant sources into cities using gravity alone.",
+      "questions": [
+        "How did Roman aqueducts transport water?",
+        "What power source did Roman aqueducts use?",
+        "How did Romans move water from distant sources to cities?"
+      ]
+    },
+    {
+      "entity": "Water in Roman aqueducts",
+      "statement": "Water in Roman aqueducts flowed down a gradual slope along channels of stone and concrete.",
+      "questions": [
+        "What material were Roman aqueduct channels made of?",
+        "How did water flow through Roman aqueducts?",
+        "What was the construction of Roman aqueduct channels?"
+      ]
+    },
+    {
+      "entity": "Aqua Appia",
+      "statement": "The Aqua Appia was the first Roman aqueduct.",
+      "questions": [
+        "What was the first Roman aqueduct?",
+        "Which aqueduct was built first by the Romans?",
+        "What is the name of the earliest Roman aqueduct?"
+      ]
+    },
+    {
+      "entity": "Aqua Appia",
+      "statement": "The Aqua Appia was built in 312 BCE.",
+      "questions": [
+        "When was the Aqua Appia built?",
+        "What year was the first Roman aqueduct constructed?",
+        "In what year did Romans build the Aqua Appia?"
+      ]
+    },
+    {
+      "entity": "Roman arched bridges",
+      "statement": "Romans built arched bridges where valleys had to be crossed to keep the aqueduct channel at the correct gentle gradient.",
+      "questions": [
+        "Why did Romans build arched bridges for aqueducts?",
+        "How did Romans maintain aqueduct gradient across valleys?",
+        "What did Romans use to cross valleys with aqueducts?"
+      ]
+    },
+    {
+      "entity": "Rome's aqueduct system",
+      "statement": "At its height, the city of Rome was served by eleven aqueducts.",
+      "questions": [
+        "How many aqueducts served Rome at its height?",
+        "What was the number of aqueducts in Rome at its peak?",
+        "How many aqueducts supplied ancient Rome?"
+      ]
+    },
+    {
+      "entity": "Rome's eleven aqueducts",
+      "statement": "Rome's eleven aqueducts supplied public baths, fountains, and private homes.",
+      "questions": [
+        "What did Rome's aqueducts supply water to?",
+        "What facilities were served by Roman aqueducts?",
+        "Where did the water from Rome's aqueducts go?"
+      ]
+    }
+  ],
+  "recordedAt": "2026-05-31T06:55:53.066Z"
+}

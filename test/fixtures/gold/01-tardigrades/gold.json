@@ -1,0 +1,34 @@
+{
+  "title": "Tardigrades",
+  "format": "markdown",
+  "source": "source.md",
+  "goldFacts": [
+    {
+      "entity": "Tardigrades",
+      "statement": "are microscopic eight-legged animals",
+      "aliases": [
+        "water bears"
+      ]
+    },
+    {
+      "entity": "Tardigrades",
+      "statement": "first described by Johann Goeze in 1773"
+    },
+    {
+      "entity": "Tardigrades",
+      "statement": "are between 0.3 and 0.5 millimeters long"
+    },
+    {
+      "entity": "Tardigrades",
+      "statement": "can enter a dehydrated state called a tun"
+    },
+    {
+      "entity": "Tardigrades",
+      "statement": "have survived the vacuum of outer space"
+    },
+    {
+      "entity": "Tardigrades",
+      "statement": "in 2007 became the first animals to survive exposure to space"
+    }
+  ]
+}

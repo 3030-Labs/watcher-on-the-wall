@@ -1,0 +1,89 @@
+{
+  "provider": "anthropic",
+  "fixtureId": "13-git-basics",
+  "model": "claude-sonnet-4-5",
+  "facts": [
+    {
+      "entity": "git init command",
+      "statement": "The git init command creates a new repository in the current directory.",
+      "questions": [
+        "How do I create a new Git repository?",
+        "What command initializes a Git repository?",
+        "What does git init do?"
+      ]
+    },
+    {
+      "entity": "git add command",
+      "statement": "The git add command stages changes for the next commit.",
+      "questions": [
+        "How do I stage changes in Git?",
+        "What command prepares files for commit in Git?",
+        "What does git add do?"
+      ]
+    },
+    {
+      "entity": "git commit command",
+      "statement": "The git commit -m command records staged changes as a new commit with a message.",
+      "questions": [
+        "How do I save staged changes in Git?",
+        "What command creates a commit with a message?",
+        "What does git commit -m do?"
+      ]
+    },
+    {
+      "entity": "git branch command",
+      "statement": "The git branch command lists or creates branches.",
+      "questions": [
+        "How do I create a new branch in Git?",
+        "What command shows all Git branches?",
+        "What does git branch do?"
+      ]
+    },
+    {
+      "entity": "git merge command",
+      "statement": "The git merge command combines another branch's history into the current branch.",
+      "questions": [
+        "How do I merge branches in Git?",
+        "What command combines branch histories?",
+        "What does git merge do?"
+      ]
+    },
+    {
+      "entity": "git clone command",
+      "statement": "The git clone command copies a remote repository, including its full history.",
+      "questions": [
+        "How do I copy a remote repository?",
+        "What command downloads a Git repository?",
+        "What does git clone do?"
+      ]
+    },
+    {
+      "entity": "Git commit",
+      "statement": "A Git commit is identified by a SHA-1 hash.",
+      "questions": [
+        "How are Git commits identified?",
+        "What type of hash identifies a commit?",
+        "What uniquely identifies a Git commit?"
+      ]
+    },
+    {
+      "entity": "Git branches",
+      "statement": "Git branches are movable pointers to commits.",
+      "questions": [
+        "What are Git branches?",
+        "How do branches work in Git?",
+        "What do Git branches point to?"
+      ]
+    },
+    {
+      "entity": "staging area",
+      "statement": "The staging area holds changes before they are committed.",
+      "questions": [
+        "What is the staging area in Git?",
+        "Where are changes stored before committing in Git?",
+        "What is the Git index?"
+      ]
+    }
+  ],
+  "recordedAt": "2026-05-31T06:55:53.066Z"
+}

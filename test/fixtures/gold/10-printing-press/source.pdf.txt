@@ -1,0 +1,8 @@
+The Printing Press
+
+Johannes Gutenberg introduced movable-type printing to Europe around 1440 in
+Mainz. His most famous work, the Gutenberg Bible, was printed around 1455. The
+press used individual metal letters that could be rearranged and reused, making
+books far cheaper and faster to produce than hand copying. The technology spread
+rapidly and is widely credited with enabling the Reformation and the scientific
+revolution by making information widely available.

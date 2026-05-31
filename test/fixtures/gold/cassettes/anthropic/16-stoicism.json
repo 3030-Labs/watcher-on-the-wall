@@ -1,0 +1,89 @@
+{
+  "provider": "anthropic",
+  "fixtureId": "16-stoicism",
+  "model": "claude-sonnet-4-5",
+  "facts": [
+    {
+      "entity": "Stoicism",
+      "statement": "Stoicism is a Hellenistic philosophy.",
+      "questions": [
+        "What type of philosophy is Stoicism?",
+        "Is Stoicism a Hellenistic philosophy?",
+        "What philosophical tradition does Stoicism belong to?"
+      ]
+    },
+    {
+      "entity": "Zeno of Citium",
+      "statement": "Zeno of Citium founded Stoicism in Athens around 300 BCE.",
+      "questions": [
+        "Who founded Stoicism?",
+        "When was Stoicism founded?",
+        "Where did Zeno of Citium found Stoicism?"
+      ]
+    },
+    {
+      "entity": "Stoic virtue ethics",
+      "statement": "Stoicism holds that virtue is the only true good and is sufficient for happiness.",
+      "questions": [
+        "What does Stoicism say about virtue?",
+        "According to Stoicism, what is the only true good?",
+        "Is virtue sufficient for happiness in Stoic philosophy?"
+      ]
+    },
+    {
+      "entity": "The dichotomy of control",
+      "statement": "The dichotomy of control is a core Stoic doctrine that distinguishes between what is within our power and what is not.",
+      "questions": [
+        "What is the dichotomy of control?",
+        "What is a core doctrine of Stoicism?",
+        "What does the Stoic dichotomy of control distinguish?"
+      ]
+    },
+    {
+      "entity": "Stoic tranquility",
+      "statement": "According to Stoicism, tranquility comes from focusing on what we control.",
+      "questions": [
+        "How do Stoics achieve tranquility?",
+        "What should we focus on to achieve tranquility according to Stoicism?",
+        "What does Stoicism teach about the source of tranquility?"
+      ]
+    },
+    {
+      "entity": "Seneca",
+      "statement": "Seneca was a prominent later Stoic.",
+      "questions": [
+        "Who was Seneca?",
+        "Was Seneca a Stoic philosopher?",
+        "Who are examples of later Stoic philosophers?"
+      ]
+    },
+    {
+      "entity": "Epictetus",
+      "statement": "Epictetus was a prominent later Stoic.",
+      "questions": [
+        "Who was Epictetus?",
+        "Was Epictetus a Stoic?",
+        "Name a prominent later Stoic philosopher."
+      ]
+    },
+    {
+      "entity": "Marcus Aurelius",
+      "statement": "Marcus Aurelius was a Roman emperor and prominent later Stoic.",
+      "questions": [
+        "Who was Marcus Aurelius?",
+        "Which Roman emperor was a Stoic philosopher?",
+        "Was Marcus Aurelius a Stoic?"
+      ]
+    },
+    {
+      "entity": "Meditations",
+      "statement": "The Meditations is the notebook of Marcus Aurelius.",
+      "questions": [
+        "What is the Meditations?",
+        "What did Marcus Aurelius write?",
+        "Whose notebook is known as the Meditations?"
+      ]
+    }
+  ],
+  "recordedAt": "2026-05-31T06:55:53.066Z"
+}

@@ -1,0 +1,8 @@
+// TCP three-way handshake establishes a connection before data transfer.
+//
+// 1. Client -> Server: SYN          (client requests a connection)
+// 2. Server -> Client: SYN-ACK      (server acknowledges and requests back)
+// 3. Client -> Server: ACK          (client acknowledges; connection open)
+//
+// TCP is connection-oriented and reliable: it guarantees ordered, error-checked
+// delivery of a byte stream. Connections are torn down with a FIN exchange.

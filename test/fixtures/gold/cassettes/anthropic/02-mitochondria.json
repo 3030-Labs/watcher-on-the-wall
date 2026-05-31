@@ -1,0 +1,80 @@
+{
+  "provider": "anthropic",
+  "fixtureId": "02-mitochondria",
+  "model": "claude-sonnet-4-5",
+  "facts": [
+    {
+      "entity": "Mitochondrion",
+      "statement": "The mitochondrion is a membrane-bound organelle found in most eukaryotic cells.",
+      "questions": [
+        "What is a mitochondrion?",
+        "Where are mitochondria found?",
+        "What type of organelle is the mitochondrion?"
+      ]
+    },
+    {
+      "entity": "Mitochondria",
+      "statement": "Mitochondria generate most of the cell's supply of ATP.",
+      "questions": [
+        "What do mitochondria produce?",
+        "Why are mitochondria called the powerhouse of the cell?",
+        "What is the main function of mitochondria?"
+      ]
+    },
+    {
+      "entity": "Mitochondria",
+      "statement": "Mitochondria have an outer membrane and a folded inner membrane.",
+      "questions": [
+        "What is the structure of mitochondria?",
+        "How many membranes do mitochondria have?",
+        "What membranes are found in mitochondria?"
+      ]
+    },
+    {
+      "entity": "Cristae",
+      "statement": "The folds of the mitochondrial inner membrane are called cristae.",
+      "questions": [
+        "What are cristae?",
+        "What are the folds in mitochondria called?",
+        "Where are cristae located?"
+      ]
+    },
+    {
+      "entity": "Mitochondrial DNA",
+      "statement": "Mitochondria contain their own circular DNA.",
+      "questions": [
+        "Do mitochondria have their own DNA?",
+        "What type of DNA do mitochondria contain?",
+        "What is unique about mitochondrial genetic material?"
+      ]
+    },
+    {
+      "entity": "Mitochondrial DNA",
+      "statement": "Mitochondrial DNA is inherited almost exclusively from the mother.",
+      "questions": [
+        "How is mitochondrial DNA inherited?",
+        "Is mitochondrial DNA inherited from the father or mother?",
+        "What is the inheritance pattern of mitochondrial DNA?"
+      ]
+    },
+    {
+      "entity": "Endosymbiotic theory",
+      "statement": "The endosymbiotic theory proposes that mitochondria descend from free-living bacteria engulfed by an ancestral eukaryotic cell.",
+      "questions": [
+        "What does the endosymbiotic theory propose?",
+        "How did mitochondria originate according to endosymbiotic theory?",
+        "What is the evolutionary origin of mitochondria?"
+      ]
+    },
+    {
+      "entity": "Lynn Margulis",
+      "statement": "Lynn Margulis advanced the endosymbiotic theory.",
+      "questions": [
+        "Who advanced the endosymbiotic theory?",
+        "What did Lynn Margulis contribute to cell biology?",
+        "Who is credited with the endosymbiotic theory?"
+      ]
+    }
+  ],
+  "recordedAt": "2026-05-31T06:55:53.066Z"
+}

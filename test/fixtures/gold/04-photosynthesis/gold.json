@@ -1,0 +1,31 @@
+{
+  "title": "Photosynthesis",
+  "format": "markdown",
+  "source": "source.md",
+  "goldFacts": [
+    {
+      "entity": "Photosynthesis",
+      "statement": "converts light energy into chemical energy in glucose"
+    },
+    {
+      "entity": "Photosynthesis",
+      "statement": "occurs in the chloroplasts of plant cells"
+    },
+    {
+      "entity": "Chlorophyll",
+      "statement": "is the green pigment that absorbs light"
+    },
+    {
+      "entity": "Light-dependent reactions",
+      "statement": "produce ATP and NADPH"
+    },
+    {
+      "entity": "Calvin cycle",
+      "statement": "fixes carbon dioxide into sugar"
+    },
+    {
+      "entity": "Photosynthesis",
+      "statement": "releases oxygen as a byproduct"
+    }
+  ]
+}

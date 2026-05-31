@@ -1,0 +1,11 @@
+// Binary search finds a target in a SORTED array in O(log n) time.
+function binarySearch(arr, target) {
+  let lo = 0, hi = arr.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;     // midpoint
+    if (arr[mid] === target) return mid;
+    if (arr[mid] < target) lo = mid + 1;  // search right half
+    else hi = mid - 1;                     // search left half
+  }
+  return -1;  // not found
+}

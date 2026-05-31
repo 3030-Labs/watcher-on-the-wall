@@ -238,6 +238,46 @@ describe("loadConfig", () => {
     expect(result.path).toContain("wotw.yml");
     expect(result.config.server.port).toBe(5555);
   });
+
+  // Multi-LLM Phase 1 (verify-and-harness arc) — config-chain integration
+  // guard. Phase A discovered the Zod schema silently stripped the `llm`
+  // block, crashing selectProvider on every pre-Phase-10 wiki's first
+  // ingestion. Phase A added a regression test, but it calls validateConfig
+  // on a *directly-constructed* config — it does NOT exercise the
+  // file → cosmiconfig → mergeConfig → applyEnvOverrides → validateConfig
+  // chain that runs in production. Phase A's own "notes for review" flagged
+  // the gap: "The integration test would need to load an actual
+  // wotw.config.yaml via cosmiconfig to exercise the bug." These two tests
+  // close it — the mocked 985 suite is necessary-but-insufficient.
+  it("preserves an explicit llm block through the real cosmiconfig load chain (Phase-A regression)", async () => {
+    const dir = tmp();
+    writeFileSync(
+      join(dir, "wotw.config.yaml"),
+      "llm:\n  provider: openai\n  model: gpt-4o\nserver:\n  port: 3333\n",
+    );
+    const result = await loadConfig(dir);
+    // The exact field Phase A's Zod gap stripped: provider must survive
+    // file-load + merge + env + validate, not just direct validateConfig.
+    expect(result.config.llm.provider).toBe("openai");
+    expect(result.config.llm.model).toBe("gpt-4o");
+  });
+
+  it("resolves a pre-Phase-10 config (no llm block) to the anthropic default — existing wikis don't crash", async () => {
+    const dir = tmp();
+    // A config shaped like every wiki initialized BEFORE Phase 10: no
+    // `llm:` block at all. Phase A: these would have crashed selectProvider
+    // on first ingestion after the refactor shipped. Through the real chain
+    // the llm block must resolve to the default so selectProvider has a
+    // provider to read.
+    writeFileSync(join(dir, "wotw.config.yaml"), "wiki_root: ./my-wiki\n");
+    const result = await loadConfig(dir);
+    const defaults = defaultConfig();
+    expect(result.config.llm.provider).toBe(defaults.llm.provider);
+    expect(result.config.llm.provider).toBe("anthropic");
+    // And the provider field is defined (the precise nil that crashed
+    // `config.llm.provider` deref in selectProvider).
+    expect(result.config.llm).toBeDefined();
+  });
 });
 
 // ---------------------------------------------------------------------------

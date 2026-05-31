@@ -1,0 +1,31 @@
+{
+  "title": "TCP Three-Way Handshake",
+  "format": "code",
+  "source": "source.code.txt",
+  "goldFacts": [
+    {
+      "entity": "TCP handshake",
+      "statement": "establishes a connection before data transfer"
+    },
+    {
+      "entity": "TCP handshake",
+      "statement": "step 1 is the client sending SYN"
+    },
+    {
+      "entity": "TCP handshake",
+      "statement": "step 2 is the server sending SYN-ACK"
+    },
+    {
+      "entity": "TCP handshake",
+      "statement": "step 3 is the client sending ACK"
+    },
+    {
+      "entity": "TCP",
+      "statement": "is connection-oriented and provides reliable ordered delivery"
+    },
+    {
+      "entity": "TCP",
+      "statement": "connections are torn down with a FIN exchange"
+    }
+  ]
+}
