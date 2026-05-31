@@ -18,6 +18,9 @@ import { IngestionQueue } from "../ingestion/queue.js";
 import { FileWatcher } from "../watcher/index.js";
 import { McpHttpServer } from "../server/index.js";
 import { ProvenanceChain } from "../provenance/chain.js";
+import { RedactionEmitStore } from "../provenance/redaction-emit-store.js";
+import { RedactionEmitWorker } from "../provenance/redaction-emit-worker.js";
+import { redactionSinkFromEnv } from "../provenance/redaction-sink.js";
 import type { KeyStore as KeyStoreType } from "../keys/store.js";
 import { CompoundingEngine } from "../compounding/engine.js";
 
@@ -168,6 +171,33 @@ async function main(): Promise<void> {
       }
     }
 
+    // FEATURE-PASS-011: redaction-emit substrate. The SQLite queue is
+    // constructed unconditionally so credential-pattern + truncation_32kb
+    // events captured in prompt-builder always have a durable home; the
+    // sink + worker only come up when WOTW_WIKI_ID + WOTW_CLOUD_SINK_SECRET
+    // are both present (hosted-mode invariant pre-validated by
+    // validateHostedRedactionSink in src/daemon/config.ts). In hosted-mode-
+    // with-cloud-down the worker accumulates rows and retries with
+    // exponential backoff; in local mode the worker is a no-op.
+    const redactionEmitStore = new RedactionEmitStore({
+      path: `${config.wiki_root}/.wotw/redaction-emit.db`,
+    });
+    const redactionWorkspaceId = process.env.WOTW_WIKI_ID;
+    const redactionSink = redactionSinkFromEnv();
+    const redactionEmitWorker = new RedactionEmitWorker({
+      store: redactionEmitStore,
+      sink: redactionSink,
+    });
+    log.info(
+      {
+        path: redactionEmitStore.path,
+        sinkActive: !!redactionSink,
+        workspaceId: redactionWorkspaceId ?? null,
+        counts: redactionEmitStore.countByStatus(),
+      },
+      "redaction-emit store ready",
+    );
+
     // Ingestion layer
     const costTracker = new CostTracker({
       trackFile: config.cost.track_file,
@@ -226,6 +256,8 @@ async function main(): Promise<void> {
       deadLetter,
       factStore,
       factIndex,
+      redactionEmitStore,
+      redactionWorkspaceId,
     });
 
     // Compounding engine (Phase 4) — not a subsystem; invoked on demand via
@@ -298,6 +330,7 @@ async function main(): Promise<void> {
     daemon.attachSubsystem(mcp);
     daemon.attachSubsystem(lintScheduler);
     if (dekArchiveScheduler) daemon.attachSubsystem(dekArchiveScheduler);
+    daemon.attachSubsystem(redactionEmitWorker);
 
     // Review item 23: startReconciliation was defined + tested but
     // never called. The watcher relies on it to catch files dropped

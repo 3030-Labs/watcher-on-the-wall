@@ -28,6 +28,7 @@ import type { WikiSearch } from "../wiki/search.js";
 import type { WikiStore } from "../wiki/store.js";
 import type { WatcherBatch } from "../watcher/index.js";
 import type { ProvenanceChain } from "../provenance/chain.js";
+import type { RedactionEmitStore } from "../provenance/redaction-emit-store.js";
 import { sha256File, sha256Files, sha256Hex } from "../provenance/hash.js";
 import type { CostTracker } from "./cost-tracker.js";
 import type { DeadLetterQueue } from "./dead-letter.js";
@@ -75,6 +76,15 @@ export interface IngestionQueueOptions {
    */
   factStore?: FactStore | null;
   factIndex?: FactIndex | null;
+  /**
+   * FEATURE-PASS-011: forwarded to buildIngestionPrompt so credential-
+   * pattern redactions + 32KB truncations land as durable rows in the
+   * outbound queue. Null in local/offline mode → events not captured.
+   * `redactionWorkspaceId` is the cloud workspace UUID (mirrors
+   * `WOTW_WIKI_ID`); required when `redactionEmitStore` is set.
+   */
+  redactionEmitStore?: RedactionEmitStore | null;
+  redactionWorkspaceId?: string;
 }
 
 export interface IngestionOutcome {
@@ -289,6 +299,8 @@ export class IngestionQueue implements DaemonSubsystem {
       config: this.opts.config,
       files: batch.paths,
       existingPages,
+      redactionEmitStore: this.opts.redactionEmitStore ?? null,
+      workspaceId: this.opts.redactionWorkspaceId,
     });
 
     // 1a. Hash source files NOW (M-PIPE-1). Computing source_hashes at

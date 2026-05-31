@@ -237,6 +237,7 @@ export async function loadConfig(searchFrom?: string): Promise<LoadConfigResult>
   const withEnv = applyEnvOverrides(merged);
   const validated = validateConfig(withEnv);
   validateHostedConfig(validated);
+  validateHostedRedactionSink(validated);
   return { config: validated, path };
 }
 
@@ -402,6 +403,36 @@ export function applyEnvOverrides(config: WotwConfig): WotwConfig {
 }
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * FEATURE-PASS-011: hosted-mode invariant for the daemon→cloud
+ * redaction-emit wire (PASS-024 / CT3). When hosted.enabled is true the
+ * daemon MUST have a configured cloud sink secret — otherwise every
+ * credential redaction silently fails to reach the compliance ledger
+ * and the audit trail has gaps. This is the goal's "Zod schema with a
+ * clear error if missing in hosted mode" requirement: WOTW_CLOUD_SINK_SECRET
+ * is an env var (not a config-file field) so the check happens here,
+ * alongside the other hosted-mode invariants.
+ *
+ * Local/offline operation (hosted.enabled false) is intentionally
+ * lenient: the SQLite queue captures rows for forensic inspection even
+ * when emission is disabled.
+ */
+export function validateHostedRedactionSink(
+  config: WotwConfig,
+  env: NodeJS.ProcessEnv = process.env,
+): void {
+  if (!config.hosted.enabled) return;
+  const secret = env.WOTW_CLOUD_SINK_SECRET;
+  if (!secret || secret.length === 0) {
+    throw new Error(
+      "Config error: hosted.enabled is true but WOTW_CLOUD_SINK_SECRET is unset. " +
+        "The redaction-emit wire requires this secret to authenticate with " +
+        "/api/internal/redaction-log; running hosted-mode without it would " +
+        "silently drop every compliance redaction event.",
+    );
+  }
+}
 
 /**
  * Hosted-mode runtime invariants. Throws with a precise message when:

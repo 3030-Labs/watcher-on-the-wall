@@ -14,9 +14,10 @@
  */
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import type { RedactionEmitStore } from "../provenance/redaction-emit-store.js";
 import { readTextOrNullAsync } from "../utils/fs.js";
 import { getLogger } from "../utils/logger.js";
-import { sanitize } from "../utils/sanitize.js";
+import { sanitizeWithEvents } from "../utils/sanitize.js";
 import type { WotwConfig } from "../utils/types.js";
 import { parsePage } from "../wiki/page.js";
 
@@ -55,6 +56,19 @@ export interface BuildIngestionPromptOptions {
    * sources are kept (X1-C1 scope-bound).
    */
   existingPages?: ExistingPageManifestEntry[];
+  /**
+   * FEATURE-PASS-011: SQLite-backed queue for outbound redaction events.
+   * When provided (alongside `workspaceId`), the builder enqueues one
+   * row per credential-pattern hit and one row when the 32KB truncation
+   * fires. When omitted (unit tests, local mode pre-wire), redaction
+   * still applies on the prompt — only the outbound capture is skipped.
+   */
+  redactionEmitStore?: RedactionEmitStore | null;
+  /**
+   * Cloud workspace UUID for redaction emission attribution. Required
+   * when `redactionEmitStore` is set; otherwise the enqueue is skipped.
+   */
+  workspaceId?: string;
 }
 
 /** Cap for the manifest section in the prompt (per X1-C1). */
@@ -71,6 +85,8 @@ export async function buildIngestionPrompt(
   const read = opts.readFile ?? ((p: string) => readFileSync(p, "utf8"));
 
   const excerpts: IngestionPrompt["excerpts"] = [];
+  const emitStore = opts.redactionEmitStore && opts.workspaceId ? opts.redactionEmitStore : null;
+  const emitWorkspaceId = opts.workspaceId ?? "";
   for (const file of opts.files) {
     try {
       const raw = read(file);
@@ -90,12 +106,59 @@ export async function buildIngestionPrompt(
           { path: file, rawBytes, capBytes: MAX_EXCERPT_BYTES },
           "source file truncated for prompt — model sees only the first MAX_EXCERPT_BYTES",
         );
+        // FEATURE-PASS-011: emit a `truncation_32kb` row to the cloud queue.
+        // byte_count is the *dropped* tail (what the model didn't see),
+        // mirroring the credential-rule byte_count semantics.
+        if (emitStore) {
+          try {
+            emitStore.enqueue(emitWorkspaceId, {
+              redacted_at: new Date().toISOString(),
+              rule_id: "truncation_32kb",
+              source_file_path: file,
+              redaction_byte_count: rawBytes - MAX_EXCERPT_BYTES,
+            });
+          } catch (storeErr) {
+            getLogger("prompt-builder").warn(
+              {
+                path: file,
+                err: storeErr instanceof Error ? storeErr.message : String(storeErr),
+              },
+              "redaction-emit enqueue failed (truncation); prompt continues",
+            );
+          }
+        }
       } else {
         body = raw;
       }
+      const { output: sanitized, events } = sanitizeWithEvents(body);
+      // FEATURE-PASS-011: emit one row per credential-rule that fired.
+      // PII rules (credit-card, us-ssn) have no cloud_rule_id and are
+      // skipped by sanitizeWithEvents — they still redact on-disk but
+      // never leave the daemon. Per the cloud's explicit whitelist.
+      if (emitStore && events.length > 0) {
+        for (const event of events) {
+          try {
+            emitStore.enqueue(emitWorkspaceId, {
+              redacted_at: new Date().toISOString(),
+              rule_id: event.cloud_rule_id,
+              source_file_path: file,
+              redaction_byte_count: event.byte_count,
+            });
+          } catch (storeErr) {
+            getLogger("prompt-builder").warn(
+              {
+                path: file,
+                rule: event.rule_name,
+                err: storeErr instanceof Error ? storeErr.message : String(storeErr),
+              },
+              "redaction-emit enqueue failed (credential); prompt continues",
+            );
+          }
+        }
+      }
       excerpts.push({
         path: file,
-        excerpt: sanitize(body),
+        excerpt: sanitized,
         bytes: rawBytes,
         truncated,
       });

@@ -11,7 +11,12 @@
  * `user@host` patterns; these tests lock the behavior in place.
  */
 import { describe, expect, it } from "vitest";
-import { DEFAULT_REDACTIONS, sanitize, sanitizeWithReport } from "../../src/utils/sanitize.js";
+import {
+  DEFAULT_REDACTIONS,
+  sanitize,
+  sanitizeWithEvents,
+  sanitizeWithReport,
+} from "../../src/utils/sanitize.js";
 
 describe("sanitize — password-in-url (L-SEC-3 regression)", () => {
   it("redacts http(s) URLs with a user:password@host component", () => {
@@ -176,5 +181,78 @@ describe("review item 2 — modern key formats", () => {
     const input = "auth: wotw_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_";
     const out = sanitize(input);
     expect(out).toContain("[REDACTED:WOTW_TOKEN]");
+  });
+});
+
+// FEATURE-PASS-011 — sanitizeWithEvents byte-count + cloud-rule-id mapping.
+describe("sanitizeWithEvents — chain-write unaffected (regression)", () => {
+  it("returns the same output string as sanitize() (semantic equivalence)", () => {
+    const input = `key=${"AKIA" + "A".repeat(16)} ssn=123-45-6789 url=https://u:p@h.com/`;
+    const { output } = sanitizeWithEvents(input);
+    expect(output).toBe(sanitize(input));
+  });
+
+  it("PII rules still redact on output but produce NO events (credit-card)", () => {
+    const input = "card: 4111 1111 1111 1111";
+    const { output, events } = sanitizeWithEvents(input);
+    expect(output).toContain("[REDACTED:PAN]");
+    expect(events).toEqual([]);
+  });
+
+  it("PII rules still redact on output but produce NO events (us-ssn)", () => {
+    const input = "ssn: 123-45-6789";
+    const { output, events } = sanitizeWithEvents(input);
+    expect(output).toContain("[REDACTED:SSN]");
+    expect(events).toEqual([]);
+  });
+});
+
+describe("sanitizeWithEvents — credential-rule emission", () => {
+  it("emits one event with the correct cloud_rule_id when one rule fires", () => {
+    const token = "AKIA" + "A".repeat(16);
+    const { events } = sanitizeWithEvents(`key: ${token}`);
+    expect(events).toHaveLength(1);
+    expect(events[0].rule_name).toBe("aws-access-key");
+    expect(events[0].cloud_rule_id).toBe("credential_pattern_01");
+    expect(events[0].byte_count).toBe(20);
+  });
+
+  it("emits multiple events when multiple rules fire — byte counts per rule", () => {
+    const aws = "AKIA" + "A".repeat(16);
+    const gh = "ghp_" + "A".repeat(36);
+    const { events } = sanitizeWithEvents(`aws=${aws} gh=${gh}`);
+    const names = events.map((e) => e.rule_name);
+    expect(names).toContain("aws-access-key");
+    expect(names).toContain("github-token");
+    const aws_event = events.find((e) => e.rule_name === "aws-access-key");
+    const gh_event = events.find((e) => e.rule_name === "github-token");
+    expect(aws_event?.byte_count).toBe(20);
+    expect(gh_event?.byte_count).toBe(40);
+  });
+
+  it("aggregates byte_count across all matches of one rule in a single pass", () => {
+    const tok1 = "AKIA" + "B".repeat(16);
+    const tok2 = "AKIA" + "C".repeat(16);
+    const { events } = sanitizeWithEvents(`first: ${tok1} second: ${tok2}`);
+    const aws = events.find((e) => e.rule_name === "aws-access-key");
+    // 20 bytes × 2 matches = 40
+    expect(aws?.byte_count).toBe(40);
+  });
+
+  it("emits no events for clean input", () => {
+    const { events } = sanitizeWithEvents("nothing sensitive here.");
+    expect(events).toEqual([]);
+  });
+
+  it("DEFAULT_REDACTIONS — exactly 10 rules carry cloud_rule_id (credential_pattern_01..10)", () => {
+    const mapped = DEFAULT_REDACTIONS.filter((r) => r.cloud_rule_id);
+    expect(mapped).toHaveLength(10);
+    const ids = mapped.map((r) => r.cloud_rule_id);
+    for (let i = 1; i <= 10; i++) {
+      expect(ids).toContain(`credential_pattern_${String(i).padStart(2, "0")}`);
+    }
+    // PII rules remain unmapped — those stay daemon-local.
+    const unmapped = DEFAULT_REDACTIONS.filter((r) => !r.cloud_rule_id);
+    expect(unmapped.map((r) => r.name)).toEqual(["credit-card", "us-ssn"]);
   });
 });

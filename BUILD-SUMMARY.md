@@ -1,5 +1,62 @@
 # BUILD-SUMMARY — watcher-on-the-wall v0.8.4
 
+> ### FEATURE-PASS-011 — Daemon → Cloud redaction-emit wire — 2026-05-30
+>
+> Closes the daemon-side of PASS-024 / CT3: every credential-pattern
+> redaction or 32KB truncation that fires inside the ingestion pipeline
+> writes a durable SQLite row to `<wiki_root>/.wotw/redaction-emit.db`,
+> then a `RedactionEmitWorker` drains the queue to wotw-cloud's
+> `/api/internal/redaction-log` with exponential backoff and never-delete
+> discipline. Closure doc: `FEATURE-PASS-011.md`.
+>
+> **Emission contract:** `POST /api/internal/redaction-log` with
+> `x-sink-key: $WOTW_CLOUD_SINK_SECRET` (split-secret per
+> `wotw-cloud/web/lib/admin-auth.ts:40-51`); batch of up to 1000
+> `{ redacted_at, rule_id, source_file_path, redaction_byte_count }`
+> events under one `workspace_id` (= `WOTW_WIKI_ID`).
+>
+> **Durability guarantee:** write-before-emit (SQLite enqueue inside
+> `prompt-builder.ts` BEFORE any POST), restart re-drain (worker picks
+> up `status='pending'` rows on boot), exp-backoff (30s base → 5min cap
+> on consecutive failures, reset on success), per-row attempt cap (100
+> → archive for forensic inspection).
+>
+> **Rule mapping:** 10 daemon credential rules → `credential_pattern_01..10`
+> in `src/utils/sanitize.ts` definition order; `truncation_32kb` at the
+> 32KB excerpt cap. `credit-card` + `us-ssn` redact daemon-locally but
+> do NOT emit (PASS-024 whitelist treats PII metadata as
+> daemon-only — see FEATURE-PASS-011.md F4).
+>
+> **Hosted-mode invariant:** `validateHostedRedactionSink` in
+> `src/daemon/config.ts` refuses daemon start when `hosted.enabled` is
+> true and `WOTW_CLOUD_SINK_SECRET` is unset. Local/offline mode is
+> lenient: SQLite still captures rows for forensic inspection; worker
+> is a no-op.
+>
+> **Cross-repo handshake (F1 RESOLVED):** cloud-PASS-028 shipped the
+> idempotency half in parallel — added `daemon_event_id uuid` + partial
+> unique index on `redaction_log` and `ON CONFLICT (daemon_event_id)
+> DO NOTHING` in the route. This commit ships the daemon half:
+> `event_id` is carried into each cloud payload event so re-POSTs are
+> server-deduplicated. End-to-end at-most-once across daemon restarts.
+> Contract handshake confirmed closed by Justin 2026-05-30.
+>
+> **Code:**
+> - New: `src/provenance/redaction-emit-store.ts`,
+>   `src/provenance/redaction-sink.ts`,
+>   `src/provenance/redaction-emit-worker.ts`.
+> - Extended: `src/utils/sanitize.ts` (`cloud_rule_id`,
+>   `sanitizeWithEvents`); `src/ingestion/prompt-builder.ts` (hooks);
+>   `src/ingestion/queue.ts` (forwards options);
+>   `src/daemon/config.ts` (`validateHostedRedactionSink`);
+>   `src/daemon/entry.ts` (lifecycle wire-up).
+>
+> **Tests:** 5 new files in `test/unit/provenance/` +
+> `test/unit/ingestion/prompt-builder-redaction.test.ts` +
+> `test/unit/config-redaction-sink.test.ts` + extensions in
+> `test/unit/sanitize.test.ts`. 7 goal-required scenarios covered (see
+> FEATURE-PASS-011.md test matrix).
+
 > ### PASS-023 — Daemon public-launch readiness — 2026-05-26
 >
 > Closes the onboarding-shell gap before DriftVane/watcher-on-the-wall
@@ -1548,6 +1605,12 @@ Every user-visible feature with an auditable source location.
 | Path-traversal rejection on `read_page` | `src/server/tools.ts` (`resolveWikiPath`) | `integration/mcp-server.test.ts` ("rejects ..") |
 | Token file mode 0600 on disk | `src/multi-user/token-store.ts` (`save`) | `unit/token-store.test.ts` |
 | pino logger with per-module names | `src/utils/logger.ts` | Used throughout |
+| **Redaction-emit SQLite queue (durable per-event)** | `src/provenance/redaction-emit-store.ts` | `unit/provenance/redaction-emit-store.test.ts` (write/list/markSent idempotent/markFailed/archiveExhausted + file-backed restart re-drain) |
+| **Redaction sink (POST /api/internal/redaction-log + x-sink-key)** | `src/provenance/redaction-sink.ts` | `unit/provenance/redaction-sink.test.ts` (auth header, https-only fail-closed, batch-cap, env-factory null cases) |
+| **Redaction drain worker (exp-backoff, restart re-drain, archive)** | `src/provenance/redaction-emit-worker.ts` | `unit/provenance/redaction-emit-worker.test.ts` (drain, offline-mode no-op, backoff doubles + caps + resets, attempt-cap archive) |
+| **`sanitizeWithEvents` byte-count + cloud_rule_id mapping** | `src/utils/sanitize.ts` (`DEFAULT_REDACTIONS[*].cloud_rule_id` + `sanitizeWithEvents`) | `unit/sanitize.test.ts` (extended; semantic equivalence with `sanitize`, PII-no-emit, multi-rule aggregation) |
+| **Prompt-builder write-before-emit hook** | `src/ingestion/prompt-builder.ts` (`redactionEmitStore?` + `workspaceId?` options) | `unit/ingestion/prompt-builder-redaction.test.ts` (write-before-emit ordering, truncation event, chain-write unaffected regression) |
+| **Hosted-mode redaction-sink secret invariant** | `src/daemon/config.ts` (`validateHostedRedactionSink`) | `unit/config-redaction-sink.test.ts` (4 hosted/local cross-product) |
 
 ---
 
